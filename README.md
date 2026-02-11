@@ -10,10 +10,12 @@ Conversation memory system for Claude Code. Archives conversation sessions, extr
 curl -fsSL https://raw.githubusercontent.com/Algiras/claude-memory/master/install.sh | sh
 ```
 
-**From source** (all platforms):
+**From source:**
 
 ```bash
-cargo install --git https://github.com/Algiras/claude-memory
+git clone https://github.com/Algiras/claude-memory.git
+cd claude-memory
+cargo install --path .
 ```
 
 **Prebuilt binaries**: download from [Releases](https://github.com/Algiras/claude-memory/releases) for Linux x86_64, macOS ARM, and Windows x86_64.

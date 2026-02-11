@@ -1,6 +1,9 @@
 #!/bin/sh
 # Install claude-memory
-# Usage: curl -fsSL https://raw.githubusercontent.com/Algiras/claude-memory/master/install.sh | sh
+#
+# Public repo:  curl -fsSL https://raw.githubusercontent.com/Algiras/claude-memory/master/install.sh | sh
+# Private repo: GH_TOKEN=ghp_... sh install.sh
+#               or: gh auth token | INSTALL_DIR=~/.local/bin sh install.sh
 
 set -e
 
@@ -36,16 +39,37 @@ detect_platform() {
     esac
 }
 
+# Build auth header if token available
+auth_header() {
+    if [ -n "$GH_TOKEN" ]; then
+        echo "Authorization: token ${GH_TOKEN}"
+    elif command -v gh >/dev/null 2>&1; then
+        TOKEN="$(gh auth token 2>/dev/null || true)"
+        if [ -n "$TOKEN" ]; then
+            echo "Authorization: token ${TOKEN}"
+        fi
+    fi
+}
+
 # Get latest release tag
 get_latest_version() {
-    VERSION="$(curl -fsSL "https://api.github.com/repos/${REPO}/releases/latest" \
+    AUTH="$(auth_header)"
+    if [ -n "$AUTH" ]; then
+        CURL_AUTH="-H"
+    else
+        CURL_AUTH=""
+        AUTH=""
+    fi
+
+    VERSION="$(curl -fsSL ${CURL_AUTH:+"$CURL_AUTH"} ${AUTH:+"$AUTH"} \
+        "https://api.github.com/repos/${REPO}/releases/latest" \
         | grep '"tag_name"' \
         | head -1 \
         | sed 's/.*"tag_name": *"\([^"]*\)".*/\1/')"
 
     if [ -z "$VERSION" ]; then
-        echo "Error: could not determine latest version" >&2
-        echo "No releases found. Install from source: cargo install --git https://github.com/${REPO}" >&2
+        echo "Error: could not determine latest version." >&2
+        echo "If the repo is private, set GH_TOKEN or install gh CLI first." >&2
         exit 1
     fi
 }
@@ -54,14 +78,36 @@ main() {
     detect_platform
     get_latest_version
 
+    AUTH="$(auth_header)"
     URL="https://github.com/${REPO}/releases/download/${VERSION}/${ARCHIVE}"
     TMPDIR="$(mktemp -d)"
     trap 'rm -rf "$TMPDIR"' EXIT
 
     echo "Installing ${BINARY} ${VERSION} (${PLATFORM}/${ARCH})..."
-    echo "  Downloading ${URL}"
+    echo "  Downloading ${ARCHIVE}"
 
-    curl -fsSL "$URL" -o "${TMPDIR}/${ARCHIVE}"
+    if [ -n "$AUTH" ]; then
+        # Private repo: find asset ID via API, download with octet-stream accept
+        RELEASE_JSON="$(curl -fsSL -H "$AUTH" \
+            "https://api.github.com/repos/${REPO}/releases/tags/${VERSION}")"
+
+        # Extract the API url for our asset (sits on the line before the asset name)
+        ASSET_URL="$(echo "$RELEASE_JSON" \
+            | grep -B5 "\"name\": *\"${ARCHIVE}\"" \
+            | grep '"url"' \
+            | head -1 \
+            | sed 's/.*"url": *"\([^"]*\)".*/\1/')"
+
+        if [ -n "$ASSET_URL" ]; then
+            curl -fsSL -H "$AUTH" -H "Accept: application/octet-stream" \
+                "$ASSET_URL" -o "${TMPDIR}/${ARCHIVE}"
+        else
+            echo "Error: could not find asset ${ARCHIVE} in release ${VERSION}" >&2
+            exit 1
+        fi
+    else
+        curl -fsSL -L "$URL" -o "${TMPDIR}/${ARCHIVE}"
+    fi
 
     # Extract
     cd "$TMPDIR"
@@ -81,7 +127,7 @@ main() {
     chmod +x "${INSTALL_DIR}/${BINARY}"
 
     echo ""
-    echo "Installed ${BINARY} to ${INSTALL_DIR}/${BINARY}"
+    echo "Installed ${BINARY} ${VERSION} to ${INSTALL_DIR}/${BINARY}"
     echo ""
     echo "Get started:"
     echo "  ${BINARY} auth login              # Configure LLM provider"
