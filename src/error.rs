@@ -11,9 +11,6 @@ pub enum MemoryError {
     #[error("Walk error: {0}")]
     Walk(#[from] walkdir::Error),
 
-    #[error("Project not found: {0}")]
-    ProjectNotFound(String),
-
     #[error("No Claude projects directory found at {0}")]
     NoProjectsDir(String),
 

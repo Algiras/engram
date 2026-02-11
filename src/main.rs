@@ -111,7 +111,11 @@ fn cmd_auth_login(provider_name: Option<String>, set_default: bool) -> Result<()
             let mut store = auth::AuthStore::load()?;
             store.default_provider = Some(provider.to_string());
             store.save()?;
-            println!("{} Set {} as default provider.", "Done!".green().bold(), provider.display_name());
+            println!(
+                "{} Set {} as default provider.",
+                "Done!".green().bold(),
+                provider.display_name()
+            );
         }
         return Ok(());
     }
@@ -248,7 +252,7 @@ fn cmd_auth_status() -> Result<()> {
                 if !env_var.is_empty() && std::env::var(env_var).is_ok() {
                     println!("  Source:    {} (env var)", env_var);
                 } else {
-                    println!("  Source:    {}", "auth.json");
+                    println!("  Source:    auth.json");
                 }
             }
         }
@@ -320,7 +324,10 @@ fn cmd_ingest(
     }
 
     if all_sessions.is_empty() {
-        println!("{}", "Everything up to date. Use --force to re-process.".green());
+        println!(
+            "{}",
+            "Everything up to date. Use --force to re-process.".green()
+        );
         return Ok(());
     }
 
@@ -415,11 +422,8 @@ fn process_session(
     let entries = parser::jsonl::parse_jsonl(&session.path)?;
 
     // Build conversation model
-    let conversation = parser::conversation::build_conversation(
-        &entries,
-        &session.session_id,
-        project_name,
-    );
+    let conversation =
+        parser::conversation::build_conversation(&entries, &session.session_id, project_name);
 
     if conversation.turns.is_empty() {
         return Ok(None);
@@ -459,9 +463,12 @@ fn process_session(
             .map_err(|e| crate::error::MemoryError::Config(format!("tokio runtime: {}", e)))?;
 
         rt.block_on(async {
-            if let Err(e) =
-                extractor::knowledge::extract_and_merge_knowledge(config, project_name, &conversation)
-                    .await
+            if let Err(e) = extractor::knowledge::extract_and_merge_knowledge(
+                config,
+                project_name,
+                &conversation,
+            )
+            .await
             {
                 eprintln!(
                     "  {} knowledge extraction for {}/{}: {}",
@@ -491,20 +498,24 @@ fn cmd_search(
     };
 
     if !search_dir.exists() {
-        println!("{}", "No memory directory found. Run 'ingest' first.".yellow());
+        println!(
+            "{}",
+            "No memory directory found. Run 'ingest' first.".yellow()
+        );
         return Ok(());
     }
 
-    let pattern = regex::Regex::new(query).map_err(|e| {
-        crate::error::MemoryError::Config(format!("Invalid regex: {}", e))
-    })?;
+    let pattern = regex::Regex::new(query)
+        .map_err(|e| crate::error::MemoryError::Config(format!("Invalid regex: {}", e)))?;
 
     let mut found = false;
     for entry in walkdir::WalkDir::new(&search_dir)
         .into_iter()
         .filter_map(|e| e.ok())
         .filter(|e| {
-            e.path().extension().map_or(false, |ext| ext == "md" || ext == "json")
+            e.path()
+                .extension()
+                .is_some_and(|ext| ext == "md" || ext == "json")
         })
     {
         let path = entry.path();
@@ -536,13 +547,13 @@ fn cmd_search(
 
                 let start = i.saturating_sub(context_lines);
                 let end = (i + context_lines + 1).min(lines.len());
-                for j in start..end {
+                for (j, line) in lines.iter().enumerate().take(end).skip(start) {
                     let prefix = if j == i {
                         format!("{:>4} > ", j + 1).green().to_string()
                     } else {
                         format!("{:>4}   ", j + 1).dimmed().to_string()
                     };
-                    println!("{}{}", prefix, lines[j]);
+                    println!("{}{}", prefix, line);
                 }
                 if end < lines.len() {
                     println!("{}", "  ---".dimmed());
@@ -599,7 +610,10 @@ fn cmd_context(config: &Config, project: &str) -> Result<()> {
 
 fn cmd_status(config: &Config) -> Result<()> {
     if !config.memory_dir.exists() {
-        println!("{}", "No memory directory found. Run 'ingest' first.".yellow());
+        println!(
+            "{}",
+            "No memory directory found. Run 'ingest' first.".yellow()
+        );
         return Ok(());
     }
 
@@ -659,11 +673,11 @@ fn cmd_status(config: &Config) -> Result<()> {
     println!("  JSON files:        {}", json_count);
     println!("  Projects archived: {}", project_count);
     println!("  Knowledge bases:   {}", knowledge_count);
+    println!("  Sessions processed:{}", manifest.processed_count());
     println!(
-        "  Sessions processed:{}",
-        manifest.processed_count()
+        "  LLM provider:      {}",
+        config.llm.provider.display_name().cyan()
     );
-    println!("  LLM provider:      {}", config.llm.provider.display_name().cyan());
 
     Ok(())
 }

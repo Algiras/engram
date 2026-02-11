@@ -98,14 +98,15 @@ pub fn write_aggregated_analytics(config: &Config, sessions: &[SessionAnalytics]
     // Deduplicate by session_id
     let existing_ids: std::collections::HashSet<String> = existing_activity
         .iter()
-        .filter_map(|v| v.get("session_id").and_then(|s| s.as_str()).map(String::from))
+        .filter_map(|v| {
+            v.get("session_id")
+                .and_then(|s| s.as_str())
+                .map(String::from)
+        })
         .collect();
 
     for a in activity {
-        let id = a
-            .get("session_id")
-            .and_then(|s| s.as_str())
-            .unwrap_or("");
+        let id = a.get("session_id").and_then(|s| s.as_str()).unwrap_or("");
         if !existing_ids.contains(id) {
             existing_activity.push(a);
         }
@@ -129,10 +130,7 @@ fn merge_usage(existing: &serde_json::Value, new: &serde_json::Value) -> serde_j
     ) {
         let mut global = existing_global.clone();
         for (key, new_val) in new_global {
-            let existing_count = global
-                .get(key)
-                .and_then(|v| v.as_u64())
-                .unwrap_or(0);
+            let existing_count = global.get(key).and_then(|v| v.as_u64()).unwrap_or(0);
             let new_count = new_val.as_u64().unwrap_or(0);
             global.insert(key.clone(), serde_json::json!(existing_count + new_count));
         }

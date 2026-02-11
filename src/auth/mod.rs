@@ -29,9 +29,8 @@ pub struct ProviderCredential {
 impl AuthStore {
     /// Path to auth.json
     pub fn path() -> Result<PathBuf> {
-        let config_dir = dirs::config_dir().ok_or_else(|| {
-            MemoryError::Auth("Could not determine config directory".into())
-        })?;
+        let config_dir = dirs::config_dir()
+            .ok_or_else(|| MemoryError::Auth("Could not determine config directory".into()))?;
         Ok(config_dir.join("claude-memory").join("auth.json"))
     }
 

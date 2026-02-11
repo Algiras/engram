@@ -19,6 +19,7 @@ pub struct Turn {
     pub user_text: String,
     pub assistant_text: String,
     pub tool_interactions: Vec<ToolInteraction>,
+    #[allow(dead_code)]
     pub timestamp: Option<String>,
 }
 
@@ -142,7 +143,7 @@ fn build_turn(user: &UserEntry, assistant_chunks: &[&AssistantEntry]) -> Turn {
                             let result_id = tool_use_id.as_deref().unwrap_or("");
                             let output_summary = content
                                 .as_ref()
-                                .map(|c| summarize_tool_result(c))
+                                .map(summarize_tool_result)
                                 .unwrap_or_default();
 
                             // Match with pending tool_use
@@ -211,20 +212,16 @@ fn summarize_tool_input(tool_name: &str, input: &Option<serde_json::Value>) -> S
             .and_then(|v| v.as_str())
             .unwrap_or("")
             .to_string(),
-        "Write" => {
-            let path = input
-                .get("file_path")
-                .and_then(|v| v.as_str())
-                .unwrap_or("?");
-            format!("{}", path)
-        }
-        "Edit" => {
-            let path = input
-                .get("file_path")
-                .and_then(|v| v.as_str())
-                .unwrap_or("?");
-            format!("{}", path)
-        }
+        "Write" => input
+            .get("file_path")
+            .and_then(|v| v.as_str())
+            .unwrap_or("?")
+            .to_string(),
+        "Edit" => input
+            .get("file_path")
+            .and_then(|v| v.as_str())
+            .unwrap_or("?")
+            .to_string(),
         "Glob" => input
             .get("pattern")
             .and_then(|v| v.as_str())

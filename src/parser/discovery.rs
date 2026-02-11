@@ -10,8 +10,10 @@ pub struct Project {
     /// Decoded project name (e.g., "claudius")
     pub name: String,
     /// Original directory name
+    #[allow(dead_code)]
     pub dir_name: String,
     /// Full path to the project directory
+    #[allow(dead_code)]
     pub path: PathBuf,
     /// JSONL session files in this project
     pub sessions: Vec<SessionFile>,
@@ -55,11 +57,7 @@ pub fn discover_projects(projects_dir: &Path) -> Result<Vec<Project>> {
             .max_depth(1)
             .into_iter()
             .filter_map(|e| e.ok())
-            .filter(|e| {
-                e.path()
-                    .extension()
-                    .map_or(false, |ext| ext == "jsonl")
-            })
+            .filter(|e| e.path().extension().is_some_and(|ext| ext == "jsonl"))
         {
             let file_path = file_entry.path().to_path_buf();
             let metadata = file_entry.metadata()?;
@@ -72,7 +70,7 @@ pub fn discover_projects(projects_dir: &Path) -> Result<Vec<Project>> {
 
             let modified = metadata
                 .modified()
-                .map(|t| DateTime::<Utc>::from(t))
+                .map(DateTime::<Utc>::from)
                 .unwrap_or_default();
 
             sessions.push(SessionFile {
@@ -156,17 +154,8 @@ mod tests {
             decode_project_name("-Users-algimantask-Projects-nile-cag-packages-nile-setup-cli"),
             "nile-cag-packages-nile-setup-cli"
         );
-        assert_eq!(
-            decode_project_name("-Users-algimantask-sandbox"),
-            "sandbox"
-        );
-        assert_eq!(
-            decode_project_name("-Users-algimantask"),
-            "home"
-        );
-        assert_eq!(
-            decode_project_name("-private-tmp-sm"),
-            "private-tmp-sm"
-        );
+        assert_eq!(decode_project_name("-Users-algimantask-sandbox"), "sandbox");
+        assert_eq!(decode_project_name("-Users-algimantask"), "home");
+        assert_eq!(decode_project_name("-private-tmp-sm"), "private-tmp-sm");
     }
 }

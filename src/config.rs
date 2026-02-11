@@ -16,9 +16,8 @@ pub struct Config {
 
 impl Config {
     pub fn load(provider_override: Option<&str>) -> Result<Self> {
-        let home = dirs::home_dir().ok_or_else(|| {
-            MemoryError::Config("Could not determine home directory".into())
-        })?;
+        let home = dirs::home_dir()
+            .ok_or_else(|| MemoryError::Config("Could not determine home directory".into()))?;
 
         let claude_projects_dir = home.join(".claude").join("projects");
         let memory_dir = home.join("memory");

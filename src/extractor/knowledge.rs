@@ -71,14 +71,30 @@ pub async fn extract_and_merge_knowledge(
         conversation.start_time.as_deref().unwrap_or("unknown date")
     );
 
-    append_knowledge(&knowledge_dir.join("decisions.md"), &session_header, &decisions)?;
-    append_knowledge(&knowledge_dir.join("solutions.md"), &session_header, &solutions)?;
-    append_knowledge(&knowledge_dir.join("patterns.md"), &session_header, &patterns)?;
+    append_knowledge(
+        &knowledge_dir.join("decisions.md"),
+        &session_header,
+        &decisions,
+    )?;
+    append_knowledge(
+        &knowledge_dir.join("solutions.md"),
+        &session_header,
+        &solutions,
+    )?;
+    append_knowledge(
+        &knowledge_dir.join("patterns.md"),
+        &session_header,
+        &patterns,
+    )?;
 
     // Global preferences
     let global_dir = config.memory_dir.join("knowledge").join("_global");
     std::fs::create_dir_all(&global_dir)?;
-    append_knowledge(&global_dir.join("preferences.md"), &session_header, &preferences)?;
+    append_knowledge(
+        &global_dir.join("preferences.md"),
+        &session_header,
+        &preferences,
+    )?;
 
     // Write summary
     let summary_dir = config.memory_dir.join("summaries").join(project_name);
@@ -144,7 +160,10 @@ fn conversation_to_text(conv: &Conversation) -> String {
 
         // Include tool names but not full output
         for tool in &turn.tool_interactions {
-            text.push_str(&format!("[Tool: {} -> {}]\n", tool.tool_name, tool.input_summary));
+            text.push_str(&format!(
+                "[Tool: {} -> {}]\n",
+                tool.tool_name, tool.input_summary
+            ));
         }
 
         if !turn.assistant_text.is_empty() {
@@ -177,7 +196,7 @@ fn append_knowledge(path: &std::path::Path, header: &str, content: &str) -> Resu
     }
 
     let mut file = std::fs::OpenOptions::new().append(true).open(path)?;
-    write!(file, "{}{}\n", header, content)?;
+    writeln!(file, "{}{}", header, content)?;
 
     Ok(())
 }
@@ -195,7 +214,7 @@ fn collect_summaries(dir: &std::path::Path) -> Result<String> {
 
     for entry in std::fs::read_dir(dir)? {
         let entry = entry?;
-        if entry.path().extension().map_or(false, |e| e == "md") {
+        if entry.path().extension().is_some_and(|e| e == "md") {
             let content = std::fs::read_to_string(entry.path())?;
             summaries.push_str(&content);
             summaries.push('\n');

@@ -138,6 +138,7 @@ impl MessageContent {
     }
 
     /// Get all content blocks (returns empty vec for plain text)
+    #[allow(dead_code)]
     pub fn blocks(&self) -> Vec<&ContentBlock> {
         match self {
             MessageContent::Text(_) => Vec::new(),
