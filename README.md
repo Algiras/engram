@@ -4,9 +4,19 @@ Conversation memory system for Claude Code. Archives conversation sessions, extr
 
 ## Install
 
+**Quick install** (Linux, macOS):
+
 ```bash
-cargo install --path .
+curl -fsSL https://raw.githubusercontent.com/Algiras/claude-memory/master/install.sh | sh
 ```
+
+**From source** (all platforms):
+
+```bash
+cargo install --git https://github.com/Algiras/claude-memory
+```
+
+**Prebuilt binaries**: download from [Releases](https://github.com/Algiras/claude-memory/releases) for Linux x86_64, macOS ARM, and Windows x86_64.
 
 ## Quick Start
 
