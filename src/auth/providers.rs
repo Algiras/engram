@@ -6,11 +6,12 @@ pub enum Provider {
     Anthropic,
     OpenAI,
     Ollama,
+    Gemini,
 }
 
 impl Provider {
     pub fn all() -> &'static [Provider] {
-        &[Provider::Anthropic, Provider::OpenAI, Provider::Ollama]
+        &[Provider::Anthropic, Provider::OpenAI, Provider::Ollama, Provider::Gemini]
     }
 
     pub fn default_endpoint(&self) -> &'static str {
@@ -18,6 +19,7 @@ impl Provider {
             Provider::Anthropic => "https://api.anthropic.com",
             Provider::OpenAI => "https://api.openai.com/v1",
             Provider::Ollama => "http://localhost:11434/v1",
+            Provider::Gemini => "https://generativelanguage.googleapis.com/v1",
         }
     }
 
@@ -26,12 +28,13 @@ impl Provider {
             Provider::Anthropic => "claude-sonnet-4-5-20250929",
             Provider::OpenAI => "gpt-4o",
             Provider::Ollama => "gemma3:4b",
+            Provider::Gemini => "gemini-pro",
         }
     }
 
     pub fn requires_auth(&self) -> bool {
         match self {
-            Provider::Anthropic | Provider::OpenAI => true,
+            Provider::Anthropic | Provider::OpenAI | Provider::Gemini => true,
             Provider::Ollama => false,
         }
     }
@@ -41,6 +44,7 @@ impl Provider {
             Provider::Anthropic => "ANTHROPIC_API_KEY",
             Provider::OpenAI => "OPENAI_API_KEY",
             Provider::Ollama => "",
+            Provider::Gemini => "GEMINI_API_KEY",
         }
     }
 
@@ -49,6 +53,7 @@ impl Provider {
             Provider::Anthropic => "Anthropic (Claude)",
             Provider::OpenAI => "OpenAI",
             Provider::Ollama => "Ollama (local)",
+            Provider::Gemini => "Google Gemini",
         }
     }
 
@@ -57,6 +62,7 @@ impl Provider {
             "anthropic" | "claude" => Some(Provider::Anthropic),
             "openai" | "gpt" => Some(Provider::OpenAI),
             "ollama" | "local" => Some(Provider::Ollama),
+            "gemini" | "google" => Some(Provider::Gemini),
             _ => None,
         }
     }
@@ -68,6 +74,7 @@ impl fmt::Display for Provider {
             Provider::Anthropic => write!(f, "anthropic"),
             Provider::OpenAI => write!(f, "openai"),
             Provider::Ollama => write!(f, "ollama"),
+            Provider::Gemini => write!(f, "gemini"),
         }
     }
 }

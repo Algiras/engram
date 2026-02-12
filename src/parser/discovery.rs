@@ -102,7 +102,7 @@ pub fn discover_projects(projects_dir: &Path) -> Result<Vec<Project>> {
 
 /// Decode project directory name to human-readable name
 /// e.g., "-Users-algimantask-Projects-claudius" -> "claudius"
-fn decode_project_name(dir_name: &str) -> String {
+pub fn decode_project_name(dir_name: &str) -> String {
     // Split by '-', take the last meaningful segment
     let parts: Vec<&str> = dir_name.split('-').filter(|s| !s.is_empty()).collect();
 

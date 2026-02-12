@@ -29,6 +29,7 @@ impl LlmClient {
         match self.provider {
             Provider::Anthropic => self.chat_anthropic(system, user).await,
             Provider::OpenAI | Provider::Ollama => self.chat_openai_compat(system, user).await,
+            Provider::Gemini => self.chat_gemini(system, user).await,
         }
     }
 
@@ -111,6 +112,65 @@ impl LlmClient {
             .and_then(|c| c.get("message"))
             .and_then(|m| m.get("content"))
             .and_then(|c| c.as_str())
+            .map(|s| s.to_string())
+            .ok_or(MemoryError::LlmEmptyResponse)
+    }
+
+    /// Google Gemini API
+    async fn chat_gemini(&self, system: &str, user: &str) -> Result<String> {
+        // Gemini API uses a different URL structure with the API key as a query param
+        let api_key = self.api_key.as_deref().ok_or_else(|| {
+            MemoryError::Config("Gemini API key required (set GEMINI_API_KEY)".into())
+        })?;
+
+        // Use gemini-pro if model contains "flash" or "pro", otherwise use as-is
+        let model_name = if self.model.contains("gemini") {
+            &self.model
+        } else {
+            "gemini-pro"
+        };
+
+        let url = format!(
+            "{}/models/{}:generateContent?key={}",
+            self.endpoint, model_name, api_key
+        );
+
+        // Combine system and user messages into a single prompt
+        let combined_prompt = format!("{}\n\n{}", system, user);
+
+        let body = serde_json::json!({
+            "contents": [{
+                "parts": [{
+                    "text": combined_prompt
+                }]
+            }],
+            "generationConfig": {
+                "temperature": 0.3,
+                "maxOutputTokens": 2048,
+            }
+        });
+
+        let req = self.client.post(&url).json(&body);
+
+        let response = req.send().await?;
+        let status = response.status();
+        if !status.is_success() {
+            let text = response.text().await.unwrap_or_default();
+            return Err(MemoryError::Config(format!(
+                "Gemini API returned {}: {}",
+                status, text
+            )));
+        }
+
+        let json: serde_json::Value = response.json().await?;
+
+        json.get("candidates")
+            .and_then(|c| c.get(0))
+            .and_then(|c| c.get("content"))
+            .and_then(|c| c.get("parts"))
+            .and_then(|p| p.get(0))
+            .and_then(|p| p.get("text"))
+            .and_then(|t| t.as_str())
             .map(|s| s.to_string())
             .ok_or(MemoryError::LlmEmptyResponse)
     }

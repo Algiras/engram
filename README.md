@@ -37,7 +37,36 @@ claude-memory recall my-project
 
 # List projects
 claude-memory projects
+
+# Interactive TUI with fuzzy search
+claude-memory tui
+
+# View reinforcement learning progress
+claude-memory learn dashboard
 ```
+
+## MCP Server (Claude Desktop Integration)
+
+`claude-memory` includes MCP (Model Context Protocol) server support for direct integration with Claude Desktop.
+
+**Quick setup:**
+
+1. Add to Claude Desktop config (`~/Library/Application Support/Claude/claude_desktop_config.json`):
+
+```json
+{
+  "mcpServers": {
+    "claude-memory": {
+      "command": "claude-memory",
+      "args": ["mcp"]
+    }
+  }
+}
+```
+
+2. Restart Claude Desktop
+
+Claude can now directly access your memory during conversations! See [MCP_SETUP.md](MCP_SETUP.md) for detailed setup and usage.
 
 ## LLM Providers
 
@@ -84,6 +113,9 @@ Credentials are stored in `~/.config/claude-memory/auth.json` with `0600` permis
 | `auth list` | Show configured providers |
 | `auth logout <provider>` | Remove provider credentials |
 | `auth status` | Show active provider |
+| `learn dashboard [project]` | View reinforcement learning progress and metrics |
+| `learn optimize <project>` | Apply learned parameter optimizations |
+| `learn reset <project>` | Reset learning state to defaults |
 
 ## How It Works
 
@@ -92,6 +124,9 @@ Credentials are stored in `~/.config/claude-memory/auth.json` with `0600` permis
 3. **Archival** - Renders conversations as markdown with analytics
 4. **Knowledge Extraction** - Uses an LLM to extract decisions, solutions, patterns, and preferences
 5. **Synthesis** - Generates a `context.md` per project from accumulated knowledge
+6. **Reinforcement Learning** - Automatically optimizes knowledge importance, TTLs, and consolidation strategies based on usage patterns
+
+> **New!** claude-memory now includes a reinforcement learning system that continuously improves itself. See [LEARNING_GUIDE.md](LEARNING_GUIDE.md) for details.
 
 ### Output Structure
 

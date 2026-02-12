@@ -1,0 +1,416 @@
+# Sync Guide
+
+Share and version your knowledge using GitHub Gists or Git repositories.
+
+## Quick Start
+
+### GitHub Gists (Recommended)
+
+```bash
+# 1. Set GitHub token
+export GITHUB_TOKEN='your-token-here'
+
+# 2. Push knowledge to a private gist
+claude-memory sync push my-project
+
+# 3. On another machine, pull the knowledge
+claude-memory sync pull my-project <gist-id>
+```
+
+### Git Repository (Multi-agent collaboration)
+
+```bash
+# 1. Initialize a shared memory repo
+claude-memory sync init-repo ~/shared-memory
+
+# 2. Push knowledge
+claude-memory sync push-repo my-project ~/shared-memory
+
+# 3. Other agents pull changes
+claude-memory sync pull-repo my-project ~/shared-memory
+```
+
+## GitHub Gists
+
+### Setup
+
+1. **Create a GitHub Personal Access Token:**
+   - Go to https://github.com/settings/tokens
+   - Click "Generate new token" → "Generate new token (classic)"
+   - Select scopes: `gist`
+   - Generate and copy the token
+
+2. **Set environment variable:**
+   ```bash
+   export GITHUB_TOKEN='ghp_...'
+   # Add to ~/.bashrc or ~/.zshrc for persistence
+   ```
+
+### Commands
+
+#### Push Knowledge
+
+Create or update a private gist:
+
+```bash
+# First push (creates new gist)
+claude-memory sync push my-project
+
+# Update existing gist
+claude-memory sync push my-project --gist-id abc123
+
+# Custom description
+claude-memory sync push my-project --description "My Team's Project Knowledge"
+```
+
+#### Pull Knowledge
+
+Download knowledge from a gist:
+
+```bash
+# Pull to existing project
+claude-memory sync pull my-project abc123
+
+# Overwrite local knowledge
+claude-memory sync pull my-project abc123 --force
+
+# Clone to new project
+claude-memory sync clone abc123 new-project
+```
+
+#### List Gists
+
+Find gists for a project:
+
+```bash
+claude-memory sync list my-project
+```
+
+#### Version History
+
+View and restore previous versions:
+
+```bash
+# Show all versions
+claude-memory sync history abc123
+
+# View specific version
+claude-memory sync history abc123 --version 1234567890abcdef
+
+# Restore a version
+claude-memory sync pull my-project 1234567890abcdef
+```
+
+## Git Repository Sync
+
+### When to Use Git Repos
+
+- **Multi-agent collaboration**: Multiple AI agents working on the same project
+- **Self-hosted**: Keep knowledge on your own infrastructure
+- **Branch-based**: Use git branches for different knowledge versions
+- **Audit trail**: Full git history with commits and authors
+
+### Setup
+
+```bash
+# Create a shared memory repository
+mkdir -p ~/shared-memory
+cd ~/shared-memory
+git init
+git config user.name "AI Agent"
+git config user.email "agent@example.com"
+
+# Optional: Add remote
+git remote add origin git@github.com:yourteam/shared-memory.git
+```
+
+### Commands
+
+#### Push to Repository
+
+```bash
+# Push knowledge to git repo
+claude-memory sync push-repo my-project ~/shared-memory
+
+# With custom commit message
+claude-memory sync push-repo my-project ~/shared-memory \
+  --message "Updated patterns from session abc123"
+
+# Push and sync to remote
+claude-memory sync push-repo my-project ~/shared-memory --push-remote
+```
+
+#### Pull from Repository
+
+```bash
+# Pull knowledge from git repo
+claude-memory sync pull-repo my-project ~/shared-memory
+
+# Pull from specific branch
+claude-memory sync pull-repo my-project ~/shared-memory --branch develop
+
+# Pull from remote first
+claude-memory sync pull-repo my-project ~/shared-memory --fetch-remote
+```
+
+#### Sync Workflow
+
+For continuous collaboration:
+
+```bash
+# Agent 1: Make changes and push
+claude-memory ingest --project my-project
+claude-memory sync push-repo my-project ~/shared-memory --push-remote
+
+# Agent 2: Pull changes before working
+claude-memory sync pull-repo my-project ~/shared-memory --fetch-remote
+claude-memory recall my-project
+# ... work on project ...
+claude-memory sync push-repo my-project ~/shared-memory --push-remote
+```
+
+## Use Cases
+
+### 1. Personal Backup
+
+Use gists for simple backup:
+
+```bash
+# Push all projects to gists
+for project in $(claude-memory projects | grep -o '^\s*[^ ]*'); do
+  claude-memory sync push "$project" --description "$project knowledge backup"
+done
+```
+
+### 2. Team Knowledge Base
+
+Use git repo for team collaboration:
+
+```bash
+# Setup shared repo
+git clone git@github.com:yourteam/knowledge.git ~/team-knowledge
+
+# Each team member syncs
+claude-memory sync pull-repo project-x ~/team-knowledge --fetch-remote
+# ... work ...
+claude-memory sync push-repo project-x ~/team-knowledge --push-remote
+```
+
+### 3. Multi-Machine Development
+
+Sync between work and home:
+
+```bash
+# On work machine
+claude-memory sync push my-project
+# Note the gist ID: abc123
+
+# On home machine
+claude-memory sync pull my-project abc123
+```
+
+### 4. Knowledge Versioning
+
+Track knowledge evolution:
+
+```bash
+# Push regularly to create version history
+claude-memory sync push my-project --gist-id abc123
+
+# Later, view what changed
+claude-memory sync history abc123
+
+# Restore old version if needed
+claude-memory sync pull my-project <old-version-id>
+```
+
+### 5. Multi-Agent System
+
+Multiple AI agents collaborating:
+
+```bash
+# Central repo
+git clone git@github.com:ai-team/memory.git ~/ai-memory
+
+# Agent A (planning agent)
+claude-memory sync pull-repo project-x ~/ai-memory
+# ... extract planning decisions ...
+claude-memory sync push-repo project-x ~/ai-memory
+
+# Agent B (implementation agent)
+claude-memory sync pull-repo project-x ~/ai-memory --fetch-remote
+# ... implement based on plans ...
+claude-memory sync push-repo project-x ~/ai-memory --push-remote
+
+# Agent C (review agent)
+claude-memory sync pull-repo project-x ~/ai-memory --fetch-remote
+# ... review and add patterns ...
+```
+
+## Comparison
+
+| Feature | GitHub Gists | Git Repository |
+|---------|--------------|----------------|
+| **Setup** | Simple (just token) | Medium (git config) |
+| **Privacy** | Private by default | Self-hosted option |
+| **Versioning** | Built-in | Full git history |
+| **Collaboration** | View-only sharing | Full collaboration |
+| **Size limit** | ~10MB | Unlimited (self-hosted) |
+| **Web UI** | GitHub gists UI | GitHub/GitLab/etc |
+| **API access** | GitHub API | Git protocol |
+| **Best for** | Personal, simple sync | Teams, multi-agent |
+
+## Workflows
+
+### Solo Developer
+
+```bash
+# Use gists for simplicity
+claude-memory sync push my-project
+# Work continues...
+claude-memory sync push my-project --gist-id abc123
+```
+
+### Small Team (2-5 people)
+
+```bash
+# Use shared git repo
+git clone git@github.com:team/knowledge.git ~/team-knowledge
+
+# Daily workflow
+claude-memory sync pull-repo projects ~/team-knowledge --fetch-remote
+# Work...
+claude-memory sync push-repo projects ~/team-knowledge --push-remote
+```
+
+### Multi-Agent System
+
+```bash
+# Central orchestrator sets up repo
+git clone git@github.com:org/ai-memory.git ~/ai-memory
+
+# Each agent has a role
+claude-memory sync pull-repo project ~/ai-memory --branch agent-a
+# Work...
+claude-memory sync push-repo project ~/ai-memory --branch agent-a
+
+# Merge knowledge
+cd ~/ai-memory
+git checkout main
+git merge agent-a agent-b agent-c
+```
+
+## Security
+
+### Gist Security
+
+- **Private gists** are only visible to you (and those you share the link with)
+- **Tokens** should be kept secret (use `chmod 600` on files containing tokens)
+- **Revoke tokens** if compromised: https://github.com/settings/tokens
+
+### Git Repository Security
+
+- **Use SSH keys** for authentication
+- **Encrypt sensitive knowledge** before committing
+- **Use private repos** on GitHub/GitLab
+- **Self-host** for maximum control
+
+### Encryption
+
+For sensitive projects, encrypt before syncing:
+
+```bash
+# Export and encrypt
+claude-memory export my-project json | \
+  gpg -e -r team@example.com | \
+  base64 > knowledge.enc
+
+# Upload encrypted file
+# (knowledge remains encrypted in gist/repo)
+```
+
+## Troubleshooting
+
+### "GitHub token not found"
+
+**Solution:** Set GITHUB_TOKEN or GH_TOKEN:
+```bash
+export GITHUB_TOKEN='your-token-here'
+```
+
+### "Permission denied"
+
+**Solution:** Token needs `gist` scope. Create new token with correct permissions.
+
+### "Gist not found"
+
+**Solution:** Check gist ID and ensure it's your gist or publicly accessible.
+
+### Merge Conflicts (Git repo)
+
+**Solution:** Resolve conflicts manually:
+```bash
+cd ~/shared-memory
+git status
+# Edit conflicting files
+git add .
+git commit
+```
+
+### Large Gist Size
+
+**Solution:** Gists have ~10MB limit. For larger knowledge bases, use git repositories or split into multiple projects.
+
+## Advanced
+
+### Automated Sync
+
+Add to cron or git hooks:
+
+```bash
+# crontab: sync every hour
+0 * * * * claude-memory sync push my-project --gist-id abc123
+
+# git post-commit hook
+#!/bin/bash
+claude-memory ingest
+claude-memory sync push my-project --gist-id abc123
+```
+
+### CI/CD Integration
+
+```yaml
+# GitHub Actions
+- name: Sync Knowledge
+  env:
+    GITHUB_TOKEN: ${{ secrets.GIST_TOKEN }}
+  run: |
+    claude-memory ingest
+    claude-memory sync push my-project
+```
+
+### Custom Sync Script
+
+```bash
+#!/bin/bash
+# sync-all.sh - Sync all projects
+
+for project in $(claude-memory projects | grep -o '^\s*[^ ]*'); do
+  echo "Syncing $project..."
+  claude-memory sync push "$project" || true
+done
+```
+
+## Future Features
+
+Planned enhancements:
+- [ ] Differential sync (only changed files)
+- [ ] Conflict resolution UI
+- [ ] Automatic merge strategies
+- [ ] Sync to S3/Cloud storage
+- [ ] End-to-end encryption
+- [ ] Real-time sync via websockets
+
+## Feedback
+
+Questions or suggestions? [Open an issue](https://github.com/Algiras/claude-memory/issues)!

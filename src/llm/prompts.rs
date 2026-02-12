@@ -161,6 +161,10 @@ fn truncate_for_llm(text: &str) -> &str {
     if text.len() <= MAX_CHARS {
         text
     } else {
-        &text[..MAX_CHARS]
+        let mut idx = MAX_CHARS;
+        while idx > 0 && !text.is_char_boundary(idx) {
+            idx -= 1;
+        }
+        &text[..idx]
     }
 }
