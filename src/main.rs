@@ -4445,6 +4445,20 @@ fn cmd_hive_pack(command: PackCommand, memory_dir: &Path) -> Result<()> {
             memory_dir,
         ),
         PackCommand::Stats { name } => cmd_hive_pack_stats(&name, memory_dir),
+        PackCommand::Publish {
+            path,
+            repo,
+            push,
+            message,
+            skip_security,
+        } => cmd_hive_pack_publish(
+            &path,
+            repo.as_deref(),
+            push,
+            message.as_deref(),
+            skip_security,
+        ),
+        PackCommand::Validate { path } => cmd_hive_pack_validate(&path),
     }
 }
 
@@ -4665,6 +4679,280 @@ fn cmd_hive_pack_stats(name: &str, memory_dir: &Path) -> Result<()> {
     println!();
     println!("  {} {}", "Installed:".bold(), pack.installed_at.format("%Y-%m-%d %H:%M:%S"));
     println!("  {} {}", "Path:".bold(), pack.path.display());
+
+    Ok(())
+}
+
+fn cmd_hive_pack_publish(
+    pack_path: &str,
+    repo_url: Option<&str>,
+    do_push: bool,
+    commit_msg: Option<&str>,
+    skip_security: bool,
+) -> Result<()> {
+    use std::path::Path;
+
+    let pack_dir = Path::new(pack_path);
+
+    if !pack_dir.exists() {
+        return Err(MemoryError::Config(format!(
+            "Pack directory not found: {}",
+            pack_path
+        )));
+    }
+
+    println!("{} Publishing knowledge pack", "→".blue());
+    println!("  Path: {}", pack_dir.display());
+
+    // Step 1: Validate pack structure
+    println!("\n{} Validating pack structure...", "→".blue());
+    validate_pack_structure(pack_dir)?;
+    println!("  {} Pack structure valid", "✓".green());
+
+    // Step 2: Load manifest
+    let pack = hive::KnowledgePack::load(pack_dir)?;
+    println!("  {} Loaded manifest: {} v{}", "✓".green(), pack.name, pack.version);
+
+    // Step 3: Security scan (unless skipped)
+    if !skip_security {
+        println!("\n{} Scanning for secrets...", "→".blue());
+        let detector = hive::SecretDetector::new()?;
+        let knowledge_dir = pack_dir.join("knowledge");
+
+        if knowledge_dir.exists() {
+            let secrets = detector.scan_directory(&knowledge_dir)?;
+
+            if !secrets.is_empty() {
+                println!("\n{} Secrets detected!", "✗".red().bold());
+                println!("\nThe following potential secrets were found:\n");
+
+                for secret in &secrets {
+                    println!("  {} {}:{}", "●".red(), secret.file_path, secret.line_number);
+                    println!("    Type: {}", secret.pattern_name.yellow());
+                    println!("    Match: {}", secret.matched_text.dimmed());
+                    println!();
+                }
+
+                println!("{}", "Publishing blocked for security.".red().bold());
+                println!("\nPlease review and remove secrets, then try again.");
+                println!("Use {} to skip this check (NOT RECOMMENDED)", "--skip-security".yellow());
+
+                return Err(MemoryError::Config(format!(
+                    "{} secret(s) detected",
+                    secrets.len()
+                )));
+            }
+
+            println!("  {} No secrets detected", "✓".green());
+        }
+    } else {
+        println!("\n{} Skipping security scan", "⚠".yellow().bold());
+    }
+
+    // Step 4: Initialize or verify git repo
+    println!("\n{} Checking git repository...", "→".blue());
+
+    let is_git_repo = pack_dir.join(".git").exists();
+
+    if !is_git_repo {
+        println!("  {} Initializing git repository...", "→".blue());
+
+        let status = std::process::Command::new("git")
+            .args(&["init"])
+            .current_dir(pack_dir)
+            .status()?;
+
+        if !status.success() {
+            return Err(MemoryError::Config("Failed to initialize git repository".into()));
+        }
+
+        println!("  {} Git repository initialized", "✓".green());
+
+        // Create .gitignore
+        std::fs::write(pack_dir.join(".gitignore"), "*.tmp\n*.swp\n.DS_Store\n")?;
+    } else {
+        println!("  {} Git repository exists", "✓".green());
+    }
+
+    // Step 5: Commit changes
+    println!("\n{} Committing changes...", "→".blue());
+
+    std::process::Command::new("git")
+        .args(&["add", "."])
+        .current_dir(pack_dir)
+        .status()?;
+
+    let default_msg = format!("Update {} v{}", pack.name, pack.version);
+    let message = commit_msg.unwrap_or(&default_msg);
+
+    let commit_status = std::process::Command::new("git")
+        .args(&["commit", "-m", message])
+        .current_dir(pack_dir)
+        .status()?;
+
+    if commit_status.success() {
+        println!("  {} Changes committed", "✓".green());
+    } else {
+        println!("  {} No changes to commit", "ℹ".cyan());
+    }
+
+    // Step 6: Set up remote if provided
+    if let Some(url) = repo_url {
+        println!("\n{} Setting up remote repository...", "→".blue());
+
+        // Check if remote exists
+        let has_remote = std::process::Command::new("git")
+            .args(&["remote", "get-url", "origin"])
+            .current_dir(pack_dir)
+            .status()?
+            .success();
+
+        if !has_remote {
+            println!("  {} Adding remote: {}", "→".blue(), url);
+
+            let status = std::process::Command::new("git")
+                .args(&["remote", "add", "origin", url])
+                .current_dir(pack_dir)
+                .status()?;
+
+            if !status.success() {
+                return Err(MemoryError::Config("Failed to add git remote".into()));
+            }
+
+            println!("  {} Remote added", "✓".green());
+        } else {
+            println!("  {} Remote already configured", "✓".green());
+        }
+    }
+
+    // Step 7: Push if requested
+    if do_push {
+        println!("\n{} Pushing to remote...", "→".blue());
+
+        let status = std::process::Command::new("git")
+            .args(&["push", "-u", "origin", "HEAD"])
+            .current_dir(pack_dir)
+            .status()?;
+
+        if !status.success() {
+            return Err(MemoryError::Config(
+                "Failed to push to remote. Check git remote configuration.".into(),
+            ));
+        }
+
+        println!("  {} Pushed successfully", "✓".green());
+    }
+
+    // Step 8: Tag version
+    println!("\n{} Creating version tag...", "→".blue());
+
+    let tag = format!("v{}", pack.version);
+    let tag_status = std::process::Command::new("git")
+        .args(&["tag", "-a", &tag, "-m", &format!("Release {}", tag)])
+        .current_dir(pack_dir)
+        .status()?;
+
+    if tag_status.success() {
+        println!("  {} Tagged as {}", "✓".green(), tag.cyan());
+
+        if do_push {
+            std::process::Command::new("git")
+                .args(&["push", "origin", &tag])
+                .current_dir(pack_dir)
+                .status()?;
+            println!("  {} Tag pushed", "✓".green());
+        }
+    }
+
+    println!("\n{} Pack published successfully!", "✓".green().bold());
+    println!("\n💡 Share your pack:");
+    if let Some(url) = repo_url {
+        println!("  Users can install with:");
+        println!("  {}", format!("claude-memory hive registry add {}", url).cyan());
+    } else {
+        println!("  1. Push to GitHub: git push -u origin main");
+        println!("  2. Share the repository URL");
+        println!("  3. Users can add: claude-memory hive registry add <owner>/<repo>");
+    }
+
+    Ok(())
+}
+
+fn cmd_hive_pack_validate(pack_path: &str) -> Result<()> {
+    use std::path::Path;
+
+    let pack_dir = Path::new(pack_path);
+
+    println!("{} Validating pack: {}", "→".blue(), pack_dir.display());
+    println!();
+
+    validate_pack_structure(pack_dir)?;
+
+    println!("{} Pack is valid!", "✓".green().bold());
+
+    Ok(())
+}
+
+fn validate_pack_structure(pack_dir: &Path) -> Result<()> {
+    // Check 1: Directory exists
+    if !pack_dir.exists() {
+        return Err(MemoryError::Config(format!(
+            "Pack directory not found: {}",
+            pack_dir.display()
+        )));
+    }
+
+    // Check 2: Manifest exists and is valid
+    let manifest_path = pack_dir.join(".pack/manifest.json");
+    if !manifest_path.exists() {
+        return Err(MemoryError::Config(
+            "Missing .pack/manifest.json file".into(),
+        ));
+    }
+
+    let pack = hive::KnowledgePack::load(pack_dir)?;
+
+    // Check 3: Knowledge directory exists
+    let knowledge_dir = pack_dir.join("knowledge");
+    if !knowledge_dir.exists() {
+        return Err(MemoryError::Config(
+            "Missing knowledge/ directory".into(),
+        ));
+    }
+
+    // Check 4: At least one knowledge file exists
+    let has_knowledge = ["patterns.md", "solutions.md", "workflows.md", "decisions.md", "preferences.md"]
+        .iter()
+        .any(|f| knowledge_dir.join(f).exists());
+
+    if !has_knowledge {
+        return Err(MemoryError::Config(
+            "No knowledge files found in knowledge/ directory".into(),
+        ));
+    }
+
+    // Check 5: README exists
+    if !pack_dir.join("README.md").exists() {
+        println!("  {} README.md missing (recommended)", "⚠".yellow());
+    }
+
+    // Check 6: Categories match available knowledge
+    let mut found_categories = Vec::new();
+    for (file, category) in [
+        ("patterns.md", "Patterns"),
+        ("solutions.md", "Solutions"),
+        ("workflows.md", "Workflows"),
+        ("decisions.md", "Decisions"),
+        ("preferences.md", "Preferences"),
+    ] {
+        if knowledge_dir.join(file).exists() {
+            found_categories.push(category);
+        }
+    }
+
+    println!("  {} Manifest valid", "✓".green());
+    println!("  {} Knowledge directory exists", "✓".green());
+    println!("  {} Found categories: {}", "✓".green(), found_categories.join(", "));
 
     Ok(())
 }

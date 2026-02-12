@@ -713,6 +713,34 @@ pub enum PackCommand {
         /// Pack name
         name: String,
     },
+
+    /// Publish a pack to Git repository
+    Publish {
+        /// Pack directory path
+        path: String,
+
+        /// Git repository URL (creates if doesn't exist)
+        #[arg(long)]
+        repo: Option<String>,
+
+        /// Push to remote after commit
+        #[arg(long)]
+        push: bool,
+
+        /// Commit message
+        #[arg(short, long)]
+        message: Option<String>,
+
+        /// Skip secret detection (WARNING: use with caution)
+        #[arg(long)]
+        skip_security: bool,
+    },
+
+    /// Validate a pack structure
+    Validate {
+        /// Pack directory path
+        path: String,
+    },
 }
 
 #[derive(Subcommand)]
