@@ -1,0 +1,37 @@
+{
+  "name": "hive-knowledge",
+  "version": "1.0.0",
+  "description": "Distributed knowledge sharing via Hive Mind - discover, install, and share knowledge packs",
+  "author": "Claude Memory Project",
+  "homepage": "https://github.com/anthropics/claude-memory",
+  "keywords": ["knowledge", "hive", "packs", "sharing", "distributed", "memory"],
+  "categories": ["productivity", "knowledge-management"],
+  "commands": {
+    "hive-browse": {
+      "description": "Browse available knowledge packs",
+      "script": "scripts/browse.sh"
+    },
+    "hive-install": {
+      "description": "Install a knowledge pack",
+      "script": "scripts/install.sh",
+      "args": ["pack_name"]
+    },
+    "hive-list": {
+      "description": "List installed packs",
+      "script": "scripts/list.sh"
+    },
+    "hive-search": {
+      "description": "Search for knowledge packs",
+      "script": "scripts/search.sh",
+      "args": ["query"]
+    }
+  },
+  "skills": ["hive-knowledge"],
+  "triggers": [
+    "install knowledge pack",
+    "browse packs",
+    "hive mind",
+    "share knowledge",
+    "knowledge registry"
+  ]
+}
