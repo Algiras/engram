@@ -231,29 +231,52 @@ impl RegistryManager {
         Ok(())
     }
 
-    /// Clone a registry from Git
+    /// Convert HTTPS GitHub URL to SSH URL
+    fn https_to_ssh(url: &str) -> Option<String> {
+        // https://github.com/owner/repo.git -> git@github.com:owner/repo.git
+        let trimmed = url
+            .strip_prefix("https://github.com/")?;
+        Some(format!("git@github.com:{}", trimmed))
+    }
+
+    /// Clone a registry from Git (tries HTTPS first, falls back to SSH)
     fn clone_registry(&self, registry: &Registry) -> Result<()> {
         let local_path = registry.local_path(&self.hive_dir);
         std::fs::create_dir_all(local_path.parent().unwrap())?;
 
+        let local_str = local_path.to_str().unwrap();
+
+        // Try HTTPS first
         let status = std::process::Command::new("git")
-            .args([
-                "clone",
-                "--depth",
-                "1", // Shallow clone for speed
-                &registry.url,
-                local_path.to_str().unwrap(),
-            ])
+            .args(["clone", "--depth", "1", &registry.url, local_str])
             .status()?;
 
-        if !status.success() {
-            return Err(MemoryError::Config(format!(
-                "Failed to clone registry from {}",
-                registry.url
-            )));
+        if status.success() {
+            return Ok(());
         }
 
-        Ok(())
+        // If HTTPS failed and URL is GitHub, try SSH fallback
+        if let Some(ssh_url) = Self::https_to_ssh(&registry.url) {
+            eprintln!("HTTPS clone failed, trying SSH: {}", ssh_url);
+
+            // Clean up any partial clone
+            if local_path.exists() {
+                let _ = std::fs::remove_dir_all(&local_path);
+            }
+
+            let ssh_status = std::process::Command::new("git")
+                .args(["clone", "--depth", "1", &ssh_url, local_str])
+                .status()?;
+
+            if ssh_status.success() {
+                return Ok(());
+            }
+        }
+
+        Err(MemoryError::Config(format!(
+            "Failed to clone registry from {} (tried HTTPS and SSH)",
+            registry.url
+        )))
     }
 
     /// Pull updates from a registry
@@ -291,19 +314,38 @@ impl RegistryManager {
         let mut packs = Vec::new();
 
         // Scan for pack directories (contain .pack/manifest.json)
-        for entry in std::fs::read_dir(&local_path)? {
-            let entry = entry?;
-            let path = entry.path();
+        // Check both root level and one level deep (e.g., registry/ subdirectory)
+        let mut dirs_to_scan = vec![local_path.clone()];
 
-            if path.is_dir() && path.join(".pack/manifest.json").exists() {
-                match KnowledgePack::load(&path) {
-                    Ok(pack) => packs.push(pack),
-                    Err(e) => {
-                        eprintln!("Warning: Failed to load pack at {}: {}", path.display(), e);
+        // Also scan immediate subdirectories (handles repos where packs are in a subdirectory)
+        if let Ok(entries) = std::fs::read_dir(&local_path) {
+            for entry in entries.flatten() {
+                let path = entry.path();
+                if path.is_dir() && !path.file_name().is_some_and(|n| n.to_string_lossy().starts_with('.')) {
+                    dirs_to_scan.push(path);
+                }
+            }
+        }
+
+        for scan_dir in &dirs_to_scan {
+            if let Ok(entries) = std::fs::read_dir(scan_dir) {
+                for entry in entries.flatten() {
+                    let path = entry.path();
+                    if path.is_dir() && path.join(".pack/manifest.json").exists() {
+                        match KnowledgePack::load(&path) {
+                            Ok(pack) => packs.push(pack),
+                            Err(e) => {
+                                eprintln!("Warning: Failed to load pack at {}: {}", path.display(), e);
+                            }
+                        }
                     }
                 }
             }
         }
+
+        // Deduplicate by pack name (prefer first found)
+        let mut seen = std::collections::HashSet::new();
+        packs.retain(|p| seen.insert(p.name.clone()));
 
         Ok(packs)
     }
@@ -381,6 +423,33 @@ mod tests {
 
         // Remove nonexistent
         assert!(store.remove("nonexistent").is_err());
+    }
+
+    #[test]
+    fn test_https_to_ssh() {
+        // Standard GitHub HTTPS → SSH
+        assert_eq!(
+            RegistryManager::https_to_ssh("https://github.com/owner/repo.git"),
+            Some("git@github.com:owner/repo.git".to_string())
+        );
+
+        // Without .git suffix
+        assert_eq!(
+            RegistryManager::https_to_ssh("https://github.com/owner/repo"),
+            Some("git@github.com:owner/repo".to_string())
+        );
+
+        // Non-GitHub URL returns None
+        assert_eq!(
+            RegistryManager::https_to_ssh("https://gitlab.com/owner/repo.git"),
+            None
+        );
+
+        // SSH URL returns None
+        assert_eq!(
+            RegistryManager::https_to_ssh("git@github.com:owner/repo.git"),
+            None
+        );
     }
 
     #[test]

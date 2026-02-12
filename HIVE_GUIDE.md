@@ -106,16 +106,27 @@ claude-memory hive pack publish . \
 
 | Command | Description |
 |---------|-------------|
-| `hive pack create` | Create pack from local knowledge |
+| `hive pack create <name> --project <proj>` | Create pack from local knowledge |
 | `hive pack validate <path>` | Validate pack structure |
-| `hive pack publish <path>` | Publish pack to Git |
+| `hive pack publish <path> [--repo <url>] [--push]` | Publish pack to Git |
 | `hive pack stats <name>` | Show pack statistics |
-| `hive install <pack>` | Install a pack |
+| `hive install <pack> [--registry <name>]` | Install a pack |
 | `hive uninstall <pack>` | Uninstall a pack |
 | `hive list` | List installed packs |
 | `hive update [pack]` | Update pack(s) |
-| `hive browse` | Browse available packs |
+| `hive browse [--category <cat>] [--keyword <kw>]` | Browse available packs |
 | `hive search <query>` | Search for packs |
+
+### Pack Create Options
+
+| Flag | Description |
+|------|-------------|
+| `--project <name>` | **Required.** Source project to extract knowledge from |
+| `--description <text>` | Pack description |
+| `--author <name>` | Author name |
+| `--keywords <list>` | Comma-separated keywords |
+| `--categories <list>` | Comma-separated: patterns,solutions,decisions,workflows,preferences |
+| `--output <dir>` | Output directory (default: `./packs/<name>`) |
 
 ## Pack Structure
 
@@ -210,10 +221,10 @@ Scans for 12 types of secrets:
 - JWT tokens
 
 **Behavior:**
-- Blocks pack creation if secrets found
+- Blocks pack creation and publishing if secrets found
 - Shows file:line location
 - Requires manual removal
-- Can skip with `--skip-security` (NOT recommended)
+- Publishing can skip with `--skip-security` (NOT recommended)
 
 ### Privacy Controls
 
