@@ -575,42 +575,6 @@ impl App {
         }
         Ok(())
     }
-}
-
-/// Entry point: set up terminal, run app, restore terminal.
-pub fn run_tui(memory_dir: PathBuf) -> io::Result<()> {
-    if !io::IsTerminal::is_terminal(&io::stdin()) {
-        return Err(io::Error::other(
-            "TUI requires an interactive terminal (stdin must be a TTY)",
-        ));
-    }
-
-    // Set up panic hook to restore terminal
-    let original_hook = std::panic::take_hook();
-    std::panic::set_hook(Box::new(move |panic_info| {
-        let _ = terminal::disable_raw_mode();
-        let _ = crossterm::execute!(io::stdout(), LeaveAlternateScreen);
-        original_hook(panic_info);
-    }));
-
-    terminal::enable_raw_mode()?;
-    let mut stdout = io::stdout();
-    crossterm::execute!(stdout, EnterAlternateScreen)?;
-
-    let backend = CrosstermBackend::new(stdout);
-    let mut terminal = Terminal::new(backend)?;
-
-    let mut app = App::new(memory_dir);
-    let result = app.run(&mut terminal);
-
-    // Restore terminal
-    terminal::disable_raw_mode()?;
-    crossterm::execute!(terminal.backend_mut(), LeaveAlternateScreen)?;
-    terminal.show_cursor()?;
-
-    result
-}
-
     fn handle_pack_search_keys(&mut self, code: KeyCode) {
         match code {
             KeyCode::Esc => {
@@ -687,3 +651,38 @@ pub fn run_tui(memory_dir: PathBuf) -> io::Result<()> {
         self.pack_search_matches.contains(&pack_idx)
     }
 }
+
+/// Entry point: set up terminal, run app, restore terminal.
+pub fn run_tui(memory_dir: PathBuf) -> io::Result<()> {
+    if !io::IsTerminal::is_terminal(&io::stdin()) {
+        return Err(io::Error::other(
+            "TUI requires an interactive terminal (stdin must be a TTY)",
+        ));
+    }
+
+    // Set up panic hook to restore terminal
+    let original_hook = std::panic::take_hook();
+    std::panic::set_hook(Box::new(move |panic_info| {
+        let _ = terminal::disable_raw_mode();
+        let _ = crossterm::execute!(io::stdout(), LeaveAlternateScreen);
+        original_hook(panic_info);
+    }));
+
+    terminal::enable_raw_mode()?;
+    let mut stdout = io::stdout();
+    crossterm::execute!(stdout, EnterAlternateScreen)?;
+
+    let backend = CrosstermBackend::new(stdout);
+    let mut terminal = Terminal::new(backend)?;
+
+    let mut app = App::new(memory_dir);
+    let result = app.run(&mut terminal);
+
+    // Restore terminal
+    terminal::disable_raw_mode()?;
+    crossterm::execute!(terminal.backend_mut(), LeaveAlternateScreen)?;
+    terminal.show_cursor()?;
+
+    result
+}
+
