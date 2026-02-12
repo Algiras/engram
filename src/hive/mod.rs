@@ -6,13 +6,13 @@
 // - Knowledge discovery (browse, search packs)
 // - Integration with recall/search (union of local + installed)
 
+pub mod installer;
 pub mod pack;
 pub mod registry;
-pub mod installer;
 pub mod security;
 
 // Re-export commonly used types
+pub use installer::PackInstaller;
 pub use pack::{Author, KnowledgePack, PackCategory, PrivacyPolicy};
-pub use registry::{Registry, RegistryManager};
-pub use installer::{InstalledPack, PackInstaller};
-pub use security::{SecretDetector, DetectedSecret};
+pub use registry::RegistryManager;
+pub use security::SecretDetector;

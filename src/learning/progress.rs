@@ -167,7 +167,9 @@ pub fn save_state(memory_dir: &Path, state: &LearningState) -> Result<()> {
 
 /// Get the path to the learning state file
 fn get_state_path(memory_dir: &Path, project: &str) -> PathBuf {
-    memory_dir.join("learning").join(format!("{}.json", project))
+    memory_dir
+        .join("learning")
+        .join(format!("{}.json", project))
 }
 
 /// Reset learning state to defaults (but preserve history)

@@ -187,11 +187,9 @@ impl PackInstaller {
 
         // Get latest pack info from registry
         let registry_store = crate::hive::registry::RegistryStore::load(&self.hive_dir)?;
-        let registry = registry_store
-            .get(&installed.registry)
-            .ok_or_else(|| {
-                MemoryError::Config(format!("Registry '{}' not found", installed.registry))
-            })?;
+        let registry = registry_store.get(&installed.registry).ok_or_else(|| {
+            MemoryError::Config(format!("Registry '{}' not found", installed.registry))
+        })?;
 
         let registry_pack_dir = registry.local_path(&self.hive_dir).join(&installed.name);
 

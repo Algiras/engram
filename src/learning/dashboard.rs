@@ -50,7 +50,12 @@ pub fn display_dashboard(state: &LearningState) {
         println!("{}", "-".repeat(60).cyan());
 
         let health_delta = latest.health_score as i16 - first.health_score as i16;
-        display_delta("Health Score", first.health_score, latest.health_score, health_delta);
+        display_delta(
+            "Health Score",
+            first.health_score,
+            latest.health_score,
+            health_delta,
+        );
 
         let query_delta = latest.avg_query_time_ms as i32 - first.avg_query_time_ms as i32;
         display_delta_i32(
@@ -177,10 +182,23 @@ fn display_delta<T: std::fmt::Display>(label: &str, before: T, after: T, delta: 
         "(±0)".dimmed()
     };
 
-    println!("{}: {} → {} {}", label.bold(), before, after, formatted_delta);
+    println!(
+        "{}: {} → {} {}",
+        label.bold(),
+        before,
+        after,
+        formatted_delta
+    );
 }
 
-fn display_delta_i32(label: &str, before: u32, after: u32, delta: i32, unit: &str, lower_is_better: bool) {
+fn display_delta_i32(
+    label: &str,
+    before: u32,
+    after: u32,
+    delta: i32,
+    unit: &str,
+    lower_is_better: bool,
+) {
     let formatted_delta = if delta > 0 {
         if lower_is_better {
             format!("(+{}{})", delta, unit).red()
@@ -197,10 +215,25 @@ fn display_delta_i32(label: &str, before: u32, after: u32, delta: i32, unit: &st
         format!("(±0{})", unit).dimmed()
     };
 
-    println!("{}: {}{} → {}{} {}", label.bold(), before, unit, after, unit, formatted_delta);
+    println!(
+        "{}: {}{} → {}{} {}",
+        label.bold(),
+        before,
+        unit,
+        after,
+        unit,
+        formatted_delta
+    );
 }
 
-fn display_delta_f32(label: &str, before: f32, after: f32, delta: f32, unit: &str, lower_is_better: bool) {
+fn display_delta_f32(
+    label: &str,
+    before: f32,
+    after: f32,
+    delta: f32,
+    unit: &str,
+    lower_is_better: bool,
+) {
     let formatted_delta = if delta > 0.01 {
         if lower_is_better {
             format!("(+{:.1}{})", delta, unit).red()
@@ -217,7 +250,15 @@ fn display_delta_f32(label: &str, before: f32, after: f32, delta: f32, unit: &st
         format!("(±0{})", unit).dimmed()
     };
 
-    println!("{}: {:.1}{} → {:.1}{} {}", label.bold(), before, unit, after, unit, formatted_delta);
+    println!(
+        "{}: {:.1}{} → {:.1}{} {}",
+        label.bold(),
+        before,
+        unit,
+        after,
+        unit,
+        formatted_delta
+    );
 }
 
 /// Display a preview of proposed changes
@@ -271,10 +312,7 @@ pub fn display_preview(preview: &ChangePreview) {
             "  Similarity Threshold: {:.2}",
             strategy.similarity_threshold
         );
-        println!(
-            "  Trigger Frequency: {}d",
-            strategy.trigger_frequency_days
-        );
+        println!("  Trigger Frequency: {}d", strategy.trigger_frequency_days);
         println!("  Size Trigger: {:.1}MB", strategy.size_trigger_mb);
     }
 

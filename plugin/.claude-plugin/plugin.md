@@ -67,7 +67,7 @@ cargo install --path /path/to/claude-memory
 2. **Configure a registry:**
 ```bash
 # Add official registry
-claude-memory hive registry add anthropics/claude-memory
+claude-memory hive registry add Algiras/claude-memory
 
 # Or add local registry
 claude-memory hive registry add file:///path/to/registry
@@ -104,8 +104,8 @@ This plugin integrates with:
 
 ## Support
 
-- Repository: https://github.com/anthropics/claude-memory
-- Issues: https://github.com/anthropics/claude-memory/issues
+- Repository: https://github.com/Algiras/claude-memory
+- Issues: https://github.com/Algiras/claude-memory/issues
 - Documentation: See hive-knowledge skill
 
 ## License

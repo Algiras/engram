@@ -37,9 +37,18 @@ impl SecretDetector {
                 r"-----BEGIN (RSA|OPENSSH|EC|DSA) PRIVATE KEY-----",
             ),
             ("Bearer Token", r"(?i)bearer\s+[A-Za-z0-9_-]{20,}"),
-            ("JWT", r"eyJ[A-Za-z0-9_-]*\.eyJ[A-Za-z0-9_-]*\.[A-Za-z0-9_-]*"),
-            ("Generic Secret", r#"(?i)secret["']?\s*[:=]\s*["']?[A-Za-z0-9_-]{20,}"#),
-            ("Auth Token", r#"(?i)auth[_-]?token["']?\s*[:=]\s*["']?[A-Za-z0-9_-]{20,}"#),
+            (
+                "JWT",
+                r"eyJ[A-Za-z0-9_-]*\.eyJ[A-Za-z0-9_-]*\.[A-Za-z0-9_-]*",
+            ),
+            (
+                "Generic Secret",
+                r#"(?i)secret["']?\s*[:=]\s*["']?[A-Za-z0-9_-]{20,}"#,
+            ),
+            (
+                "Auth Token",
+                r#"(?i)auth[_-]?token["']?\s*[:=]\s*["']?[A-Za-z0-9_-]{20,}"#,
+            ),
         ];
 
         let compiled: Result<Vec<_>> = patterns
@@ -89,7 +98,11 @@ impl SecretDetector {
         for entry in walkdir::WalkDir::new(dir)
             .into_iter()
             .filter_map(|e| e.ok())
-            .filter(|e| e.path().extension().is_some_and(|ext| ext == "md" || ext == "json"))
+            .filter(|e| {
+                e.path()
+                    .extension()
+                    .is_some_and(|ext| ext == "md" || ext == "json")
+            })
         {
             let secrets = self.scan_file(entry.path())?;
             all_secrets.extend(secrets);
@@ -114,9 +127,7 @@ impl SecretDetector {
         ];
 
         let matched_lower = matched.to_lowercase();
-        false_positives
-            .iter()
-            .any(|fp| matched_lower.contains(fp))
+        false_positives.iter().any(|fp| matched_lower.contains(fp))
             || context.contains("Example:")
             || context.contains("example")
             || matched.chars().all(|c| c == 'x' || c == '*')
@@ -127,11 +138,7 @@ impl SecretDetector {
         if secret.len() <= 10 {
             "*".repeat(secret.len())
         } else {
-            format!(
-                "{}***{}",
-                &secret[..3],
-                &secret[secret.len() - 3..]
-            )
+            format!("{}***{}", &secret[..3], &secret[secret.len() - 3..])
         }
     }
 }
@@ -189,7 +196,11 @@ mod tests {
         let detector = SecretDetector::new().unwrap();
 
         let temp_dir = TempDir::new().unwrap();
-        std::fs::write(temp_dir.path().join("file1.md"), "api_key=sk-real123456789012345678").unwrap();
+        std::fs::write(
+            temp_dir.path().join("file1.md"),
+            "api_key=sk-real123456789012345678",
+        )
+        .unwrap();
         std::fs::write(temp_dir.path().join("file2.md"), "No secrets here").unwrap();
 
         let secrets = detector.scan_directory(temp_dir.path()).unwrap();

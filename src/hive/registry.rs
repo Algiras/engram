@@ -61,8 +61,10 @@ impl Registry {
         let name = url
             .trim_end_matches(".git")
             .split('/')
-            .last()
-            .ok_or_else(|| MemoryError::Config(format!("Could not extract name from URL: {}", url)))?
+            .next_back()
+            .ok_or_else(|| {
+                MemoryError::Config(format!("Could not extract name from URL: {}", url))
+            })?
             .to_string();
 
         if name.is_empty() {
@@ -235,9 +237,10 @@ impl RegistryManager {
         std::fs::create_dir_all(local_path.parent().unwrap())?;
 
         let status = std::process::Command::new("git")
-            .args(&[
+            .args([
                 "clone",
-                "--depth", "1",  // Shallow clone for speed
+                "--depth",
+                "1", // Shallow clone for speed
                 &registry.url,
                 local_path.to_str().unwrap(),
             ])
@@ -256,7 +259,7 @@ impl RegistryManager {
     /// Pull updates from a registry
     fn pull_registry(&self, local_path: &Path) -> Result<()> {
         let status = std::process::Command::new("git")
-            .args(&["pull", "--ff-only"])
+            .args(["pull", "--ff-only"])
             .current_dir(local_path)
             .status()?;
 
@@ -273,9 +276,9 @@ impl RegistryManager {
     /// Discover packs in a registry
     pub fn discover_packs(&self, registry_name: &str) -> Result<Vec<KnowledgePack>> {
         let store = RegistryStore::load(&self.hive_dir)?;
-        let registry = store
-            .get(registry_name)
-            .ok_or_else(|| MemoryError::Config(format!("Registry '{}' not found", registry_name)))?;
+        let registry = store.get(registry_name).ok_or_else(|| {
+            MemoryError::Config(format!("Registry '{}' not found", registry_name))
+        })?;
 
         let local_path = registry.local_path(&self.hive_dir);
         if !local_path.exists() {

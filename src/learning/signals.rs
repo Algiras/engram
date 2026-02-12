@@ -45,9 +45,9 @@ impl LearningSignal {
         match self {
             LearningSignal::HealthImprovement { before, after, .. } => {
                 let improvement = (*after as f32 - *before as f32) / 100.0;
-                improvement.max(0.0).min(1.0)
+                improvement.clamp(0.0, 1.0)
             }
-            LearningSignal::SuccessfulRecall { relevance, .. } => relevance.max(0.0).min(1.0),
+            LearningSignal::SuccessfulRecall { relevance, .. } => relevance.clamp(0.0, 1.0),
             LearningSignal::ConsolidationAccepted {
                 merged_count,
                 similarity_threshold,

@@ -41,7 +41,7 @@ impl RelationType {
         }
     }
 
-    pub fn from_str(s: &str) -> Option<Self> {
+    pub fn parse(s: &str) -> Option<Self> {
         match s.to_lowercase().as_str() {
             "implements" => Some(RelationType::Implements),
             "uses" => Some(RelationType::Uses),
@@ -64,7 +64,7 @@ pub struct Concept {
     pub category: ConceptCategory,
     pub description: Option<String>,
     pub source_sessions: Vec<String>,
-    pub importance: f32,  // 0.0 - 1.0
+    pub importance: f32, // 0.0 - 1.0
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -85,7 +85,7 @@ pub struct Relationship {
     pub from: String,
     pub to: String,
     pub rel_type: RelationType,
-    pub strength: f32,  // 0.0 - 1.0 (like synaptic weight!)
+    pub strength: f32, // 0.0 - 1.0 (like synaptic weight!)
     pub source_sessions: Vec<String>,
 }
 
@@ -134,7 +134,9 @@ impl KnowledgeGraph {
 
         // Add edges
         for rel in &self.relationships {
-            if let (Some(&from_idx), Some(&to_idx)) = (node_map.get(&rel.from), node_map.get(&rel.to)) {
+            if let (Some(&from_idx), Some(&to_idx)) =
+                (node_map.get(&rel.from), node_map.get(&rel.to))
+            {
                 graph.add_edge(from_idx, to_idx, rel.rel_type);
             }
         }

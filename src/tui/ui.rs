@@ -218,8 +218,7 @@ pub fn render_viewer(f: &mut Frame, app: &App) {
         " Esc/q: back | PgUp/PgDn/j/k: scroll | Line {} ",
         app.scroll_offset + 1
     );
-    let bar = Paragraph::new(help)
-        .style(Style::default().fg(Color::Black).bg(Color::DarkGray));
+    let bar = Paragraph::new(help).style(Style::default().fg(Color::Black).bg(Color::DarkGray));
     f.render_widget(bar, bar_area);
 }
 
@@ -247,9 +246,7 @@ fn render_delete_dialog(f: &mut Frame, app: &App) {
         Line::from(""),
         Line::from(Span::styled(
             "Delete this item?",
-            Style::default()
-                .fg(Color::Red)
-                .add_modifier(Modifier::BOLD),
+            Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
         )),
         Line::from(""),
         Line::from(item_name),
@@ -278,10 +275,7 @@ pub fn render_packs(f: &mut Frame, app: &App) {
     let area = f.area();
 
     // Split into main area and status bar
-    let chunks = Layout::vertical([
-        Constraint::Min(3),
-        Constraint::Length(1),
-    ]).split(area);
+    let chunks = Layout::vertical([Constraint::Min(3), Constraint::Length(1)]).split(area);
 
     // Title
     let title_block = Block::default()
@@ -327,7 +321,7 @@ pub fn render_packs(f: &mut Frame, app: &App) {
                 };
 
                 let categories = pack.categories.join(", ");
-                let keywords = if pack.keywords.is_empty() {
+                let _keywords = if pack.keywords.is_empty() {
                     String::new()
                 } else {
                     format!(" [{}]", pack.keywords.join(", "))
@@ -337,7 +331,9 @@ pub fn render_packs(f: &mut Frame, app: &App) {
                     Line::from(vec![
                         Span::styled(
                             format!("● {}", pack.name),
-                            Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD),
+                            Style::default()
+                                .fg(Color::Cyan)
+                                .add_modifier(Modifier::BOLD),
                         ),
                         Span::raw(format!(" v{}", pack.version)),
                     ]),
@@ -364,21 +360,22 @@ pub fn render_packs(f: &mut Frame, app: &App) {
         let mut list_state = ListState::default();
         list_state.select(Some(app.pack_index));
 
-        let list = List::new(items)
-            .block(title_block)
-            .highlight_style(
-                Style::default()
-                    .bg(Color::Cyan)
-                    .fg(Color::Black)
-                    .add_modifier(Modifier::BOLD),
-            );
+        let list = List::new(items).block(title_block).highlight_style(
+            Style::default()
+                .bg(Color::Cyan)
+                .fg(Color::Black)
+                .add_modifier(Modifier::BOLD),
+        );
 
         f.render_stateful_widget(list, chunks[0], &mut list_state);
     }
 
     // Status bar
     let status_text = if app.pack_search_mode {
-        format!("SEARCH: {}  (Enter: jump, ESC: cancel)", app.pack_search_query)
+        format!(
+            "SEARCH: {}  (Enter: jump, ESC: cancel)",
+            app.pack_search_query
+        )
     } else if !app.pack_search_matches.is_empty() {
         format!(
             "j/k: nav  |  Enter: details  |  u: update  |  d: del  |  /: search  |  n/N: match {}/{}  |  ESC: back  |  q: quit",
@@ -412,10 +409,7 @@ pub fn render_pack_detail(f: &mut Frame, app: &App) {
     let area = f.area();
 
     // Split into content area and status bar
-    let chunks = Layout::vertical([
-        Constraint::Min(3),
-        Constraint::Length(1),
-    ]).split(area);
+    let chunks = Layout::vertical([Constraint::Min(3), Constraint::Length(1)]).split(area);
 
     let block = Block::default()
         .title(" Pack Details ")
@@ -452,7 +446,9 @@ fn render_pack_confirm_dialog(f: &mut Frame, app: &App) {
     let popup_area = Rect::new(x, y, popup_width, popup_height);
 
     if let Some(action) = &app.show_pack_confirm {
-        let pack_name = app.packs.get(app.pack_index)
+        let pack_name = app
+            .packs
+            .get(app.pack_index)
             .map(|p| p.name.as_str())
             .unwrap_or("unknown");
 
@@ -460,12 +456,12 @@ fn render_pack_confirm_dialog(f: &mut Frame, app: &App) {
             super::PackAction::Update => (
                 "Update Pack",
                 format!("Update pack '{}'?", pack_name),
-                "This will pull the latest version from the registry."
+                "This will pull the latest version from the registry.",
             ),
             super::PackAction::Uninstall => (
                 "Uninstall Pack",
                 format!("Uninstall pack '{}'?", pack_name),
-                "This will remove the pack and all its knowledge from your system."
+                "This will remove the pack and all its knowledge from your system.",
             ),
         };
 
@@ -473,7 +469,9 @@ fn render_pack_confirm_dialog(f: &mut Frame, app: &App) {
             Line::from(""),
             Line::from(Span::styled(
                 title,
-                Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD),
+                Style::default()
+                    .fg(Color::Yellow)
+                    .add_modifier(Modifier::BOLD),
             )),
             Line::from(""),
             Line::from(message),
@@ -490,7 +488,9 @@ fn render_pack_confirm_dialog(f: &mut Frame, app: &App) {
             .borders(Borders::ALL)
             .border_style(Style::default().fg(Color::Yellow));
 
-        let paragraph = Paragraph::new(text).block(block).alignment(Alignment::Center);
+        let paragraph = Paragraph::new(text)
+            .block(block)
+            .alignment(Alignment::Center);
 
         f.render_widget(Clear, popup_area);
         f.render_widget(paragraph, popup_area);
@@ -501,7 +501,7 @@ fn render_pack_confirm_dialog(f: &mut Frame, app: &App) {
 fn render_pack_action_message(f: &mut Frame, app: &App) {
     if let Some((message, is_error)) = &app.pack_action_message {
         let area = f.area();
-        
+
         let popup_width = (message.len() as u16 + 10).min(area.width.saturating_sub(4));
         let popup_height = 5u16;
         let x = (area.width.saturating_sub(popup_width)) / 2;
@@ -517,14 +517,19 @@ fn render_pack_action_message(f: &mut Frame, app: &App) {
                 Style::default().fg(color).add_modifier(Modifier::BOLD),
             )),
             Line::from(""),
-            Line::from(Span::styled("Press any key to continue", Style::default().fg(Color::Gray))),
+            Line::from(Span::styled(
+                "Press any key to continue",
+                Style::default().fg(Color::Gray),
+            )),
         ];
 
         let block = Block::default()
             .borders(Borders::ALL)
             .border_style(Style::default().fg(color));
 
-        let paragraph = Paragraph::new(text).block(block).alignment(Alignment::Center);
+        let paragraph = Paragraph::new(text)
+            .block(block)
+            .alignment(Alignment::Center);
 
         f.render_widget(Clear, popup_area);
         f.render_widget(paragraph, popup_area);

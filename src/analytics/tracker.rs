@@ -1,8 +1,8 @@
+use crate::error::Result;
+use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::{Path, PathBuf};
-use chrono::{DateTime, Utc};
-use crate::error::Result;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum EventType {
@@ -117,7 +117,8 @@ impl EventTracker {
             // Extract date from filename (YYYY-MM-DD.jsonl)
             if let Some(filename) = path.file_stem().and_then(|s| s.to_str()) {
                 if let Ok(file_date) = chrono::NaiveDate::parse_from_str(filename, "%Y-%m-%d") {
-                    let file_datetime = file_date.and_hms_opt(0, 0, 0)
+                    let file_datetime = file_date
+                        .and_hms_opt(0, 0, 0)
                         .unwrap()
                         .and_local_timezone(Utc)
                         .unwrap();
@@ -167,15 +168,17 @@ mod tests {
         let tracker = EventTracker::new(temp.path());
 
         for project in &["proj-a", "proj-b", "proj-a"] {
-            tracker.track(UsageEvent {
-                timestamp: Utc::now(),
-                event_type: EventType::Search,
-                project: project.to_string(),
-                query: Some("test".to_string()),
-                category: None,
-                results_count: Some(5),
-                session_id: None,
-            }).unwrap();
+            tracker
+                .track(UsageEvent {
+                    timestamp: Utc::now(),
+                    event_type: EventType::Search,
+                    project: project.to_string(),
+                    query: Some("test".to_string()),
+                    category: None,
+                    results_count: Some(5),
+                    session_id: None,
+                })
+                .unwrap();
         }
 
         let events = tracker.get_events(Some("proj-a"), 1).unwrap();

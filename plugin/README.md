@@ -29,7 +29,7 @@ cargo install --path /path/to/claude-memory
 
 2. **Add a registry:**
 ```bash
-claude-memory hive registry add anthropics/claude-memory
+claude-memory hive registry add Algiras/claude-memory
 ```
 
 3. **Browse and install packs:**

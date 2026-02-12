@@ -11,7 +11,12 @@ pub enum Provider {
 
 impl Provider {
     pub fn all() -> &'static [Provider] {
-        &[Provider::Anthropic, Provider::OpenAI, Provider::Ollama, Provider::Gemini]
+        &[
+            Provider::Anthropic,
+            Provider::OpenAI,
+            Provider::Ollama,
+            Provider::Gemini,
+        ]
     }
 
     pub fn default_endpoint(&self) -> &'static str {

@@ -4,11 +4,7 @@ use crate::error::Result;
 use chrono::Utc;
 
 /// Simulate a user session with recall events
-pub fn simulate_recall_session(
-    config: &Config,
-    project: &str,
-    recall_count: usize,
-) -> Result<()> {
+pub fn simulate_recall_session(config: &Config, project: &str, recall_count: usize) -> Result<()> {
     let tracker = EventTracker::new(&config.memory_dir);
 
     for i in 0..recall_count {
@@ -27,11 +23,7 @@ pub fn simulate_recall_session(
 }
 
 /// Simulate mixed usage patterns (recall, search, add)
-pub fn simulate_mixed_usage(
-    config: &Config,
-    project: &str,
-    iterations: usize,
-) -> Result<()> {
+pub fn simulate_mixed_usage(config: &Config, project: &str, iterations: usize) -> Result<()> {
     let tracker = EventTracker::new(&config.memory_dir);
 
     for i in 0..iterations {
@@ -126,8 +118,12 @@ mod tests {
         assert_eq!(events.len(), 15);
 
         // Verify event types are mixed
-        let has_recall = events.iter().any(|e| matches!(e.event_type, EventType::Recall));
-        let has_search = events.iter().any(|e| matches!(e.event_type, EventType::Search));
+        let has_recall = events
+            .iter()
+            .any(|e| matches!(e.event_type, EventType::Recall));
+        let has_search = events
+            .iter()
+            .any(|e| matches!(e.event_type, EventType::Search));
         assert!(has_recall && has_search);
     }
 
@@ -136,13 +132,16 @@ mod tests {
         let temp = TempDir::new().unwrap();
         let config = create_test_config(&temp);
 
-        let result = simulate_high_frequency_knowledge(&config, "test-project", "critical-pattern", 20);
+        let result =
+            simulate_high_frequency_knowledge(&config, "test-project", "critical-pattern", 20);
         assert!(result.is_ok());
 
         // Verify all events have same query
         let tracker = EventTracker::new(&config.memory_dir);
         let events = tracker.get_events(Some("test-project"), 1).unwrap();
         assert_eq!(events.len(), 20);
-        assert!(events.iter().all(|e| e.query.as_deref() == Some("critical-pattern")));
+        assert!(events
+            .iter()
+            .all(|e| e.query.as_deref() == Some("critical-pattern")));
     }
 }

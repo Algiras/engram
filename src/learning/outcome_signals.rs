@@ -24,13 +24,13 @@ pub struct ExplicitFeedback {
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 pub enum Sentiment {
-    Helpful,    // Knowledge solved the problem
-    Unhelpful,  // Knowledge didn't help or was wrong
-    Neutral,    // Unclear or mixed outcome
+    Helpful,   // Knowledge solved the problem
+    Unhelpful, // Knowledge didn't help or was wrong
+    Neutral,   // Unclear or mixed outcome
 }
 
 impl Sentiment {
-    pub fn to_reward(&self) -> f32 {
+    pub fn to_reward(self) -> f32 {
         match self {
             Sentiment::Helpful => 0.8,
             Sentiment::Unhelpful => -0.3,
@@ -52,7 +52,7 @@ pub struct ErrorCorrection {
 
 impl ErrorCorrection {
     pub fn to_reward(&self) -> f32 {
-        -0.5  // Strong negative signal
+        -0.5 // Strong negative signal
     }
 }
 
@@ -68,7 +68,7 @@ pub struct FirstTimeSuccess {
 
 impl FirstTimeSuccess {
     pub fn to_reward(&self) -> f32 {
-        0.9  // Very positive - immediate success
+        0.9 // Very positive - immediate success
     }
 }
 
@@ -86,16 +86,16 @@ pub struct IterativeResolution {
 impl IterativeResolution {
     pub fn to_reward(&self) -> f32 {
         if !self.final_success {
-            return -0.2;  // Failed after multiple attempts
+            return -0.2; // Failed after multiple attempts
         }
 
         // Success, but penalize for iterations
         match self.iteration_count {
-            1 => 0.9,   // First-time success
-            2 => 0.6,   // Needed one retry
-            3 => 0.4,   // Needed two retries
-            4 => 0.2,   // Needed three retries
-            _ => 0.1,   // Too many attempts
+            1 => 0.9, // First-time success
+            2 => 0.6, // Needed one retry
+            3 => 0.4, // Needed two retries
+            4 => 0.2, // Needed three retries
+            _ => 0.1, // Too many attempts
         }
     }
 }
@@ -139,7 +139,10 @@ impl OutcomeSignal {
 }
 
 /// Store outcome signals for a project
-pub fn save_outcome_signal(memory_dir: &std::path::Path, signal: &OutcomeSignal) -> crate::error::Result<()> {
+pub fn save_outcome_signal(
+    memory_dir: &std::path::Path,
+    signal: &OutcomeSignal,
+) -> crate::error::Result<()> {
     let project = match signal {
         OutcomeSignal::Explicit(f) => &f.project,
         OutcomeSignal::ErrorCorrection(e) => &e.project,
@@ -147,7 +150,10 @@ pub fn save_outcome_signal(memory_dir: &std::path::Path, signal: &OutcomeSignal)
         OutcomeSignal::Iterative(i) => &i.project,
     };
 
-    let signals_dir = memory_dir.join("learning").join(project).join("outcome_signals");
+    let signals_dir = memory_dir
+        .join("learning")
+        .join(project)
+        .join("outcome_signals");
     std::fs::create_dir_all(&signals_dir)?;
 
     let timestamp = signal.timestamp().timestamp();
@@ -160,8 +166,14 @@ pub fn save_outcome_signal(memory_dir: &std::path::Path, signal: &OutcomeSignal)
 }
 
 /// Load all outcome signals for a project
-pub fn load_outcome_signals(memory_dir: &std::path::Path, project: &str) -> crate::error::Result<Vec<OutcomeSignal>> {
-    let signals_dir = memory_dir.join("learning").join(project).join("outcome_signals");
+pub fn load_outcome_signals(
+    memory_dir: &std::path::Path,
+    project: &str,
+) -> crate::error::Result<Vec<OutcomeSignal>> {
+    let signals_dir = memory_dir
+        .join("learning")
+        .join(project)
+        .join("outcome_signals");
 
     if !signals_dir.exists() {
         return Ok(Vec::new());
@@ -209,7 +221,7 @@ mod tests {
             final_success: true,
         };
 
-        assert_eq!(signal.to_reward(), 0.9);  // First-time success
+        assert_eq!(signal.to_reward(), 0.9); // First-time success
 
         let signal2 = IterativeResolution {
             timestamp: Utc::now(),
@@ -220,7 +232,7 @@ mod tests {
             final_success: true,
         };
 
-        assert_eq!(signal2.to_reward(), 0.1);  // Too many iterations
+        assert_eq!(signal2.to_reward(), 0.1); // Too many iterations
 
         let signal3 = IterativeResolution {
             timestamp: Utc::now(),
@@ -231,7 +243,7 @@ mod tests {
             final_success: false,
         };
 
-        assert_eq!(signal3.to_reward(), -0.2);  // Failed
+        assert_eq!(signal3.to_reward(), -0.2); // Failed
     }
 
     #[test]
@@ -245,6 +257,6 @@ mod tests {
             correction: None,
         };
 
-        assert_eq!(signal.to_reward(), -0.5);  // Strong negative
+        assert_eq!(signal.to_reward(), -0.5); // Strong negative
     }
 }

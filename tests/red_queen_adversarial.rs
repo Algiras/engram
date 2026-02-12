@@ -3,12 +3,12 @@
 //! These tests are designed to break the system and expose weaknesses.
 //! If a test passes, the system is robust. If it fails, we found a vulnerability.
 
-use claude_memory::config::Config;
-use claude_memory::learning::{self, progress, signals};
+use chrono::Utc;
 use claude_memory::analytics::tracker::{EventTracker, EventType, UsageEvent};
 use claude_memory::auth::providers::{Provider, ResolvedProvider};
+use claude_memory::config::Config;
+use claude_memory::learning::{self, progress, signals};
 use tempfile::TempDir;
-use chrono::Utc;
 
 fn create_test_config(temp: &TempDir) -> Config {
     Config {
@@ -47,15 +47,15 @@ fn red_queen_malformed_knowledge_ids() {
 
     // Challenge: Can the system handle malicious knowledge IDs?
     let evil_ids: Vec<String> = vec![
-        "".to_string(),                           // Empty
-        " ".to_string(),                          // Whitespace only
-        "../../../../etc/passwd".to_string(),     // Path traversal
-        "a".repeat(10000),                        // Extremely long
-        "test\0null".to_string(),                 // Null byte
-        "test\n\r\t".to_string(),                 // Control characters
-        "🔥💀🎃".repeat(100),                     // Unicode spam
-        "test::double::colon".to_string(),        // Multiple colons
-        "no-category".to_string(),                // Missing category separator
+        "".to_string(),                       // Empty
+        " ".to_string(),                      // Whitespace only
+        "../../../../etc/passwd".to_string(), // Path traversal
+        "a".repeat(10000),                    // Extremely long
+        "test\0null".to_string(),             // Null byte
+        "test\n\r\t".to_string(),             // Control characters
+        "🔥💀🎃".repeat(100),                 // Unicode spam
+        "test::double::colon".to_string(),    // Multiple colons
+        "no-category".to_string(),            // Missing category separator
     ];
 
     for (i, evil_id) in evil_ids.iter().enumerate() {
@@ -66,20 +66,25 @@ fn red_queen_malformed_knowledge_ids() {
             (Some("patterns".to_string()), Some(evil_id.to_string()))
         };
 
-        tracker.track(UsageEvent {
-            timestamp: Utc::now(),
-            event_type: EventType::Recall,
-            project: project.to_string(),
-            query,
-            category,
-            results_count: Some(1),
-            session_id: Some(format!("evil-{}", i)),
-        }).unwrap();
+        tracker
+            .track(UsageEvent {
+                timestamp: Utc::now(),
+                event_type: EventType::Recall,
+                project: project.to_string(),
+                query,
+                category,
+                results_count: Some(1),
+                session_id: Some(format!("evil-{}", i)),
+            })
+            .unwrap();
     }
 
     // Challenge: Does ingest survive malformed data?
     let result = learning::post_ingest_hook(&config, project);
-    assert!(result.is_ok(), "Should handle malformed knowledge IDs gracefully");
+    assert!(
+        result.is_ok(),
+        "Should handle malformed knowledge IDs gracefully"
+    );
 }
 
 #[test]
@@ -91,22 +96,27 @@ fn red_queen_events_without_categories() {
 
     // Challenge: What happens when events have no category?
     for i in 0..10 {
-        tracker.track(UsageEvent {
-            timestamp: Utc::now(),
-            event_type: EventType::Recall,
-            project: project.to_string(),
-            query: Some(format!("query-{}", i)),
-            category: None,  // No category!
-            results_count: Some(1),
-            session_id: Some(format!("no-cat-{}", i)),
-        }).unwrap();
+        tracker
+            .track(UsageEvent {
+                timestamp: Utc::now(),
+                event_type: EventType::Recall,
+                project: project.to_string(),
+                query: Some(format!("query-{}", i)),
+                category: None, // No category!
+                results_count: Some(1),
+                session_id: Some(format!("no-cat-{}", i)),
+            })
+            .unwrap();
     }
 
     let events = tracker.get_events(Some(project), 30).unwrap();
     let _signals = signals::extract_signals_from_events(&events);
 
     // System should handle this gracefully (no signals without categories)
-    assert!(_signals.is_empty(), "Events without categories should not generate signals");
+    assert!(
+        _signals.is_empty(),
+        "Events without categories should not generate signals"
+    );
 }
 
 #[test]
@@ -118,15 +128,17 @@ fn red_queen_extremely_high_frequency() {
 
     // Challenge: Can the system handle spam-level access (1000x same knowledge)?
     for i in 0..1000 {
-        tracker.track(UsageEvent {
-            timestamp: Utc::now(),
-            event_type: EventType::Recall,
-            project: project.to_string(),
-            query: Some("spam-knowledge".to_string()),
-            category: Some("patterns".to_string()),
-            results_count: Some(1),
-            session_id: Some(format!("spam-{}", i)),
-        }).unwrap();
+        tracker
+            .track(UsageEvent {
+                timestamp: Utc::now(),
+                event_type: EventType::Recall,
+                project: project.to_string(),
+                query: Some("spam-knowledge".to_string()),
+                category: Some("patterns".to_string()),
+                results_count: Some(1),
+                session_id: Some(format!("spam-{}", i)),
+            })
+            .unwrap();
     }
 
     let events = tracker.get_events(Some(project), 1000).unwrap();
@@ -137,14 +149,19 @@ fn red_queen_extremely_high_frequency() {
     assert!(result.is_ok(), "Should handle high-frequency access");
 
     let state = progress::load_state(&config.memory_dir, project).unwrap();
-    let boost = state.learned_parameters.importance_boosts
+    let boost = state
+        .learned_parameters
+        .importance_boosts
         .get("patterns:spam-knowledge")
         .copied()
         .unwrap_or(0.0);
 
     // Importance should be bounded (not infinite)
-    assert!(boost >= 0.0 && boost <= 1.0,
-        "Importance boost should be bounded: got {}", boost);
+    assert!(
+        boost >= 0.0 && boost <= 1.0,
+        "Importance boost should be bounded: got {}",
+        boost
+    );
 }
 
 #[test]
@@ -163,8 +180,14 @@ fn red_queen_concurrent_learning_sessions() {
     let state = progress::load_state(&config.memory_dir, project).unwrap();
 
     // System should maintain consistency
-    assert!(state.session_count() >= 1, "Should track at least one session");
-    assert!(state.metrics_history.len() >= 1, "Should have metrics history");
+    assert!(
+        state.session_count() >= 1,
+        "Should track at least one session"
+    );
+    assert!(
+        state.metrics_history.len() >= 1,
+        "Should have metrics history"
+    );
 }
 
 #[test]
@@ -178,7 +201,11 @@ fn red_queen_learning_state_corruption() {
     learning::post_ingest_hook(&config, project).unwrap();
 
     // Corrupt the state by writing invalid JSON
-    let state_path = config.memory_dir.join("learning").join(project).join("state.json");
+    let state_path = config
+        .memory_dir
+        .join("learning")
+        .join(project)
+        .join("state.json");
     std::fs::create_dir_all(state_path.parent().unwrap()).unwrap();
     std::fs::write(&state_path, "{ invalid json }").unwrap();
 
@@ -202,15 +229,33 @@ fn red_queen_reward_calculation_edge_cases() {
 
     // Challenge: Are rewards always in valid range?
     let test_signals = vec![
-        LearningSignal::HealthImprovement { before: 100, after: 100, knowledge_ids: vec![] },
-        LearningSignal::HealthImprovement { before: 0, after: 100, knowledge_ids: vec![] },
-        LearningSignal::HealthImprovement { before: 100, after: 0, knowledge_ids: vec![] },
-        LearningSignal::SuccessfulRecall { knowledge_id: "test".to_string(), relevance: 1.5 },
-        LearningSignal::SuccessfulRecall { knowledge_id: "test".to_string(), relevance: -0.5 },
+        LearningSignal::HealthImprovement {
+            before: 100,
+            after: 100,
+            knowledge_ids: vec![],
+        },
+        LearningSignal::HealthImprovement {
+            before: 0,
+            after: 100,
+            knowledge_ids: vec![],
+        },
+        LearningSignal::HealthImprovement {
+            before: 100,
+            after: 0,
+            knowledge_ids: vec![],
+        },
+        LearningSignal::SuccessfulRecall {
+            knowledge_id: "test".to_string(),
+            relevance: 1.5,
+        },
+        LearningSignal::SuccessfulRecall {
+            knowledge_id: "test".to_string(),
+            relevance: -0.5,
+        },
         LearningSignal::HighFrequencyAccess {
             knowledge_id: "test".to_string(),
             access_count: 1000000,
-            recency_score: 2.0
+            recency_score: 2.0,
         },
     ];
 
@@ -257,21 +302,37 @@ fn red_queen_importance_does_not_decrease_with_single_access() {
     let project = "no-decrease";
 
     // Build up importance
-    learning::simulation::simulate_high_frequency_knowledge(&config, project, "stable-knowledge", 20).unwrap();
+    learning::simulation::simulate_high_frequency_knowledge(
+        &config,
+        project,
+        "stable-knowledge",
+        20,
+    )
+    .unwrap();
     learning::post_ingest_hook(&config, project).unwrap();
 
     let state_before = progress::load_state(&config.memory_dir, project).unwrap();
-    let importance_before = state_before.learned_parameters.importance_boosts
+    let importance_before = state_before
+        .learned_parameters
+        .importance_boosts
         .get("patterns:stable-knowledge")
         .copied()
         .unwrap_or(0.0);
 
     // Access once more
-    learning::simulation::simulate_high_frequency_knowledge(&config, project, "stable-knowledge", 1).unwrap();
+    learning::simulation::simulate_high_frequency_knowledge(
+        &config,
+        project,
+        "stable-knowledge",
+        1,
+    )
+    .unwrap();
     learning::post_ingest_hook(&config, project).unwrap();
 
     let state_after = progress::load_state(&config.memory_dir, project).unwrap();
-    let importance_after = state_after.learned_parameters.importance_boosts
+    let importance_after = state_after
+        .learned_parameters
+        .importance_boosts
         .get("patterns:stable-knowledge")
         .copied()
         .unwrap_or(0.0);

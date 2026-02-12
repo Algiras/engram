@@ -1,0 +1,36 @@
+{
+  "name": "claude-memory-core",
+  "version": "1.0.0",
+  "description": "Core knowledge about how claude-memory's knowledge system works - a meta-knowledge pack for understanding memory extraction, management, and the hive system",
+  "author": {
+    "name": "Claude Memory Project",
+    "email": null
+  },
+  "license": "MIT",
+  "keywords": [
+    "claude-memory",
+    "knowledge-extraction",
+    "memory-management",
+    "hive-system",
+    "meta-knowledge",
+    "documentation"
+  ],
+  "categories": [
+    "Patterns",
+    "Solutions",
+    "Workflows"
+  ],
+  "homepage": "https://github.com/Algiras/claude-memory",
+  "repository": "https://github.com/Algiras/claude-memory",
+  "created_at": "2026-02-12T00:00:00Z",
+  "updated_at": "2026-02-12T00:00:00Z",
+  "privacy": {
+    "share_patterns": true,
+    "share_solutions": true,
+    "share_decisions": true,
+    "share_preferences": false,
+    "redact_secrets": true,
+    "require_review": true
+  },
+  "min_claude_memory_version": "0.1.0"
+}

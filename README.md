@@ -189,7 +189,7 @@ The Hive Mind system enables you to:
 
 ```bash
 # Add a registry
-claude-memory hive registry add anthropics/claude-memory
+claude-memory hive registry add Algiras/claude-memory
 
 # Browse available packs
 claude-memory hive browse

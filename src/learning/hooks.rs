@@ -1,7 +1,7 @@
 use crate::analytics::tracker::EventTracker;
 use crate::config::Config;
 use crate::error::Result;
-use crate::learning::{progress, signals, outcome_signals};
+use crate::learning::{outcome_signals, progress, signals};
 
 /// Hook called after ingest to extract learning signals
 pub fn post_ingest_hook(config: &Config, project: &str) -> Result<()> {
@@ -69,7 +69,7 @@ pub fn post_ingest_hook(config: &Config, project: &str) -> Result<()> {
         let reward = outcome.to_reward();
 
         // Outcome signals have higher weight than usage signals
-        let weighted_reward = reward * 1.5;  // 50% more weight for explicit outcomes
+        let weighted_reward = reward * 1.5; // 50% more weight for explicit outcomes
 
         for knowledge_id in outcome.knowledge_ids() {
             let current_importance = state
@@ -82,7 +82,7 @@ pub fn post_ingest_hook(config: &Config, project: &str) -> Result<()> {
             let new_importance = crate::learning::algorithms::learn_importance(
                 current_importance,
                 weighted_reward,
-                state.hyperparameters.importance_learning_rate * 1.2,  // Learn faster from outcomes
+                state.hyperparameters.importance_learning_rate * 1.2, // Learn faster from outcomes
             );
 
             state
@@ -99,7 +99,11 @@ pub fn post_ingest_hook(config: &Config, project: &str) -> Result<()> {
 }
 
 /// Hook called after recall to track successful knowledge access
-pub fn post_recall_hook(config: &Config, project: &str, _knowledge_accessed: &[String]) -> Result<()> {
+pub fn post_recall_hook(
+    config: &Config,
+    project: &str,
+    _knowledge_accessed: &[String],
+) -> Result<()> {
     // Track the recall event (already done by analytics)
     // Future: Could boost importance of accessed knowledge here
     let _state = progress::load_state(&config.memory_dir, project)?;

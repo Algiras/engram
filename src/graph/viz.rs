@@ -80,7 +80,10 @@ pub fn to_ascii(graph: &KnowledgeGraph, root_concept: Option<&str>) -> String {
         // Show tree starting from root
         if let Some(concept) = graph.concepts.get(root) {
             output.push_str(&format!("📊 Knowledge Graph: {}\n\n", concept.name));
-            output.push_str(&format!("🔵 {} (importance: {:.1})\n", concept.name, concept.importance));
+            output.push_str(&format!(
+                "🔵 {} (importance: {:.1})\n",
+                concept.name, concept.importance
+            ));
 
             // Find relationships
             let outgoing: Vec<_> = graph
@@ -97,7 +100,10 @@ pub fn to_ascii(graph: &KnowledgeGraph, root_concept: Option<&str>) -> String {
                 if let Some(target) = graph.concepts.get(&rel.to) {
                     output.push_str(&format!(
                         "{} {} {} ({})\n",
-                        prefix, arrow, target.name, rel.rel_type.as_str()
+                        prefix,
+                        arrow,
+                        target.name,
+                        rel.rel_type.as_str()
                     ));
                 }
             }
@@ -105,7 +111,11 @@ pub fn to_ascii(graph: &KnowledgeGraph, root_concept: Option<&str>) -> String {
     } else {
         // Show all concepts grouped by category
         output.push_str(&format!("📊 Knowledge Graph: {}\n\n", graph.project));
-        output.push_str(&format!("Concepts: {}, Relationships: {}\n\n", graph.concepts.len(), graph.relationships.len()));
+        output.push_str(&format!(
+            "Concepts: {}, Relationships: {}\n\n",
+            graph.concepts.len(),
+            graph.relationships.len()
+        ));
 
         let categories = [
             ConceptCategory::Technology,
@@ -125,9 +135,12 @@ pub fn to_ascii(graph: &KnowledgeGraph, root_concept: Option<&str>) -> String {
             if !concepts.is_empty() {
                 output.push_str(&format!("{:?}:\n", category));
                 for concept in concepts {
-                    output.push_str(&format!("  • {} (importance: {:.1})\n", concept.name, concept.importance));
+                    output.push_str(&format!(
+                        "  • {} (importance: {:.1})\n",
+                        concept.name, concept.importance
+                    ));
                 }
-                output.push_str("\n");
+                output.push('\n');
             }
         }
     }

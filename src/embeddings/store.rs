@@ -88,8 +88,14 @@ impl EmbeddingStore {
         };
 
         for chunk in &self.chunks {
-            *stats.by_category.entry(chunk.metadata.category.clone()).or_insert(0) += 1;
-            *stats.by_project.entry(chunk.metadata.project.clone()).or_insert(0) += 1;
+            *stats
+                .by_category
+                .entry(chunk.metadata.category.clone())
+                .or_insert(0) += 1;
+            *stats
+                .by_project
+                .entry(chunk.metadata.project.clone())
+                .or_insert(0) += 1;
         }
 
         stats

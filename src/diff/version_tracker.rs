@@ -1,9 +1,12 @@
+use crate::error::Result;
+use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
-use chrono::{DateTime, Utc};
-use crate::error::Result;
+use std::sync::atomic::{AtomicU64, Ordering};
+
+static VERSION_COUNTER: AtomicU64 = AtomicU64::new(0);
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct KnowledgeVersion {
@@ -20,9 +23,7 @@ pub struct VersionTracker {
 
 impl VersionTracker {
     pub fn new(memory_dir: &Path, project: &str) -> Self {
-        let versions_dir = memory_dir
-            .join("versions")
-            .join(project);
+        let versions_dir = memory_dir.join("versions").join(project);
         Self { versions_dir }
     }
 
@@ -31,7 +32,8 @@ impl VersionTracker {
 
         let timestamp = Utc::now();
         let content_hash = Self::hash_content(content);
-        let version_id = format!("{}-{}", category, timestamp.timestamp());
+        let counter = VERSION_COUNTER.fetch_add(1, Ordering::Relaxed);
+        let version_id = format!("{}-{}-{}", category, timestamp.timestamp(), counter);
 
         let version = KnowledgeVersion {
             version_id: version_id.clone(),
@@ -110,7 +112,7 @@ impl VersionTracker {
             if let Ok(version) = serde_json::from_str::<KnowledgeVersion>(&content) {
                 category_versions
                     .entry(version.category.clone())
-                    .or_insert_with(Vec::new)
+                    .or_default()
                     .push(version);
             }
         }
@@ -122,7 +124,9 @@ impl VersionTracker {
             versions.sort_by(|a, b| b.timestamp.cmp(&a.timestamp));
 
             for version in versions.iter().skip(keep_count) {
-                let meta_file = self.versions_dir.join(format!("{}.json", version.version_id));
+                let meta_file = self
+                    .versions_dir
+                    .join(format!("{}.json", version.version_id));
                 let content_file = self.versions_dir.join(format!("{}.md", version.version_id));
 
                 if meta_file.exists() {
@@ -185,7 +189,9 @@ mod tests {
         let tracker = VersionTracker::new(temp.path(), "test-project");
 
         for i in 0..5 {
-            tracker.track_version("decisions", &format!("Version {}", i)).unwrap();
+            tracker
+                .track_version("decisions", &format!("Version {}", i))
+                .unwrap();
         }
 
         let removed = tracker.cleanup_old_versions(2).unwrap();

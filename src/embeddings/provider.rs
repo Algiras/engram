@@ -36,9 +36,10 @@ impl EmbeddingProvider {
     /// Generate embedding for single text
     pub async fn embed(&self, text: &str) -> Result<Vec<f32>> {
         let batch = self.embed_batch(&[text.to_string()]).await?;
-        batch.into_iter().next().ok_or_else(|| {
-            MemoryError::Config("No embedding returned".into())
-        })
+        batch
+            .into_iter()
+            .next()
+            .ok_or_else(|| MemoryError::Config("No embedding returned".into()))
     }
 
     async fn embed_openai(&self, texts: &[String], api_key: &str) -> Result<Vec<Vec<f32>>> {

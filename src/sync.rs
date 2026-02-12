@@ -72,17 +72,19 @@ impl GistClient {
             .or_else(|_| {
                 // Try gh CLI auth token
                 std::process::Command::new("gh")
-                    .args(&["auth", "token"])
+                    .args(["auth", "token"])
                     .output()
                     .ok()
                     .and_then(|output| {
                         if output.status.success() {
-                            String::from_utf8(output.stdout).ok().map(|s| s.trim().to_string())
+                            String::from_utf8(output.stdout)
+                                .ok()
+                                .map(|s| s.trim().to_string())
                         } else {
                             None
                         }
                     })
-                    .ok_or_else(|| std::env::VarError::NotPresent)
+                    .ok_or(std::env::VarError::NotPresent)
             })
             .map_err(|_| {
                 MemoryError::Config(
@@ -155,7 +157,7 @@ impl GistClient {
 
         let response = self
             .client
-            .patch(&format!("https://api.github.com/gists/{}", gist_id))
+            .patch(format!("https://api.github.com/gists/{}", gist_id))
             .header("Authorization", format!("Bearer {}", self.token))
             .header("User-Agent", "claude-memory")
             .header("Accept", "application/vnd.github+json")
@@ -180,7 +182,7 @@ impl GistClient {
     pub async fn get_gist(&self, gist_id: &str) -> Result<Gist> {
         let response = self
             .client
-            .get(&format!("https://api.github.com/gists/{}", gist_id))
+            .get(format!("https://api.github.com/gists/{}", gist_id))
             .header("Authorization", format!("Bearer {}", self.token))
             .header("User-Agent", "claude-memory")
             .header("Accept", "application/vnd.github+json")
@@ -229,7 +231,7 @@ impl GistClient {
         // Get gist with full history
         let response = self
             .client
-            .get(&format!("https://api.github.com/gists/{}", gist_id))
+            .get(format!("https://api.github.com/gists/{}", gist_id))
             .header("Authorization", format!("Bearer {}", self.token))
             .header("User-Agent", "claude-memory")
             .header("Accept", "application/vnd.github+json")
@@ -254,7 +256,10 @@ impl GistClient {
     pub async fn get_gist_version(&self, gist_id: &str, version: &str) -> Result<Gist> {
         let response = self
             .client
-            .get(&format!("https://api.github.com/gists/{}/{}", gist_id, version))
+            .get(format!(
+                "https://api.github.com/gists/{}/{}",
+                gist_id, version
+            ))
             .header("Authorization", format!("Bearer {}", self.token))
             .header("User-Agent", "claude-memory")
             .header("Accept", "application/vnd.github+json")
@@ -317,12 +322,14 @@ pub fn init_git_repo(repo_path: &std::path::Path) -> Result<()> {
     std::fs::create_dir_all(repo_path)?;
 
     let status = std::process::Command::new("git")
-        .args(&["init"])
+        .args(["init"])
         .current_dir(repo_path)
         .status()?;
 
     if !status.success() {
-        return Err(MemoryError::Config("Failed to initialize git repository".into()));
+        return Err(MemoryError::Config(
+            "Failed to initialize git repository".into(),
+        ));
     }
 
     // Create .gitignore
@@ -338,12 +345,12 @@ pub fn init_git_repo(repo_path: &std::path::Path) -> Result<()> {
 
     // Initial commit
     std::process::Command::new("git")
-        .args(&["add", "."])
+        .args(["add", "."])
         .current_dir(repo_path)
         .status()?;
 
     std::process::Command::new("git")
-        .args(&[
+        .args([
             "commit",
             "-m",
             "Initial commit: claude-memory knowledge repository",
@@ -384,7 +391,7 @@ pub fn push_to_git_repo(
 
     // Git add
     std::process::Command::new("git")
-        .args(&["add", project])
+        .args(["add", project])
         .current_dir(repo_path)
         .status()?;
 
@@ -392,7 +399,7 @@ pub fn push_to_git_repo(
     let default_message = format!("Update {} knowledge", project);
     let message = commit_message.unwrap_or(&default_message);
     let status = std::process::Command::new("git")
-        .args(&["commit", "-m", message])
+        .args(["commit", "-m", message])
         .current_dir(repo_path)
         .status()?;
 
@@ -402,12 +409,14 @@ pub fn push_to_git_repo(
     // Git push if requested and there are changes
     if push_remote && has_changes {
         let status = std::process::Command::new("git")
-            .args(&["push"])
+            .args(["push"])
             .current_dir(repo_path)
             .status()?;
 
         if !status.success() {
-            return Err(MemoryError::Config("Failed to push to remote. Check git remote configuration.".into()));
+            return Err(MemoryError::Config(
+                "Failed to push to remote. Check git remote configuration.".into(),
+            ));
         }
     }
 
@@ -432,17 +441,17 @@ pub fn pull_from_git_repo(
     // Fetch from remote if requested
     if fetch_remote {
         std::process::Command::new("git")
-            .args(&["fetch"])
+            .args(["fetch"])
             .current_dir(repo_path)
             .status()?;
 
         std::process::Command::new("git")
-            .args(&["checkout", branch])
+            .args(["checkout", branch])
             .current_dir(repo_path)
             .status()?;
 
         std::process::Command::new("git")
-            .args(&["pull"])
+            .args(["pull"])
             .current_dir(repo_path)
             .status()?;
     }

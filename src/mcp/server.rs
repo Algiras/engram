@@ -24,7 +24,7 @@ impl McpServer {
         let reader = stdin.lock();
 
         for line in reader.lines() {
-            let line = line.map_err(|e| MemoryError::Io(e))?;
+            let line = line.map_err(MemoryError::Io)?;
 
             if line.trim().is_empty() {
                 continue;
@@ -189,12 +189,17 @@ impl McpServer {
 
     fn handle_resources_list(&self, id: serde_json::Value) -> Response {
         // Discover all projects and expose their contexts as resources
-        let projects = match crate::parser::discovery::discover_projects(&self.config.claude_projects_dir) {
-            Ok(projects) => projects,
-            Err(e) => {
-                return Response::error(id, -32000, format!("Failed to discover projects: {}", e));
-            }
-        };
+        let projects =
+            match crate::parser::discovery::discover_projects(&self.config.claude_projects_dir) {
+                Ok(projects) => projects,
+                Err(e) => {
+                    return Response::error(
+                        id,
+                        -32000,
+                        format!("Failed to discover projects: {}", e),
+                    );
+                }
+            };
 
         let resources: Vec<Resource> = projects
             .iter()
@@ -264,7 +269,10 @@ impl McpServer {
             .ok_or_else(|| MemoryError::Config("Missing query parameter".into()))?;
 
         let project = args.get("project").and_then(|v| v.as_str());
-        let knowledge_only = args.get("knowledge_only").and_then(|v| v.as_bool()).unwrap_or(false);
+        let knowledge_only = args
+            .get("knowledge_only")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false);
 
         let search_dir = if knowledge_only {
             self.config.memory_dir.join("knowledge")
@@ -366,14 +374,18 @@ impl McpServer {
         }
 
         if results.is_empty() {
-            Ok(format!("No knowledge matching '{}' in project '{}'", query, project))
+            Ok(format!(
+                "No knowledge matching '{}' in project '{}'",
+                query, project
+            ))
         } else {
             Ok(results)
         }
     }
 
     fn tool_projects(&self, _args: serde_json::Value) -> Result<String> {
-        let projects = crate::parser::discovery::discover_projects(&self.config.claude_projects_dir)?;
+        let projects =
+            crate::parser::discovery::discover_projects(&self.config.claude_projects_dir)?;
 
         if projects.is_empty() {
             return Ok("No Claude projects found.".to_string());
@@ -422,13 +434,22 @@ impl McpServer {
             // Try raw fallback
             match self.build_raw_context(project, &knowledge_dir) {
                 Some(raw) => Ok(raw),
-                None => Ok(format!("No context found for project '{}'. Run 'claude-memory ingest' first.", project)),
+                None => Ok(format!(
+                    "No context found for project '{}'. Run 'claude-memory ingest' first.",
+                    project
+                )),
             }
         }
     }
 
-    fn build_raw_context(&self, project: &str, project_knowledge_dir: &std::path::Path) -> Option<String> {
-        use crate::extractor::knowledge::{parse_session_blocks, partition_by_expiry, reconstruct_blocks};
+    fn build_raw_context(
+        &self,
+        project: &str,
+        project_knowledge_dir: &std::path::Path,
+    ) -> Option<String> {
+        use crate::extractor::knowledge::{
+            parse_session_blocks, partition_by_expiry, reconstruct_blocks,
+        };
 
         let read_and_filter = |path: &std::path::Path| -> String {
             let raw = std::fs::read_to_string(path).unwrap_or_default();
@@ -441,7 +462,8 @@ impl McpServer {
         let solutions = read_and_filter(&project_knowledge_dir.join("solutions.md"));
         let patterns = read_and_filter(&project_knowledge_dir.join("patterns.md"));
 
-        if decisions.trim().is_empty() && solutions.trim().is_empty() && patterns.trim().is_empty() {
+        if decisions.trim().is_empty() && solutions.trim().is_empty() && patterns.trim().is_empty()
+        {
             return None;
         }
 

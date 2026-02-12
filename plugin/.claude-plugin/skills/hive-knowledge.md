@@ -166,7 +166,7 @@ cd /path/to/claude-memory
 claude-memory hive registry add file://$(pwd)/registry
 
 # Or from GitHub (once published)
-claude-memory hive registry add anthropics/claude-memory
+claude-memory hive registry add Algiras/claude-memory
 
 # Browse available packs
 claude-memory hive browse

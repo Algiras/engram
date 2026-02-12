@@ -135,7 +135,9 @@ impl KnowledgePack {
         }
 
         if self.repository.is_empty() {
-            return Err(MemoryError::Config("Pack repository cannot be empty".into()));
+            return Err(MemoryError::Config(
+                "Pack repository cannot be empty".into(),
+            ));
         }
 
         if self.author.name.is_empty() {

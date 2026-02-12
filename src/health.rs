@@ -5,7 +5,7 @@ use std::path::Path;
 #[derive(Debug)]
 pub struct HealthReport {
     pub project: String,
-    pub score: u8,  // 0-100
+    pub score: u8, // 0-100
     pub issues: Vec<Issue>,
     pub recommendations: Vec<String>,
 }
@@ -21,9 +21,9 @@ pub struct Issue {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Severity {
-    Critical,  // Breaks functionality
-    Warning,   // Degrades performance
-    Info,      // Could be better
+    Critical, // Breaks functionality
+    Warning,  // Degrades performance
+    Info,     // Could be better
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -157,9 +157,15 @@ pub fn check_project_health(memory_dir: &Path, project: &str) -> Result<HealthRe
                 report.add_issue(Issue {
                     severity: Severity::Warning,
                     category: IssueCategory::LargeFiles,
-                    description: format!("{} is large ({:.1} MB) - may need consolidation", file_name, size_mb),
+                    description: format!(
+                        "{} is large ({:.1} MB) - may need consolidation",
+                        file_name, size_mb
+                    ),
                     auto_fixable: false,
-                    fix_command: Some(format!("claude-memory consolidate {} --threshold 0.9", project)),
+                    fix_command: Some(format!(
+                        "claude-memory consolidate {} --threshold 0.9",
+                        project
+                    )),
                 });
             }
         }
@@ -185,11 +191,13 @@ pub fn check_project_health(memory_dir: &Path, project: &str) -> Result<HealthRe
 
     // Overall health recommendations
     if report.score >= 90 {
-        report.add_recommendation("System is healthy! Consider running doctor periodically.".into());
+        report
+            .add_recommendation("System is healthy! Consider running doctor periodically.".into());
     } else if report.score >= 75 {
         report.add_recommendation("Fix warnings to improve health score.".into());
     } else {
-        report.add_recommendation("Multiple issues detected - run with --fix to auto-repair.".into());
+        report
+            .add_recommendation("Multiple issues detected - run with --fix to auto-repair.".into());
     }
 
     Ok(report)
@@ -259,7 +267,9 @@ pub async fn auto_fix_issues(
 }
 
 async fn regenerate_context(config: &crate::config::Config, project: &str) -> Result<()> {
-    use crate::extractor::knowledge::{parse_session_blocks, partition_by_expiry, reconstruct_blocks};
+    use crate::extractor::knowledge::{
+        parse_session_blocks, partition_by_expiry, reconstruct_blocks,
+    };
     use crate::llm::client::LlmClient;
 
     let knowledge_dir = config.memory_dir.join("knowledge").join(project);

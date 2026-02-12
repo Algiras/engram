@@ -1,6 +1,6 @@
+use crate::analytics::metrics::{compute_knowledge_scores, get_stale_knowledge, get_top_knowledge};
+use crate::analytics::tracker::UsageEvent;
 use std::collections::HashMap;
-use crate::analytics::tracker::{UsageEvent, EventType};
-use crate::analytics::metrics::{compute_knowledge_scores, get_top_knowledge, get_stale_knowledge};
 
 #[derive(Debug)]
 pub struct Insights {
@@ -33,7 +33,8 @@ pub fn generate_insights(events: &[UsageEvent]) -> Insights {
     }
 
     let unique_projects = project_counts.len();
-    let most_active_project = project_counts.iter()
+    let most_active_project = project_counts
+        .iter()
         .max_by_key(|(_, count)| *count)
         .map(|(proj, _)| proj.clone());
 
@@ -44,7 +45,8 @@ pub fn generate_insights(events: &[UsageEvent]) -> Insights {
         *event_counts.entry(event_name).or_insert(0) += 1;
     }
 
-    let most_common_event = event_counts.iter()
+    let most_common_event = event_counts
+        .iter()
         .max_by_key(|(_, count)| *count)
         .map(|(event, _)| event.clone())
         .unwrap_or_else(|| "unknown".to_string());
@@ -54,11 +56,20 @@ pub fn generate_insights(events: &[UsageEvent]) -> Insights {
     let top_k = get_top_knowledge(&scores, 5);
     let stale_k = get_stale_knowledge(&scores, 0.1);
 
-    let top_knowledge = top_k.iter()
-        .map(|s| format!("{} ({}x, {:.1}%)", s.label, s.access_count, s.importance * 100.0))
+    let top_knowledge = top_k
+        .iter()
+        .map(|s| {
+            format!(
+                "{} ({}x, {:.1}%)",
+                s.label,
+                s.access_count,
+                s.importance * 100.0
+            )
+        })
         .collect();
 
-    let stale_knowledge = stale_k.iter()
+    let stale_knowledge = stale_k
+        .iter()
         .map(|s| format!("{} (last: {:.1}%)", s.label, s.recency_score * 100.0))
         .collect();
 
@@ -68,9 +79,15 @@ pub fn generate_insights(events: &[UsageEvent]) -> Insights {
     let second_half = events.len() - mid;
 
     let trend = if second_half > first_half {
-        format!("increasing (+{:.0}%)", ((second_half - first_half) as f32 / first_half as f32) * 100.0)
+        format!(
+            "increasing (+{:.0}%)",
+            ((second_half - first_half) as f32 / first_half as f32) * 100.0
+        )
     } else if second_half < first_half {
-        format!("decreasing (-{:.0}%)", ((first_half - second_half) as f32 / first_half as f32) * 100.0)
+        format!(
+            "decreasing (-{:.0}%)",
+            ((first_half - second_half) as f32 / first_half as f32) * 100.0
+        )
     } else {
         "stable".to_string()
     };
@@ -89,8 +106,8 @@ pub fn generate_insights(events: &[UsageEvent]) -> Insights {
 pub fn format_insights(insights: &Insights) -> String {
     let mut output = String::new();
 
-    output.push_str(&format!("📊 Usage Insights\n"));
-    output.push_str(&format!("============================================================\n\n"));
+    output.push_str("📊 Usage Insights\n");
+    output.push_str("============================================================\n\n");
 
     output.push_str(&format!("Total events: {}\n", insights.total_events));
     output.push_str(&format!("Unique projects: {}\n", insights.unique_projects));
@@ -99,18 +116,21 @@ pub fn format_insights(insights: &Insights) -> String {
         output.push_str(&format!("Most active project: {}\n", proj));
     }
 
-    output.push_str(&format!("Most common action: {}\n", insights.most_common_event));
+    output.push_str(&format!(
+        "Most common action: {}\n",
+        insights.most_common_event
+    ));
     output.push_str(&format!("Usage trend: {}\n", insights.usage_trend));
 
     if !insights.top_knowledge.is_empty() {
-        output.push_str(&format!("\n🔥 Top Knowledge (by usage):\n"));
+        output.push_str("\n🔥 Top Knowledge (by usage):\n");
         for (i, k) in insights.top_knowledge.iter().enumerate() {
             output.push_str(&format!("  {}. {}\n", i + 1, k));
         }
     }
 
     if !insights.stale_knowledge.is_empty() {
-        output.push_str(&format!("\n🕸️  Stale Knowledge (rarely accessed):\n"));
+        output.push_str("\n🕸️  Stale Knowledge (rarely accessed):\n");
         for (i, k) in insights.stale_knowledge.iter().enumerate() {
             output.push_str(&format!("  {}. {}\n", i + 1, k));
         }
@@ -122,6 +142,7 @@ pub fn format_insights(insights: &Insights) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::analytics::tracker::EventType;
 
     #[test]
     fn test_empty_insights() {

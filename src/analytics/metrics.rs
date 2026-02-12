@@ -1,5 +1,5 @@
-use std::collections::HashMap;
 use crate::analytics::tracker::UsageEvent;
+use std::collections::HashMap;
 
 #[derive(Debug, Clone)]
 pub struct KnowledgeScore {
@@ -7,7 +7,7 @@ pub struct KnowledgeScore {
     pub label: String,
     pub access_count: usize,
     pub last_accessed: Option<chrono::DateTime<chrono::Utc>>,
-    pub recency_score: f32,  // 0.0-1.0 based on last access
+    pub recency_score: f32,   // 0.0-1.0 based on last access
     pub frequency_score: f32, // 0.0-1.0 based on access count
     pub importance: f32,      // Combined score 0.0-1.0
 }
@@ -22,10 +22,14 @@ pub fn compute_knowledge_scores(events: &[UsageEvent]) -> HashMap<String, Knowle
     // Track access patterns per category
     for event in events {
         if let Some(category) = &event.category {
-            let key = format!("{}:{}", category,
-                event.query.as_deref().unwrap_or("unknown"));
+            let key = format!(
+                "{}:{}",
+                category,
+                event.query.as_deref().unwrap_or("unknown")
+            );
 
-            scores.entry(key.clone())
+            scores
+                .entry(key.clone())
                 .and_modify(|score| {
                     score.access_count += 1;
                     if let Some(ts) = event.timestamp.into() {
@@ -67,14 +71,21 @@ pub fn compute_knowledge_scores(events: &[UsageEvent]) -> HashMap<String, Knowle
     scores
 }
 
-pub fn get_top_knowledge(scores: &HashMap<String, KnowledgeScore>, limit: usize) -> Vec<KnowledgeScore> {
+pub fn get_top_knowledge(
+    scores: &HashMap<String, KnowledgeScore>,
+    limit: usize,
+) -> Vec<KnowledgeScore> {
     let mut sorted: Vec<_> = scores.values().cloned().collect();
     sorted.sort_by(|a, b| b.importance.partial_cmp(&a.importance).unwrap());
     sorted.into_iter().take(limit).collect()
 }
 
-pub fn get_stale_knowledge(scores: &HashMap<String, KnowledgeScore>, threshold: f32) -> Vec<KnowledgeScore> {
-    scores.values()
+pub fn get_stale_knowledge(
+    scores: &HashMap<String, KnowledgeScore>,
+    threshold: f32,
+) -> Vec<KnowledgeScore> {
+    scores
+        .values()
         .filter(|s| s.recency_score < threshold)
         .cloned()
         .collect()

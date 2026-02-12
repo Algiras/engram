@@ -31,12 +31,7 @@ impl MemoryItem {
                 ..
             } => {
                 let sz = humansize::format_size(*size, humansize::BINARY);
-                format!(
-                    "  {} {} {}",
-                    session_id,
-                    date.format("%Y-%m-%d %H:%M"),
-                    sz
-                )
+                format!("  {} {} {}", session_id, date.format("%Y-%m-%d %H:%M"), sz)
             }
             MemoryItem::KnowledgeFile { name, size, .. } => {
                 let sz = humansize::format_size(*size, humansize::BINARY);
@@ -51,7 +46,6 @@ impl MemoryItem {
             MemoryItem::KnowledgeFile { path, .. } => path,
         }
     }
-
 }
 
 #[derive(Clone)]
@@ -285,12 +279,15 @@ pub fn render_pack_detail(pack: &PackEntry, memory_dir: &Path) -> String {
     output.push_str("## Metadata\n\n");
     output.push_str(&format!("**Registry:** {}\n", pack.registry));
     output.push_str(&format!("**Version:** {}\n", pack.version));
-    output.push_str(&format!("**Installed:** {}\n", pack.installed_at.format("%Y-%m-%d %H:%M:%S")));
+    output.push_str(&format!(
+        "**Installed:** {}\n",
+        pack.installed_at.format("%Y-%m-%d %H:%M:%S")
+    ));
     output.push_str(&format!("**Categories:** {}\n", pack.categories.join(", ")));
     if !pack.keywords.is_empty() {
         output.push_str(&format!("**Keywords:** {}\n", pack.keywords.join(", ")));
     }
-    output.push_str("\n");
+    output.push('\n');
 
     // Load manifest for full details
     let pack_path = memory_dir.join("packs/installed").join(&pack.name);
@@ -306,7 +303,7 @@ pub fn render_pack_detail(pack: &PackEntry, memory_dir: &Path) -> String {
                 if let Some(email) = author.get("email").and_then(|v| v.as_str()) {
                     output.push_str(&format!("**Email:** {}\n", email));
                 }
-                output.push_str("\n");
+                output.push('\n');
             }
 
             if let Some(repo) = manifest.get("repository").and_then(|v| v.as_str()) {
@@ -328,7 +325,13 @@ pub fn render_pack_detail(pack: &PackEntry, memory_dir: &Path) -> String {
     let knowledge_dir = pack_path.join("knowledge");
 
     if knowledge_dir.exists() {
-        for category in &["patterns.md", "solutions.md", "workflows.md", "decisions.md", "preferences.md"] {
+        for category in &[
+            "patterns.md",
+            "solutions.md",
+            "workflows.md",
+            "decisions.md",
+            "preferences.md",
+        ] {
             let file_path = knowledge_dir.join(category);
             if file_path.exists() {
                 if let Ok(content) = fs::read_to_string(&file_path) {
@@ -347,7 +350,7 @@ pub fn render_pack_detail(pack: &PackEntry, memory_dir: &Path) -> String {
         }
     }
 
-    output.push_str("\n");
+    output.push('\n');
 
     // Preview of first knowledge file
     output.push_str("## Knowledge Preview\n\n");
@@ -355,7 +358,10 @@ pub fn render_pack_detail(pack: &PackEntry, memory_dir: &Path) -> String {
         let file_path = knowledge_dir.join(category);
         if file_path.exists() {
             if let Ok(content) = fs::read_to_string(&file_path) {
-                output.push_str(&format!("### {}\n\n", category.replace(".md", "").to_uppercase()));
+                output.push_str(&format!(
+                    "### {}\n\n",
+                    category.replace(".md", "").to_uppercase()
+                ));
 
                 // Show first 500 characters
                 let preview = if content.len() > 500 {

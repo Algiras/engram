@@ -1,4 +1,5 @@
 // Library interface for claude-memory
+#![allow(dead_code)]
 
 pub mod analytics;
 pub mod auth;

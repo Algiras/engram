@@ -1,8 +1,8 @@
 //! Integration tests for learning system using simulations
 
+use claude_memory::auth::providers::{Provider, ResolvedProvider};
 use claude_memory::config::Config;
 use claude_memory::learning::{self, progress};
-use claude_memory::auth::providers::{Provider, ResolvedProvider};
 use tempfile::TempDir;
 
 fn create_test_config(temp: &TempDir) -> Config {
@@ -86,7 +86,10 @@ fn test_mixed_usage_simulation() {
     let state = progress::load_state(&config.memory_dir, project).unwrap();
 
     assert!(state.session_count() > 0, "Should track sessions");
-    assert!(!state.metrics_history.is_empty(), "Should have metrics history");
+    assert!(
+        !state.metrics_history.is_empty(),
+        "Should have metrics history"
+    );
 }
 
 #[test]

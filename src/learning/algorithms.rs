@@ -4,9 +4,7 @@ use std::collections::HashMap;
 /// Temporal Difference learning for knowledge importance
 pub fn learn_importance(current: f32, reward: f32, learning_rate: f32) -> f32 {
     // Clamp to valid range [0.1, 1.0]
-    (current + learning_rate * (reward - current))
-        .max(0.1)
-        .min(1.0)
+    (current + learning_rate * (reward - current)).clamp(0.1, 1.0)
 }
 
 /// State representation for Q-learning
@@ -26,9 +24,9 @@ pub enum ImportanceTier {
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum FrequencyTier {
-    Rare,      // 0-5 accesses
+    Rare,       // 0-5 accesses
     Occasional, // 5-20 accesses
-    Frequent,  // 20+ accesses
+    Frequent,   // 20+ accesses
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -125,16 +123,13 @@ impl TTLQLearning {
 
     /// Get Q-value for state-action pair
     fn get_q_value(&self, state: &TTLState, action: &TTLAction) -> f32 {
-        *self
-            .q_table
-            .get(&(state.clone(), *action))
-            .unwrap_or(&0.0)
+        *self.q_table.get(&(state.clone(), *action)).unwrap_or(&0.0)
     }
 
     /// Random action for exploration
     fn random_action(&self) -> TTLAction {
         use rand::seq::SliceRandom;
-        let actions = vec![
+        let actions = [
             TTLAction::Extend7d,
             TTLAction::Extend14d,
             TTLAction::Extend30d,
@@ -158,15 +153,15 @@ impl TTLQLearning {
         let current_q = self.get_q_value(&state, &action);
         let max_next_q = self.best_q_value(&next_state);
 
-        let new_q =
-            current_q + self.learning_rate * (reward + self.discount_factor * max_next_q - current_q);
+        let new_q = current_q
+            + self.learning_rate * (reward + self.discount_factor * max_next_q - current_q);
 
         self.q_table.insert((state, action), new_q);
     }
 
     /// Get the maximum Q-value for a state (over all actions)
     fn best_q_value(&self, state: &TTLState) -> f32 {
-        let all_actions = vec![
+        let all_actions = [
             TTLAction::Extend7d,
             TTLAction::Extend14d,
             TTLAction::Extend30d,
@@ -286,7 +281,8 @@ pub fn learn_consolidation(
     user_acceptance_rate: f32,
 ) -> ConsolidationStrategy {
     // Compute reward as weighted combination
-    let reward = 0.4 * health_improvement + 0.3 * query_perf_improvement + 0.3 * user_acceptance_rate;
+    let reward =
+        0.4 * health_improvement + 0.3 * query_perf_improvement + 0.3 * user_acceptance_rate;
 
     let last_arm = bandit.select_arm();
     bandit.update_reward(last_arm, reward);

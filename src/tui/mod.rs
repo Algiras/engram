@@ -123,7 +123,10 @@ impl App {
 
         for (pi, project) in self.tree.projects.iter().enumerate() {
             // Fuzzy match on project name
-            if let Some(project_score) = self.fuzzy_matcher.fuzzy_match(&project.name, &self.search_query) {
+            if let Some(project_score) = self
+                .fuzzy_matcher
+                .fuzzy_match(&project.name, &self.search_query)
+            {
                 // Add all items from matching project with project score
                 if project.items.is_empty() {
                     self.search_matches.push((pi, 0, project_score));
@@ -136,9 +139,16 @@ impl App {
 
             // Fuzzy match on item labels
             for (ii, item) in project.items.iter().enumerate() {
-                if let Some(item_score) = self.fuzzy_matcher.fuzzy_match(&item.display_label(), &self.search_query) {
+                if let Some(item_score) = self
+                    .fuzzy_matcher
+                    .fuzzy_match(&item.display_label(), &self.search_query)
+                {
                     // Only add if not already added from project match
-                    if !self.search_matches.iter().any(|(p, i, _)| *p == pi && *i == ii) {
+                    if !self
+                        .search_matches
+                        .iter()
+                        .any(|(p, i, _)| *p == pi && *i == ii)
+                    {
                         self.search_matches.push((pi, ii, item_score));
                     }
                 }
@@ -162,11 +172,15 @@ impl App {
     }
 
     fn is_search_match(&self, project_idx: usize, item_idx: usize) -> bool {
-        self.search_matches.iter().any(|(pi, ii, _)| *pi == project_idx && *ii == item_idx)
+        self.search_matches
+            .iter()
+            .any(|(pi, ii, _)| *pi == project_idx && *ii == item_idx)
     }
 
     fn is_project_search_match(&self, project_idx: usize) -> bool {
-        self.search_matches.iter().any(|(pi, _, _)| *pi == project_idx)
+        self.search_matches
+            .iter()
+            .any(|(pi, _, _)| *pi == project_idx)
     }
 
     fn open_viewer(&mut self) {
@@ -175,18 +189,14 @@ impl App {
                 MemoryItem::Session { path, .. } => path.join("conversation.md"),
                 MemoryItem::KnowledgeFile { path, .. } => path.clone(),
             };
-            self.viewer_content = std::fs::read_to_string(&path).unwrap_or_else(|e| {
-                format!("Error reading {}: {}", path.display(), e)
-            });
+            self.viewer_content = std::fs::read_to_string(&path)
+                .unwrap_or_else(|e| format!("Error reading {}: {}", path.display(), e));
             self.scroll_offset = 0;
             self.screen = Screen::Viewer;
         }
     }
 
-    pub fn run(
-        &mut self,
-        terminal: &mut Terminal<CrosstermBackend<io::Stdout>>,
-    ) -> io::Result<()> {
+    pub fn run(&mut self, terminal: &mut Terminal<CrosstermBackend<io::Stdout>>) -> io::Result<()> {
         loop {
             terminal.draw(|f| match self.screen {
                 Screen::Browser => ui::render_browser(f, self),
@@ -374,7 +384,8 @@ impl App {
             KeyCode::Char('n') => {
                 // Next search match
                 if !self.pack_search_matches.is_empty() {
-                    self.pack_search_index = (self.pack_search_index + 1) % self.pack_search_matches.len();
+                    self.pack_search_index =
+                        (self.pack_search_index + 1) % self.pack_search_matches.len();
                     self.jump_to_pack_match();
                 }
             }
@@ -434,30 +445,23 @@ impl App {
         let installer = PackInstaller::new(&self.memory_dir);
 
         match action {
-            PackAction::Update => {
-                match installer.update(pack_name) {
-                    Ok(_) => {
-                        self.pack_action_message = Some((
-                            format!("✓ Pack '{}' updated successfully", pack_name),
-                            false,
-                        ));
-                        self.packs = data::load_packs(&self.memory_dir);
-                    }
-                    Err(e) => {
-                        self.pack_action_message = Some((
-                            format!("✗ Update failed: {}", e),
-                            true,
-                        ));
-                    }
+            PackAction::Update => match installer.update(pack_name) {
+                Ok(_) => {
+                    self.pack_action_message = Some((
+                        format!("✓ Pack '{}' updated successfully", pack_name),
+                        false,
+                    ));
+                    self.packs = data::load_packs(&self.memory_dir);
                 }
-            }
+                Err(e) => {
+                    self.pack_action_message = Some((format!("✗ Update failed: {}", e), true));
+                }
+            },
             PackAction::Uninstall => {
                 match installer.uninstall(pack_name) {
                     Ok(_) => {
-                        self.pack_action_message = Some((
-                            format!("✓ Pack '{}' uninstalled", pack_name),
-                            false,
-                        ));
+                        self.pack_action_message =
+                            Some((format!("✓ Pack '{}' uninstalled", pack_name), false));
                         self.packs = data::load_packs(&self.memory_dir);
                         // Adjust index if needed
                         if self.pack_index >= self.packs.len() && !self.packs.is_empty() {
@@ -465,10 +469,8 @@ impl App {
                         }
                     }
                     Err(e) => {
-                        self.pack_action_message = Some((
-                            format!("✗ Uninstall failed: {}", e),
-                            true,
-                        ));
+                        self.pack_action_message =
+                            Some((format!("✗ Uninstall failed: {}", e), true));
                     }
                 }
             }
@@ -505,7 +507,10 @@ impl App {
                 self.pack_detail_scroll = self.pack_detail_scroll.saturating_sub(1);
             }
             KeyCode::PageDown | KeyCode::Char(' ') => {
-                self.pack_detail_scroll = self.pack_detail_scroll.saturating_add(page_size).min(total_lines);
+                self.pack_detail_scroll = self
+                    .pack_detail_scroll
+                    .saturating_add(page_size)
+                    .min(total_lines);
             }
             KeyCode::PageUp => {
                 self.pack_detail_scroll = self.pack_detail_scroll.saturating_sub(page_size);
@@ -560,7 +565,10 @@ impl App {
                 self.scroll_offset = self.scroll_offset.saturating_sub(1);
             }
             KeyCode::PageDown | KeyCode::Char(' ') => {
-                self.scroll_offset = self.scroll_offset.saturating_add(page_size).min(total_lines);
+                self.scroll_offset = self
+                    .scroll_offset
+                    .saturating_add(page_size)
+                    .min(total_lines);
             }
             KeyCode::PageUp => {
                 self.scroll_offset = self.scroll_offset.saturating_sub(page_size);
@@ -608,20 +616,29 @@ impl App {
 
         for (i, pack) in self.packs.iter().enumerate() {
             // Fuzzy match on pack name
-            if let Some(_score) = self.fuzzy_matcher.fuzzy_match(&pack.name, &self.pack_search_query) {
+            if let Some(_score) = self
+                .fuzzy_matcher
+                .fuzzy_match(&pack.name, &self.pack_search_query)
+            {
                 self.pack_search_matches.push(i);
                 continue;
             }
 
             // Match on description
-            if let Some(_score) = self.fuzzy_matcher.fuzzy_match(&pack.description, &self.pack_search_query) {
+            if let Some(_score) = self
+                .fuzzy_matcher
+                .fuzzy_match(&pack.description, &self.pack_search_query)
+            {
                 self.pack_search_matches.push(i);
                 continue;
             }
 
             // Match on keywords
             for keyword in &pack.keywords {
-                if let Some(_score) = self.fuzzy_matcher.fuzzy_match(keyword, &self.pack_search_query) {
+                if let Some(_score) = self
+                    .fuzzy_matcher
+                    .fuzzy_match(keyword, &self.pack_search_query)
+                {
                     self.pack_search_matches.push(i);
                     break;
                 }
@@ -629,7 +646,10 @@ impl App {
 
             // Match on categories
             for category in &pack.categories {
-                if let Some(_score) = self.fuzzy_matcher.fuzzy_match(category, &self.pack_search_query) {
+                if let Some(_score) = self
+                    .fuzzy_matcher
+                    .fuzzy_match(category, &self.pack_search_query)
+                {
                     self.pack_search_matches.push(i);
                     break;
                 }
@@ -685,4 +705,3 @@ pub fn run_tui(memory_dir: PathBuf) -> io::Result<()> {
 
     result
 }
-

@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 mod analytics;
 mod auth;
 mod cli;
@@ -22,8 +23,8 @@ use std::path::{Path, PathBuf};
 
 use clap::Parser;
 use cli::{
-    AuthCommand, Cli, Commands, GraphCommand, HiveCommand, HooksCommand, LearnCommand,
-    PackCommand, RegistryCommand, SyncCommand,
+    AuthCommand, Cli, Commands, GraphCommand, HiveCommand, HooksCommand, LearnCommand, PackCommand,
+    RegistryCommand, SyncCommand,
 };
 use colored::Colorize;
 use config::Config;
@@ -56,7 +57,12 @@ fn main() -> Result<()> {
     }
 
     // Lookup operates on knowledge files — no Config/LLM auth needed
-    if let Commands::Lookup { project, query, all } = cli.command {
+    if let Commands::Lookup {
+        project,
+        query,
+        all,
+    } = cli.command
+    {
         return cmd_lookup(&project, &query, all);
     }
 
@@ -150,7 +156,13 @@ fn main() -> Result<()> {
         include_conversations,
     } = cli.command
     {
-        return cmd_export(&config, &project, &format, output.as_deref(), include_conversations);
+        return cmd_export(
+            &config,
+            &project,
+            &format,
+            output.as_deref(),
+            include_conversations,
+        );
     }
 
     // Sync command
@@ -168,7 +180,9 @@ fn main() -> Result<()> {
             } => cmd_sync_pull(&config, &project, &gist_id, force),
             SyncCommand::List { project } => cmd_sync_list(&config, &project),
             SyncCommand::Clone { gist_id, project } => cmd_sync_clone(&config, &gist_id, &project),
-            SyncCommand::History { gist_id, version } => cmd_sync_history(&gist_id, version.as_deref()),
+            SyncCommand::History { gist_id, version } => {
+                cmd_sync_history(&gist_id, version.as_deref())
+            }
             SyncCommand::PushRepo {
                 project,
                 repo,
@@ -189,9 +203,26 @@ fn main() -> Result<()> {
     if let Commands::Graph { command } = cli.command {
         return match command {
             GraphCommand::Build { project, .. } => cmd_graph_build(&config, &project),
-            GraphCommand::Query { project, concept, depth } => cmd_graph_query(&config, &project, &concept, depth),
-            GraphCommand::Viz { project, format, output, root } => cmd_graph_viz(&config, &project, &format, output.as_deref(), root.as_deref()),
-            GraphCommand::Path { project, from, to } => cmd_graph_path(&config, &project, &from, &to),
+            GraphCommand::Query {
+                project,
+                concept,
+                depth,
+            } => cmd_graph_query(&config, &project, &concept, depth),
+            GraphCommand::Viz {
+                project,
+                format,
+                output,
+                root,
+            } => cmd_graph_viz(
+                &config,
+                &project,
+                &format,
+                output.as_deref(),
+                root.as_deref(),
+            ),
+            GraphCommand::Path { project, from, to } => {
+                cmd_graph_path(&config, &project, &from, &to)
+            }
             GraphCommand::Hubs { project, top } => cmd_graph_hubs(&config, &project, top),
         };
     }
@@ -220,21 +251,44 @@ fn main() -> Result<()> {
         find_contradictions,
     } = &cli.command
     {
-        return cmd_consolidate(&config, project, *threshold, *auto_merge, *find_contradictions);
+        return cmd_consolidate(
+            &config,
+            project,
+            *threshold,
+            *auto_merge,
+            *find_contradictions,
+        );
     }
 
     // Doctor command (no Config needed for basic checks)
-    if let Commands::Doctor { project, fix, verbose } = &cli.command {
+    if let Commands::Doctor {
+        project,
+        fix,
+        verbose,
+    } = &cli.command
+    {
         return cmd_doctor(&config, project.as_deref(), *fix, *verbose);
     }
 
     // Analytics command (no Config needed for reading usage data)
-    if let Commands::Analytics { project, days, detailed, clear_old } = &cli.command {
+    if let Commands::Analytics {
+        project,
+        days,
+        detailed,
+        clear_old,
+    } = &cli.command
+    {
         return cmd_analytics(project.as_deref(), *days, *detailed, *clear_old);
     }
 
     // Diff command
-    if let Commands::Diff { project, category, version, history } = &cli.command {
+    if let Commands::Diff {
+        project,
+        category,
+        version,
+        history,
+    } = &cli.command
+    {
         return cmd_diff(&config, project, category, version.as_deref(), *history);
     }
 
@@ -242,9 +296,11 @@ fn main() -> Result<()> {
     if let Commands::Learn { command } = cli.command {
         return match command {
             LearnCommand::Dashboard { project } => cmd_learn_dashboard(&config, project.as_deref()),
-            LearnCommand::Optimize { project, dry_run, auto } => {
-                cmd_learn_optimize(&config, &project, dry_run, auto)
-            }
+            LearnCommand::Optimize {
+                project,
+                dry_run,
+                auto,
+            } => cmd_learn_optimize(&config, &project, dry_run, auto),
             LearnCommand::Reset { project } => cmd_learn_reset(&config, &project),
             LearnCommand::Simulate {
                 project,
@@ -257,7 +313,14 @@ fn main() -> Result<()> {
                 helpful,
                 unhelpful,
                 comment,
-            } => cmd_learn_feedback(&config, &project, session.as_deref(), helpful, unhelpful, comment.as_deref()),
+            } => cmd_learn_feedback(
+                &config,
+                &project,
+                session.as_deref(),
+                helpful,
+                unhelpful,
+                comment.as_deref(),
+            ),
         };
     }
 
@@ -348,16 +411,14 @@ fn cmd_inject(project: Option<String>) -> Result<()> {
     // Determine project name
     let project_name = match project {
         Some(name) => name,
-        None => {
-            std::env::current_dir()
-                .ok()
-                .and_then(|p| p.file_name().map(|n| n.to_string_lossy().to_string()))
-                .ok_or_else(|| {
-                    error::MemoryError::Config(
-                        "Could not determine project name from current directory".into(),
-                    )
-                })?
-        }
+        None => std::env::current_dir()
+            .ok()
+            .and_then(|p| p.file_name().map(|n| n.to_string_lossy().to_string()))
+            .ok_or_else(|| {
+                error::MemoryError::Config(
+                    "Could not determine project name from current directory".into(),
+                )
+            })?,
     };
 
     let memory_dir = home.join("memory");
@@ -421,7 +482,9 @@ fn cmd_inject(project: Option<String>) -> Result<()> {
     // Build combined content
     let mut combined = String::new();
     combined.push_str("# Project Memory (auto-injected by claude-memory)\n\n");
-    combined.push_str("<!-- This file is auto-generated. Edit knowledge sources, not this file. -->\n\n");
+    combined.push_str(
+        "<!-- This file is auto-generated. Edit knowledge sources, not this file. -->\n\n",
+    );
 
     if let Some(prefs) = &preferences_content {
         combined.push_str("## Global Preferences\n\n");
@@ -455,7 +518,10 @@ fn cmd_inject(project: Option<String>) -> Result<()> {
 }
 
 /// Scan ~/.claude/projects/ and find the directory matching a project name.
-fn find_claude_project_dir(claude_projects_dir: &Path, project_name: &str) -> Result<Option<PathBuf>> {
+fn find_claude_project_dir(
+    claude_projects_dir: &Path,
+    project_name: &str,
+) -> Result<Option<PathBuf>> {
     if !claude_projects_dir.exists() {
         return Ok(None);
     }
@@ -556,25 +622,13 @@ fn cmd_hooks_install() -> Result<()> {
         .or_insert_with(|| serde_json::json!({}));
 
     // Add SessionStart hook for inject
-    add_hook_entry(
-        hooks,
-        "SessionStart",
-        &inject_path.to_string_lossy(),
-    )?;
+    add_hook_entry(hooks, "SessionStart", &inject_path.to_string_lossy())?;
 
     // Add PostToolUse hook for auto-ingest
-    add_hook_entry(
-        hooks,
-        "PostToolUse",
-        &hook_path.to_string_lossy(),
-    )?;
+    add_hook_entry(hooks, "PostToolUse", &hook_path.to_string_lossy())?;
 
     // Add SessionEnd hook for full knowledge extraction
-    add_hook_entry(
-        hooks,
-        "Stop",
-        &session_end_path.to_string_lossy(),
-    )?;
+    add_hook_entry(hooks, "Stop", &session_end_path.to_string_lossy())?;
 
     std::fs::write(&settings_path, serde_json::to_string_pretty(&settings)?)?;
 
@@ -663,12 +717,7 @@ fn cmd_hooks_status() -> Result<()> {
 
     let check = |path: &Path, name: &str, event: &str| {
         if path.exists() {
-            println!(
-                "  {} {} ({})",
-                "installed".green(),
-                name,
-                event.cyan()
-            );
+            println!("  {} {} ({})", "installed".green(), name, event.cyan());
         } else {
             println!(
                 "  {} {} ({})",
@@ -702,18 +751,17 @@ fn cmd_hooks_status() -> Result<()> {
             );
         }
     } else {
-        println!("\n  Settings: {}", "~/.claude/settings.json not found".yellow());
+        println!(
+            "\n  Settings: {}",
+            "~/.claude/settings.json not found".yellow()
+        );
     }
 
     Ok(())
 }
 
 /// Add a hook entry to a hook event array in settings.json, idempotently.
-fn add_hook_entry(
-    hooks: &mut serde_json::Value,
-    event: &str,
-    command: &str,
-) -> Result<()> {
+fn add_hook_entry(hooks: &mut serde_json::Value, event: &str, command: &str) -> Result<()> {
     let event_hooks = hooks
         .as_object_mut()
         .ok_or_else(|| error::MemoryError::Config("hooks is not an object".into()))?
@@ -1002,11 +1050,7 @@ fn cmd_review(project: &str, show_all: bool) -> Result<()> {
         return Ok(());
     }
 
-    println!(
-        "{} Inbox for '{}':\n",
-        "Review".green().bold(),
-        project
-    );
+    println!("{} Inbox for '{}':\n", "Review".green().bold(), project);
 
     for block in &entries {
         let expired_tag = if block.ttl.is_some() && expired_ids.contains(&block.session_id) {
@@ -1203,7 +1247,10 @@ fn sanitize_session_id(s: &str) -> String {
 
 fn session_header(session_id: &str, timestamp: &str, ttl: Option<&str>) -> String {
     if let Some(ttl_val) = ttl {
-        format!("\n\n## Session: {} ({}) [ttl:{}]\n\n", session_id, timestamp, ttl_val)
+        format!(
+            "\n\n## Session: {} ({}) [ttl:{}]\n\n",
+            session_id, timestamp, ttl_val
+        )
     } else {
         format!("\n\n## Session: {} ({})\n\n", session_id, timestamp)
     }
@@ -1232,8 +1279,14 @@ fn cmd_lookup(project: &str, query: &str, include_all: bool) -> Result<()> {
         .ok_or_else(|| error::MemoryError::Config("Could not determine home directory".into()))?;
     let memory_dir = home.join("memory");
     let knowledge_dir = memory_dir.join("knowledge").join(project);
-    let global_prefs = memory_dir.join("knowledge").join("_global").join("preferences.md");
-    let global_shared = memory_dir.join("knowledge").join("_global").join("shared.md");
+    let global_prefs = memory_dir
+        .join("knowledge")
+        .join("_global")
+        .join("preferences.md");
+    let global_shared = memory_dir
+        .join("knowledge")
+        .join("_global")
+        .join("shared.md");
 
     if !knowledge_dir.exists() {
         eprintln!(
@@ -1283,7 +1336,11 @@ fn cmd_lookup(project: &str, query: &str, include_all: bool) -> Result<()> {
                 }
                 found = true;
 
-                let expired_tag = if expired { " [EXPIRED]".red().to_string() } else { String::new() };
+                let expired_tag = if expired {
+                    " [EXPIRED]".red().to_string()
+                } else {
+                    String::new()
+                };
                 println!(
                     "  {} [{}] {} ({}){}",
                     ">".green(),
@@ -1323,7 +1380,13 @@ fn cmd_lookup(project: &str, query: &str, include_all: bool) -> Result<()> {
 
 // ── Add command ─────────────────────────────────────────────────────────
 
-fn cmd_add(project: &str, category: &str, content: &str, label: &str, ttl: Option<&str>) -> Result<()> {
+fn cmd_add(
+    project: &str,
+    category: &str,
+    content: &str,
+    label: &str,
+    ttl: Option<&str>,
+) -> Result<()> {
     use extractor::knowledge::parse_ttl;
 
     // Validate TTL format early
@@ -1362,8 +1425,7 @@ fn cmd_add(project: &str, category: &str, content: &str, label: &str, ttl: Optio
 
     // Initialize file if needed
     if !path.exists() {
-        let title = category.chars().next().unwrap().to_uppercase().to_string()
-            + &category[1..];
+        let title = category.chars().next().unwrap().to_uppercase().to_string() + &category[1..];
         std::fs::write(&path, format!("# {}\n", title))?;
     }
 
@@ -1463,11 +1525,7 @@ fn cmd_regen(config: &Config, project: &str) -> Result<()> {
             .chat(
                 llm::prompts::SYSTEM_KNOWLEDGE_EXTRACTOR,
                 &llm::prompts::context_prompt(
-                    project,
-                    &decisions,
-                    &solutions,
-                    &patterns,
-                    &summaries,
+                    project, &decisions, &solutions, &patterns, &summaries,
                 ),
             )
             .await
@@ -1520,14 +1578,20 @@ fn cmd_forget(
     purge: bool,
     expired: bool,
 ) -> Result<()> {
-    use extractor::knowledge::{find_sessions_by_topic, parse_session_blocks, partition_by_expiry, reconstruct_blocks, remove_session_blocks};
+    use extractor::knowledge::{
+        find_sessions_by_topic, parse_session_blocks, partition_by_expiry, reconstruct_blocks,
+        remove_session_blocks,
+    };
     use std::collections::BTreeSet;
 
     let home = dirs::home_dir()
         .ok_or_else(|| error::MemoryError::Config("Could not determine home directory".into()))?;
     let memory_dir = home.join("memory");
     let knowledge_dir = memory_dir.join("knowledge").join(project);
-    let global_prefs = memory_dir.join("knowledge").join("_global").join("preferences.md");
+    let global_prefs = memory_dir
+        .join("knowledge")
+        .join("_global")
+        .join("preferences.md");
 
     let knowledge_files = ["decisions.md", "solutions.md", "patterns.md"];
 
@@ -1766,10 +1830,7 @@ fn cmd_forget(
         }
 
         if purge {
-            let conv_session = memory_dir
-                .join("conversations")
-                .join(project)
-                .join(sid);
+            let conv_session = memory_dir.join("conversations").join(project).join(sid);
             if conv_session.exists() {
                 std::fs::remove_dir_all(&conv_session)?;
             }
@@ -1844,8 +1905,18 @@ fn cmd_forget(
         } else {
             format!(" - {}", preview.dimmed())
         };
-        let expired_tag = if *exp { " [EXPIRED]".red().to_string() } else { String::new() };
-        println!("  {} ({}){}{}",  sid.cyan(), ts, expired_tag, preview_display);
+        let expired_tag = if *exp {
+            " [EXPIRED]".red().to_string()
+        } else {
+            String::new()
+        };
+        println!(
+            "  {} ({}){}{}",
+            sid.cyan(),
+            ts,
+            expired_tag,
+            preview_display
+        );
     }
     println!(
         "\nTo remove a session: {}",
@@ -2225,7 +2296,10 @@ fn cmd_recall(config: &Config, project: &str) -> Result<()> {
         if pack_content.is_empty() {
             local
         } else {
-            format!("{}\n\n---\n\n# Installed Pack Knowledge\n\n{}", local, pack_content)
+            format!(
+                "{}\n\n---\n\n# Installed Pack Knowledge\n\n{}",
+                local, pack_content
+            )
         }
     } else if !pack_content.is_empty() {
         format!("# Installed Pack Knowledge\n\n{}", pack_content)
@@ -2277,7 +2351,12 @@ fn get_installed_pack_knowledge(memory_dir: &Path) -> Result<String> {
         combined.push_str(&format!("## From pack: {}\n\n", pack_name));
 
         // Read knowledge files from pack
-        for category in &["patterns.md", "solutions.md", "decisions.md", "preferences.md"] {
+        for category in &[
+            "patterns.md",
+            "solutions.md",
+            "decisions.md",
+            "preferences.md",
+        ] {
             let file_path = knowledge_dir.join(category);
             if file_path.exists() {
                 if let Ok(content) = std::fs::read_to_string(&file_path) {
@@ -2479,9 +2558,33 @@ fn cmd_export(
     let context = read_and_filter(&knowledge_dir.join("context.md"));
 
     let exported_content = match format {
-        "markdown" => export_markdown(project, &context, &decisions, &solutions, &patterns, include_conversations, config)?,
-        "json" => export_json(project, &context, &decisions, &solutions, &patterns, include_conversations, config)?,
-        "html" => export_html(project, &context, &decisions, &solutions, &patterns, include_conversations, config)?,
+        "markdown" => export_markdown(
+            project,
+            &context,
+            &decisions,
+            &solutions,
+            &patterns,
+            include_conversations,
+            config,
+        )?,
+        "json" => export_json(
+            project,
+            &context,
+            &decisions,
+            &solutions,
+            &patterns,
+            include_conversations,
+            config,
+        )?,
+        "html" => export_html(
+            project,
+            &context,
+            &decisions,
+            &solutions,
+            &patterns,
+            include_conversations,
+            config,
+        )?,
         _ => return Err(MemoryError::Config(format!("Unknown format: {}", format))),
     };
 
@@ -2512,7 +2615,10 @@ fn export_markdown(
     let mut output = String::new();
 
     output.push_str(&format!("# {} - Knowledge Export\n\n", project));
-    output.push_str(&format!("**Exported:** {}\n\n", chrono::Utc::now().format("%Y-%m-%d %H:%M:%S UTC")));
+    output.push_str(&format!(
+        "**Exported:** {}\n\n",
+        chrono::Utc::now().format("%Y-%m-%d %H:%M:%S UTC")
+    ));
     output.push_str("**Tool:** [claude-memory](https://github.com/Algiras/claude-memory)\n\n");
     output.push_str("---\n\n");
 
@@ -2624,12 +2730,14 @@ fn export_html(
     include_conversations: bool,
     config: &Config,
 ) -> Result<String> {
-    let mut html = String::from(r#"<!DOCTYPE html>
+    let mut html = String::from(
+        r#"<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>"#);
+    <title>"#,
+    );
     html.push_str(&format!("{} - Knowledge Export</title>\n", project));
     html.push_str(r#"    <style>
         body {
@@ -2687,7 +2795,13 @@ fn export_html(
             html.push_str(&format!("<h2>{}</h2>\n", title));
             html.push_str("<div class='section'>\n");
             // Simple markdown to HTML (just preserve formatting)
-            html.push_str(&content.replace("<", "&lt;").replace(">", "&gt;").replace("\n\n", "</p><p>").replace("\n", "<br>"));
+            html.push_str(
+                &content
+                    .replace("<", "&lt;")
+                    .replace(">", "&gt;")
+                    .replace("\n\n", "</p><p>")
+                    .replace("\n", "<br>"),
+            );
             html.push_str("</div>\n");
         }
     }
@@ -2705,7 +2819,13 @@ fn export_html(
                         let content = std::fs::read_to_string(conv_file)?;
                         html.push_str(&format!("<h3>Session: {}</h3>\n", session_id));
                         html.push_str("<div class='section conversation'>\n");
-                        html.push_str(&content.replace("<", "&lt;").replace(">", "&gt;").replace("\n\n", "</p><p>").replace("\n", "<br>"));
+                        html.push_str(
+                            &content
+                                .replace("<", "&lt;")
+                                .replace(">", "&gt;")
+                                .replace("\n\n", "</p><p>")
+                                .replace("\n", "<br>"),
+                        );
                         html.push_str("</div>\n<hr>\n");
                     }
                 }
@@ -2713,7 +2833,8 @@ fn export_html(
         }
     }
 
-    html.push_str(r#"        </div>
+    html.push_str(
+        r#"        </div>
         <div class="footer">
             Generated by <a href="https://github.com/Algiras/claude-memory">claude-memory</a>
         </div>
@@ -2729,14 +2850,20 @@ fn export_html(
         }
     </script>
 </body>
-</html>"#);
+</html>"#,
+    );
 
     Ok(html)
 }
 
 // ── Sync commands ───────────────────────────────────────────────────────
 
-fn cmd_sync_push(config: &Config, project: &str, gist_id: Option<&str>, description: &str) -> Result<()> {
+fn cmd_sync_push(
+    config: &Config,
+    project: &str,
+    gist_id: Option<&str>,
+    description: &str,
+) -> Result<()> {
     let rt = tokio::runtime::Builder::new_current_thread()
         .enable_all()
         .build()
@@ -2771,7 +2898,10 @@ fn cmd_sync_push(config: &Config, project: &str, gist_id: Option<&str>, descript
         println!("  Gist ID:  {}", gist.id.cyan());
         println!("  URL:      {}", gist.html_url.cyan());
         println!("\nTo pull on another machine:");
-        println!("  {}", format!("claude-memory sync pull {} {}", project, gist.id).cyan());
+        println!(
+            "  {}",
+            format!("claude-memory sync pull {} {}", project, gist.id).cyan()
+        );
 
         Ok(())
     })
@@ -2823,14 +2953,16 @@ fn cmd_sync_list(_config: &Config, project: &str) -> Result<()> {
     rt.block_on(async {
         let client = sync::GistClient::from_env()?;
 
-        println!("{} Listing gists for '{}'...", "Searching".green().bold(), project);
+        println!(
+            "{} Listing gists for '{}'...",
+            "Searching".green().bold(),
+            project
+        );
         let gists = client.list_gists().await?;
 
         let matching: Vec<_> = gists
             .iter()
-            .filter(|g| {
-                g.description.contains(project) || g.files.contains_key("metadata.json")
-            })
+            .filter(|g| g.description.contains(project) || g.files.contains_key("metadata.json"))
             .collect();
 
         if matching.is_empty() {
@@ -2881,7 +3013,11 @@ fn cmd_sync_history(gist_id: &str, version: Option<&str>) -> Result<()> {
             }
         } else {
             // Show history
-            println!("{} Fetching history for {}...", "Loading".green().bold(), gist_id);
+            println!(
+                "{} Fetching history for {}...",
+                "Loading".green().bold(),
+                gist_id
+            );
             let history = client.get_gist_history(gist_id).await?;
 
             if history.is_empty() {
@@ -2903,21 +3039,40 @@ fn cmd_sync_history(gist_id: &str, version: Option<&str>) -> Result<()> {
                     .map(|dt| dt.format("%Y-%m-%d %H:%M:%S").to_string())
                     .unwrap_or_else(|_| entry.committed_at.clone());
 
-                println!("  {} {} ({})", format!("{}.", i + 1).dimmed(), entry.version.cyan(), time.dimmed());
+                println!(
+                    "  {} {} ({})",
+                    format!("{}.", i + 1).dimmed(),
+                    entry.version.cyan(),
+                    time.dimmed()
+                );
                 println!("     By: {}", user);
 
                 if let Some(ref status) = entry.change_status {
                     if let (Some(add), Some(del)) = (status.additions, status.deletions) {
-                        println!("     Changes: {} {} {}", format!("+{}", add).green(), format!("-{}", del).red(), "");
+                        println!(
+                            "     Changes: {} {} ",
+                            format!("+{}", add).green(),
+                            format!("-{}", del).red()
+                        );
                     }
                 }
                 println!();
             }
 
             println!("\nTo view a specific version:");
-            println!("  {}", format!("claude-memory sync history {} --version <version>", gist_id).cyan());
+            println!(
+                "  {}",
+                format!("claude-memory sync history {} --version <version>", gist_id).cyan()
+            );
             println!("\nTo restore a version:");
-            println!("  {}", format!("claude-memory sync pull <project> {}", history.first().unwrap().version).cyan());
+            println!(
+                "  {}",
+                format!(
+                    "claude-memory sync pull <project> {}",
+                    history.first().unwrap().version
+                )
+                .cyan()
+            );
         }
 
         Ok(())
@@ -2941,7 +3096,13 @@ fn cmd_sync_push_repo(
         repo_path.display()
     );
 
-    sync::push_to_git_repo(&config.memory_dir, project, &repo_path, message, push_remote)?;
+    sync::push_to_git_repo(
+        &config.memory_dir,
+        project,
+        &repo_path,
+        message,
+        push_remote,
+    )?;
 
     println!(
         "{} Pushed {} knowledge to {}",
@@ -2974,7 +3135,13 @@ fn cmd_sync_pull_repo(
         repo_path.display()
     );
 
-    sync::pull_from_git_repo(&config.memory_dir, project, &repo_path, fetch_remote, branch)?;
+    sync::pull_from_git_repo(
+        &config.memory_dir,
+        project,
+        &repo_path,
+        fetch_remote,
+        branch,
+    )?;
 
     println!(
         "{} Pulled {} knowledge from {}",
@@ -3001,14 +3168,14 @@ fn cmd_sync_init_repo(repo: &str) -> Result<()> {
 
     sync::init_git_repo(&repo_path)?;
 
-    println!(
-        "{} Git repository initialized",
-        "Done!".green().bold()
-    );
+    println!("{} Git repository initialized", "Done!".green().bold());
     println!("  Path: {}", repo_path.display().to_string().cyan());
     println!("\nNext steps:");
     println!("  1. {} (optional)", "git remote add origin <url>".dimmed());
-    println!("  2. {}", format!("claude-memory sync push-repo <project> {}", repo).cyan());
+    println!(
+        "  2. {}",
+        format!("claude-memory sync push-repo <project> {}", repo).cyan()
+    );
 
     Ok(())
 }
@@ -3029,7 +3196,11 @@ fn cmd_graph_build(config: &Config, project: &str) -> Result<()> {
         return Ok(());
     }
 
-    println!("{} Building knowledge graph for '{}'...", "Analyzing".green().bold(), project);
+    println!(
+        "{} Building knowledge graph for '{}'...",
+        "Analyzing".green().bold(),
+        project
+    );
 
     // Read knowledge files
     let read_and_filter = |path: &Path| -> String {
@@ -3068,7 +3239,8 @@ fn cmd_graph_build(config: &Config, project: &str) -> Result<()> {
 
     // Save graph
     let graph_path = knowledge_dir.join("graph.json");
-    graph.save(&graph_path)
+    graph
+        .save(&graph_path)
         .map_err(|e| MemoryError::Config(format!("Failed to save graph: {}", e)))?;
 
     println!("{} Knowledge graph created:", "Done!".green().bold());
@@ -3076,14 +3248,24 @@ fn cmd_graph_build(config: &Config, project: &str) -> Result<()> {
     println!("  Relationships: {}", graph.relationships.len());
     println!("  Saved to: {}", graph_path.display().to_string().cyan());
     println!("\nExplore with:");
-    println!("  {}", format!("claude-memory graph query {} <concept>", project).cyan());
-    println!("  {}", format!("claude-memory graph viz {} ascii", project).cyan());
+    println!(
+        "  {}",
+        format!("claude-memory graph query {} <concept>", project).cyan()
+    );
+    println!(
+        "  {}",
+        format!("claude-memory graph viz {} ascii", project).cyan()
+    );
 
     Ok(())
 }
 
 fn cmd_graph_query(config: &Config, project: &str, concept: &str, depth: usize) -> Result<()> {
-    let graph_path = config.memory_dir.join("knowledge").join(project).join("graph.json");
+    let graph_path = config
+        .memory_dir
+        .join("knowledge")
+        .join(project)
+        .join("graph.json");
 
     if !graph_path.exists() {
         eprintln!(
@@ -3100,24 +3282,49 @@ fn cmd_graph_query(config: &Config, project: &str, concept: &str, depth: usize) 
     let related = graph::query::find_related(&graph, concept, depth);
 
     if related.is_empty() {
-        println!("{} No concepts found related to '{}'", "Not found:".yellow(), concept);
+        println!(
+            "{} No concepts found related to '{}'",
+            "Not found:".yellow(),
+            concept
+        );
         return Ok(());
     }
 
-    println!("{} Concepts related to '{}' (depth {}):\n", "Graph Query".green().bold(), concept, depth);
+    println!(
+        "{} Concepts related to '{}' (depth {}):\n",
+        "Graph Query".green().bold(),
+        concept,
+        depth
+    );
 
     for (concept_id, dist) in related {
         if let Some(c) = graph.concepts.get(&concept_id) {
             let indent = "  ".repeat(dist);
-            println!("{}[{}] {} (importance: {:.1})", indent, dist, c.name.cyan(), c.importance);
+            println!(
+                "{}[{}] {} (importance: {:.1})",
+                indent,
+                dist,
+                c.name.cyan(),
+                c.importance
+            );
         }
     }
 
     Ok(())
 }
 
-fn cmd_graph_viz(config: &Config, project: &str, format: &str, output: Option<&str>, root: Option<&str>) -> Result<()> {
-    let graph_path = config.memory_dir.join("knowledge").join(project).join("graph.json");
+fn cmd_graph_viz(
+    config: &Config,
+    project: &str,
+    format: &str,
+    output: Option<&str>,
+    root: Option<&str>,
+) -> Result<()> {
+    let graph_path = config
+        .memory_dir
+        .join("knowledge")
+        .join(project)
+        .join("graph.json");
 
     if !graph_path.exists() {
         eprintln!(
@@ -3144,7 +3351,7 @@ fn cmd_graph_viz(config: &Config, project: &str, format: &str, output: Option<&s
 
                 // Convert to SVG using dot command
                 let status = std::process::Command::new("dot")
-                    .args(&["-Tsvg", temp_dot, "-o", out_path])
+                    .args(["-Tsvg", temp_dot, "-o", out_path])
                     .status();
 
                 match status {
@@ -3153,13 +3360,19 @@ fn cmd_graph_viz(config: &Config, project: &str, format: &str, output: Option<&s
                         return Ok(());
                     }
                     _ => {
-                        eprintln!("{} graphviz not installed. Install with: brew install graphviz", "Error:".red());
+                        eprintln!(
+                            "{} graphviz not installed. Install with: brew install graphviz",
+                            "Error:".red()
+                        );
                         eprintln!("Outputting DOT format instead...");
                         dot
                     }
                 }
             } else {
-                eprintln!("{} SVG requires --output. Showing DOT instead.", "Note:".yellow());
+                eprintln!(
+                    "{} SVG requires --output. Showing DOT instead.",
+                    "Note:".yellow()
+                );
                 dot
             }
         }
@@ -3168,7 +3381,11 @@ fn cmd_graph_viz(config: &Config, project: &str, format: &str, output: Option<&s
 
     if let Some(out_path) = output {
         std::fs::write(out_path, &viz_content)?;
-        println!("{} Visualization saved to {}", "Done!".green().bold(), out_path);
+        println!(
+            "{} Visualization saved to {}",
+            "Done!".green().bold(),
+            out_path
+        );
     } else {
         print!("{}", viz_content);
     }
@@ -3177,7 +3394,11 @@ fn cmd_graph_viz(config: &Config, project: &str, format: &str, output: Option<&s
 }
 
 fn cmd_graph_path(config: &Config, project: &str, from: &str, to: &str) -> Result<()> {
-    let graph_path = config.memory_dir.join("knowledge").join(project).join("graph.json");
+    let graph_path = config
+        .memory_dir
+        .join("knowledge")
+        .join(project)
+        .join("graph.json");
 
     if !graph_path.exists() {
         eprintln!(
@@ -3193,7 +3414,12 @@ fn cmd_graph_path(config: &Config, project: &str, from: &str, to: &str) -> Resul
 
     match graph::query::shortest_path(&graph, from, to) {
         Some(path) => {
-            println!("{} Path from '{}' to '{}':\n", "Found".green().bold(), from, to);
+            println!(
+                "{} Path from '{}' to '{}':\n",
+                "Found".green().bold(),
+                from,
+                to
+            );
             for (i, concept) in path.iter().enumerate() {
                 if i > 0 {
                     println!("   ↓");
@@ -3202,7 +3428,12 @@ fn cmd_graph_path(config: &Config, project: &str, from: &str, to: &str) -> Resul
             }
         }
         None => {
-            println!("{} No path found from '{}' to '{}'", "Not found:".yellow(), from, to);
+            println!(
+                "{} No path found from '{}' to '{}'",
+                "Not found:".yellow(),
+                from,
+                to
+            );
         }
     }
 
@@ -3210,7 +3441,11 @@ fn cmd_graph_path(config: &Config, project: &str, from: &str, to: &str) -> Resul
 }
 
 fn cmd_graph_hubs(config: &Config, project: &str, top_n: usize) -> Result<()> {
-    let graph_path = config.memory_dir.join("knowledge").join(project).join("graph.json");
+    let graph_path = config
+        .memory_dir
+        .join("knowledge")
+        .join(project)
+        .join("graph.json");
 
     if !graph_path.exists() {
         eprintln!(
@@ -3226,7 +3461,11 @@ fn cmd_graph_hubs(config: &Config, project: &str, top_n: usize) -> Result<()> {
 
     let hubs = graph::query::find_hubs(&graph, top_n);
 
-    println!("{} Top {} most connected concepts:\n", "Hubs".green().bold(), top_n);
+    println!(
+        "{} Top {} most connected concepts:\n",
+        "Hubs".green().bold(),
+        top_n
+    );
 
     for (i, (concept_id, in_degree, out_degree)) in hubs.iter().enumerate() {
         if let Some(concept) = graph.concepts.get(concept_id) {
@@ -3253,7 +3492,11 @@ fn cmd_embed(config: &Config, project: &str, provider_override: Option<&str>) ->
         .map_err(|e| MemoryError::Config(format!("tokio runtime: {}", e)))?;
 
     rt.block_on(async {
-        println!("{} Building embeddings for '{}'...", "Embedding".green().bold(), project);
+        println!(
+            "{} Building embeddings for '{}'...",
+            "Embedding".green().bold(),
+            project
+        );
 
         let provider = if let Some(prov) = provider_override {
             match prov {
@@ -3274,12 +3517,9 @@ fn cmd_embed(config: &Config, project: &str, provider_override: Option<&str>) ->
             embeddings::EmbeddingProvider::from_env()?
         };
 
-        let store = embeddings::search::SemanticSearch::build_index(
-            &config.memory_dir,
-            project,
-            &provider,
-        )
-        .await?;
+        let store =
+            embeddings::search::SemanticSearch::build_index(&config.memory_dir, project, &provider)
+                .await?;
 
         let stats = store.stats();
 
@@ -3290,7 +3530,14 @@ fn cmd_embed(config: &Config, project: &str, provider_override: Option<&str>) ->
             println!("    {}: {}", cat, count);
         }
         println!("\nSearch with:");
-        println!("  {}", format!("claude-memory search-semantic \"your query\" --project {}", project).cyan());
+        println!(
+            "  {}",
+            format!(
+                "claude-memory search-semantic \"your query\" --project {}",
+                project
+            )
+            .cyan()
+        );
 
         Ok(())
     })
@@ -3322,11 +3569,20 @@ fn cmd_search_semantic(
             )
             .await?;
 
-            println!("{} Semantic search results for '{}':\n", "Search".green().bold(), query);
+            println!(
+                "{} Semantic search results for '{}':\n",
+                "Search".green().bold(),
+                query
+            );
 
             for (score, text, category) in results {
                 if score >= threshold {
-                    println!("  {} [{}] ({:.1}%)", ">".green(), category.cyan(), score * 100.0);
+                    println!(
+                        "  {} [{}] ({:.1}%)",
+                        ">".green(),
+                        category.cyan(),
+                        score * 100.0
+                    );
                     println!("    {}\n", truncate_text(&text, 150));
                 }
             }
@@ -3372,10 +3628,20 @@ fn cmd_search_semantic(
             all_results.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(std::cmp::Ordering::Equal));
             all_results.truncate(top_k);
 
-            println!("{} Semantic search results for '{}':\n", "Search".green().bold(), query);
+            println!(
+                "{} Semantic search results for '{}':\n",
+                "Search".green().bold(),
+                query
+            );
 
             for (score, text, category, proj) in all_results {
-                println!("  {} [{}:{}] ({:.1}%)", ">".green(), proj.dimmed(), category.cyan(), score * 100.0);
+                println!(
+                    "  {} [{}:{}] ({:.1}%)",
+                    ">".green(),
+                    proj.dimmed(),
+                    category.cyan(),
+                    score * 100.0
+                );
                 println!("    {}\n", truncate_text(&text, 150));
             }
         }
@@ -3421,7 +3687,10 @@ fn cmd_consolidate(
             return Ok(());
         }
 
-        println!("{} Analyzing knowledge for duplicates...", "Consolidating".green().bold());
+        println!(
+            "{} Analyzing knowledge for duplicates...",
+            "Consolidating".green().bold()
+        );
 
         let store = embeddings::EmbeddingStore::load(&index_path)?;
 
@@ -3436,7 +3705,8 @@ fn cmd_consolidate(
                     continue; // Skip self and already compared
                 }
 
-                let similarity = embeddings::cosine_similarity(&chunk_a.embedding, &chunk_b.embedding);
+                let similarity =
+                    embeddings::cosine_similarity(&chunk_a.embedding, &chunk_b.embedding);
 
                 if similarity >= threshold {
                     similar.push((similarity, j));
@@ -3450,14 +3720,22 @@ fn cmd_consolidate(
         }
 
         if duplicate_groups.is_empty() {
-            println!("{} No duplicates found (threshold: {:.0}%)", "✓".green(), threshold * 100.0);
+            println!(
+                "{} No duplicates found (threshold: {:.0}%)",
+                "✓".green(),
+                threshold * 100.0
+            );
             return Ok(());
         }
 
         println!("\n{} duplicate group(s) found:\n", duplicate_groups.len());
 
         for (group_idx, group) in duplicate_groups.iter().enumerate() {
-            println!("{}. Duplicate Group (similarity ≥ {:.0}%):", group_idx + 1, threshold * 100.0);
+            println!(
+                "{}. Duplicate Group (similarity ≥ {:.0}%):",
+                group_idx + 1,
+                threshold * 100.0
+            );
 
             for (similarity, chunk_idx) in group {
                 let chunk = &store.chunks[*chunk_idx];
@@ -3478,17 +3756,17 @@ fn cmd_consolidate(
 
         // Contradiction detection
         if find_contradictions {
-            println!("\n{} Checking for contradictions...", "Analyzing".green().bold());
+            println!(
+                "\n{} Checking for contradictions...",
+                "Analyzing".green().bold()
+            );
             println!("{} Contradiction detection coming soon!", "Note:".yellow());
         }
 
         // Track learning signals from consolidation
-        if let Err(e) = learning::post_consolidate_hook(
-            config,
-            project,
-            duplicate_groups.len(),
-            auto_merge,
-        ) {
+        if let Err(e) =
+            learning::post_consolidate_hook(config, project, duplicate_groups.len(), auto_merge)
+        {
             eprintln!("Learning hook failed: {}", e);
         }
 
@@ -3518,8 +3796,7 @@ fn cmd_doctor(config: &Config, project: Option<&str>, auto_fix: bool, verbose: b
 
         let status_color = report.health_color();
         println!(
-            "{} {} - Health: {}/100 ({})",
-            "📊".to_string(),
+            "\u{1f4ca} {} - Health: {}/100 ({})",
             proj.cyan().bold(),
             report.score.to_string().color(status_color),
             report.health_status().color(status_color)
@@ -3531,9 +3808,21 @@ fn cmd_doctor(config: &Config, project: Option<&str>, auto_fix: bool, verbose: b
         }
 
         // Group issues by severity
-        let critical: Vec<_> = report.issues.iter().filter(|i| i.severity == health::Severity::Critical).collect();
-        let warnings: Vec<_> = report.issues.iter().filter(|i| i.severity == health::Severity::Warning).collect();
-        let info: Vec<_> = report.issues.iter().filter(|i| i.severity == health::Severity::Info).collect();
+        let critical: Vec<_> = report
+            .issues
+            .iter()
+            .filter(|i| i.severity == health::Severity::Critical)
+            .collect();
+        let warnings: Vec<_> = report
+            .issues
+            .iter()
+            .filter(|i| i.severity == health::Severity::Warning)
+            .collect();
+        let info: Vec<_> = report
+            .issues
+            .iter()
+            .filter(|i| i.severity == health::Severity::Info)
+            .collect();
 
         for (severity_label, color, issues_list) in [
             ("CRITICAL", colored::Color::Red, critical),
@@ -3541,7 +3830,11 @@ fn cmd_doctor(config: &Config, project: Option<&str>, auto_fix: bool, verbose: b
             ("INFO", colored::Color::Cyan, info),
         ] {
             if !issues_list.is_empty() {
-                println!("   {} {} issue(s):", severity_label.color(color), issues_list.len());
+                println!(
+                    "   {} {} issue(s):",
+                    severity_label.color(color),
+                    issues_list.len()
+                );
                 for issue in issues_list {
                     println!("     {} {}", "•".color(color), issue.description);
                     if verbose {
@@ -3569,7 +3862,7 @@ fn cmd_doctor(config: &Config, project: Option<&str>, auto_fix: bool, verbose: b
                 .build()
                 .map_err(|e| MemoryError::Config(format!("tokio runtime: {}", e)))?;
 
-            println!("   {} Auto-fixing issues...", "🔧".to_string());
+            println!("   \u{1f527} Auto-fixing issues...");
             let fixed = rt.block_on(health::auto_fix_issues(config, proj, &report.issues))?;
 
             for fix in &fixed {
@@ -3583,12 +3876,9 @@ fn cmd_doctor(config: &Config, project: Option<&str>, auto_fix: bool, verbose: b
             // Track learning signals from health improvements
             if !fixed.is_empty() {
                 let updated_report = health::check_project_health(&config.memory_dir, proj)?;
-                if let Err(e) = learning::post_doctor_fix_hook(
-                    config,
-                    proj,
-                    report.score,
-                    updated_report.score,
-                ) {
+                if let Err(e) =
+                    learning::post_doctor_fix_hook(config, proj, report.score, updated_report.score)
+                {
                     eprintln!("Learning hook failed: {}", e);
                 }
             }
@@ -3633,7 +3923,7 @@ fn check_pack_health(memory_dir: &Path, auto_fix: bool, verbose: bool) -> Result
         let manifest_path = pack.path.join(".pack/manifest.json");
         if !manifest_path.exists() {
             pack_issues.push("Missing manifest file");
-        } else if let Err(_) = hive::KnowledgePack::load(&pack.path) {
+        } else if hive::KnowledgePack::load(&pack.path).is_err() {
             pack_issues.push("Invalid manifest");
         }
 
@@ -3643,9 +3933,15 @@ fn check_pack_health(memory_dir: &Path, auto_fix: bool, verbose: bool) -> Result
             pack_issues.push("Missing knowledge directory");
         } else {
             // Check 3: At least one knowledge file exists
-            let has_knowledge = ["patterns.md", "solutions.md", "workflows.md", "decisions.md", "preferences.md"]
-                .iter()
-                .any(|f| knowledge_dir.join(f).exists());
+            let has_knowledge = [
+                "patterns.md",
+                "solutions.md",
+                "workflows.md",
+                "decisions.md",
+                "preferences.md",
+            ]
+            .iter()
+            .any(|f| knowledge_dir.join(f).exists());
 
             if !has_knowledge {
                 pack_issues.push("No knowledge files found");
@@ -3664,7 +3960,7 @@ fn check_pack_health(memory_dir: &Path, auto_fix: bool, verbose: bool) -> Result
             println!("{} {} issue(s)", "⚠".yellow(), pack_issues.len());
             total_issues += pack_issues.len();
 
-            if verbose || pack_issues.len() > 0 {
+            if verbose || !pack_issues.is_empty() {
                 for issue in &pack_issues {
                     println!("       {} {}", "•".yellow(), issue);
                 }
@@ -3672,8 +3968,11 @@ fn check_pack_health(memory_dir: &Path, auto_fix: bool, verbose: bool) -> Result
 
             if auto_fix {
                 // Auto-fix: Re-download corrupted packs
-                if pack_issues.iter().any(|i| i.contains("Missing") || i.contains("Invalid")) {
-                    println!("       {} Attempting to repair...", "🔧".to_string());
+                if pack_issues
+                    .iter()
+                    .any(|i| i.contains("Missing") || i.contains("Invalid"))
+                {
+                    println!("       \u{1f527} Attempting to repair...");
 
                     if let Err(e) = installer.update(&pack.name) {
                         println!("       {} Repair failed: {}", "✗".red(), e);
@@ -3685,7 +3984,7 @@ fn check_pack_health(memory_dir: &Path, auto_fix: bool, verbose: bool) -> Result
 
                 // Auto-fix: Remove orphaned packs
                 if pack_issues.iter().any(|i| i.contains("orphaned")) {
-                    println!("       {} Removing orphaned pack...", "🔧".to_string());
+                    println!("       \u{1f527} Removing orphaned pack...");
 
                     if let Err(e) = installer.uninstall(&pack.name) {
                         println!("       {} Removal failed: {}", "✗".red(), e);
@@ -3706,7 +4005,10 @@ fn check_pack_health(memory_dir: &Path, auto_fix: bool, verbose: bool) -> Result
         println!("   {} {} total issue(s) found", "⚠".yellow(), total_issues);
 
         if !auto_fix {
-            println!("   💡 Run with {} to attempt automatic repairs", "--fix".cyan());
+            println!(
+                "   💡 Run with {} to attempt automatic repairs",
+                "--fix".cyan()
+            );
         }
     }
 
@@ -3715,21 +4017,36 @@ fn check_pack_health(memory_dir: &Path, auto_fix: bool, verbose: bool) -> Result
     Ok(())
 }
 
-fn cmd_diff(config: &Config, project: &str, category: &str, version_id: Option<&str>, show_history: bool) -> Result<()> {
+fn cmd_diff(
+    config: &Config,
+    project: &str,
+    category: &str,
+    version_id: Option<&str>,
+    show_history: bool,
+) -> Result<()> {
     let tracker = diff::VersionTracker::new(&config.memory_dir, project);
 
     if show_history {
         let versions = tracker.get_versions(category)?;
 
         if versions.is_empty() {
-            println!("{} No version history for {}/{}", "Not found:".yellow(), project, category);
+            println!(
+                "{} No version history for {}/{}",
+                "Not found:".yellow(),
+                project,
+                category
+            );
             println!("\nVersions are created automatically when knowledge is updated.");
             return Ok(());
         }
 
         println!("{} Version History", "Knowledge:".green().bold());
         println!("{}", "=".repeat(60));
-        println!("Project: {} | Category: {}\n", project.cyan(), category.cyan());
+        println!(
+            "Project: {} | Category: {}\n",
+            project.cyan(),
+            category.cyan()
+        );
 
         for (i, v) in versions.iter().enumerate() {
             println!(
@@ -3738,11 +4055,22 @@ fn cmd_diff(config: &Config, project: &str, category: &str, version_id: Option<&
                 v.version_id.cyan(),
                 v.timestamp.format("%Y-%m-%d %H:%M:%S").to_string().dimmed()
             );
-            println!("     Hash: {} | Size: {} bytes", v.content_hash.dimmed(), v.size_bytes);
+            println!(
+                "     Hash: {} | Size: {} bytes",
+                v.content_hash.dimmed(),
+                v.size_bytes
+            );
         }
 
         println!("\nTo compare versions:");
-        println!("  {}", format!("claude-memory diff {} {} --version <version-id>", project, category).cyan());
+        println!(
+            "  {}",
+            format!(
+                "claude-memory diff {} {} --version <version-id>",
+                project, category
+            )
+            .cyan()
+        );
 
         return Ok(());
     }
@@ -3752,7 +4080,12 @@ fn cmd_diff(config: &Config, project: &str, category: &str, version_id: Option<&
     let current_file = knowledge_dir.join(format!("{}.md", category));
 
     if !current_file.exists() {
-        eprintln!("{} No current knowledge found for {}/{}", "Error:".red(), project, category);
+        eprintln!(
+            "{} No current knowledge found for {}/{}",
+            "Error:".red(),
+            project,
+            category
+        );
         return Ok(());
     }
 
@@ -3760,12 +4093,16 @@ fn cmd_diff(config: &Config, project: &str, category: &str, version_id: Option<&
 
     // Load comparison version
     let (old_content, version_label) = if let Some(vid) = version_id {
-        (tracker.get_version_content(vid)?, format!("Version: {}", vid))
+        (
+            tracker.get_version_content(vid)?,
+            format!("Version: {}", vid),
+        )
     } else {
         match tracker.get_latest_version(category)? {
-            Some(v) => {
-                (tracker.get_version_content(&v.version_id)?, format!("Latest version: {}", v.version_id))
-            }
+            Some(v) => (
+                tracker.get_version_content(&v.version_id)?,
+                format!("Latest version: {}", v.version_id),
+            ),
             None => {
                 println!("{} No previous versions to compare", "Info:".cyan());
                 println!("The current content will be the baseline for future comparisons.");
@@ -3797,14 +4134,17 @@ fn cmd_diff(config: &Config, project: &str, category: &str, version_id: Option<&
 }
 
 fn cmd_analytics(project: Option<&str>, days: u32, detailed: bool, clear_old: bool) -> Result<()> {
-    let home = std::env::var("HOME")
-        .map_err(|_| MemoryError::Config("HOME not set".to_string()))?;
+    let home =
+        std::env::var("HOME").map_err(|_| MemoryError::Config("HOME not set".to_string()))?;
     let memory_dir = std::path::PathBuf::from(home).join("memory");
     let tracker = analytics::EventTracker::new(&memory_dir);
 
     if clear_old {
         let removed = tracker.clear_old_events(days)?;
-        println!("{} Removed {} old analytics file(s)", "🗑️".to_string(), removed);
+        println!(
+            "\u{1f5d1}\u{fe0f} Removed {} old analytics file(s)",
+            removed
+        );
         if removed == 0 {
             println!("   (No files older than {} days)", days);
         }
@@ -3847,7 +4187,11 @@ fn cmd_analytics(project: Option<&str>, days: u32, detailed: bool, clear_old: bo
                 event_icon,
                 format!("{:?}", event.event_type).cyan(),
                 event.project.yellow(),
-                event.timestamp.format("%Y-%m-%d %H:%M:%S").to_string().dimmed()
+                event
+                    .timestamp
+                    .format("%Y-%m-%d %H:%M:%S")
+                    .to_string()
+                    .dimmed()
             );
 
             if let Some(ref query) = event.query {
@@ -3885,7 +4229,10 @@ fn cmd_learn_dashboard(config: &Config, project: Option<&str>) -> Result<()> {
         let learning_dir = config.memory_dir.join("learning");
         if !learning_dir.exists() {
             println!("{}", "No learning data found.".yellow());
-            println!("Run {} to start learning from usage patterns.", "claude-memory ingest".cyan());
+            println!(
+                "Run {} to start learning from usage patterns.",
+                "claude-memory ingest".cyan()
+            );
             return Ok(());
         }
 
@@ -3908,7 +4255,10 @@ fn cmd_learn_dashboard(config: &Config, project: Option<&str>) -> Result<()> {
 fn cmd_learn_optimize(config: &Config, project: &str, dry_run: bool, auto: bool) -> Result<()> {
     use learning::{adaptation, progress};
 
-    println!("{}", format!("Learning Optimization: {}", project).bold().cyan());
+    println!(
+        "{}",
+        format!("Learning Optimization: {}", project).bold().cyan()
+    );
     println!("{}", "=".repeat(60).cyan());
 
     // Load learning state
@@ -3920,7 +4270,11 @@ fn cmd_learn_optimize(config: &Config, project: &str, dry_run: bool, auto: bool)
     {
         println!("\n{}", "No learned optimizations available yet.".yellow());
         println!("The system needs more usage data to learn patterns.");
-        println!("Continue using {} and {} to build learning data.", "recall".cyan(), "search".cyan());
+        println!(
+            "Continue using {} and {} to build learning data.",
+            "recall".cyan(),
+            "search".cyan()
+        );
         return Ok(());
     }
 
@@ -3929,7 +4283,10 @@ fn cmd_learn_optimize(config: &Config, project: &str, dry_run: bool, auto: bool)
     learning::dashboard::display_preview(&preview);
 
     if dry_run {
-        println!("{}", "\nDry run complete. Use --auto to apply changes.".dimmed());
+        println!(
+            "{}",
+            "\nDry run complete. Use --auto to apply changes.".dimmed()
+        );
         return Ok(());
     }
 
@@ -3951,7 +4308,10 @@ fn cmd_learn_optimize(config: &Config, project: &str, dry_run: bool, auto: bool)
     // Apply learned parameters
     let result = adaptation::apply_learned_parameters(config, project, &state)?;
 
-    println!("\n{}", "✓ Optimizations applied successfully".green().bold());
+    println!(
+        "\n{}",
+        "✓ Optimizations applied successfully".green().bold()
+    );
     println!("  {} importance adjustments", result.importance_adjustments);
     println!("  {} TTL adjustments", result.ttl_adjustments);
     println!("  {} graph adjustments", result.graph_adjustments);
@@ -3966,7 +4326,10 @@ fn cmd_learn_reset(config: &Config, project: &str) -> Result<()> {
     use dialoguer::Confirm;
     use learning::progress;
 
-    println!("{}", format!("Reset Learning State: {}", project).bold().yellow());
+    println!(
+        "{}",
+        format!("Reset Learning State: {}", project).bold().yellow()
+    );
     println!("{}", "=".repeat(60).yellow());
 
     let confirmed = Confirm::new()
@@ -3996,20 +4359,34 @@ fn cmd_learn_simulate(
     sessions: usize,
     pattern: &str,
 ) -> Result<()> {
-    println!("{}", format!("🎲 Simulating {} sessions for '{}'...", sessions, project).cyan().bold());
+    println!(
+        "{}",
+        format!("🎲 Simulating {} sessions for '{}'...", sessions, project)
+            .cyan()
+            .bold()
+    );
     println!("{}", "=".repeat(60).cyan());
 
     match pattern {
         "recall" => {
-            println!("Pattern: {} (recall events only)", "Recall-focused".yellow());
+            println!(
+                "Pattern: {} (recall events only)",
+                "Recall-focused".yellow()
+            );
             learning::simulation::simulate_recall_session(config, project, sessions)?;
         }
         "mixed" => {
-            println!("Pattern: {} (recall, search, lookup)", "Mixed usage".yellow());
+            println!(
+                "Pattern: {} (recall, search, lookup)",
+                "Mixed usage".yellow()
+            );
             learning::simulation::simulate_mixed_usage(config, project, sessions)?;
         }
         "high-frequency" => {
-            println!("Pattern: {} (repeated access to same knowledge)", "High-frequency".yellow());
+            println!(
+                "Pattern: {} (repeated access to same knowledge)",
+                "High-frequency".yellow()
+            );
             learning::simulation::simulate_high_frequency_knowledge(
                 config,
                 project,
@@ -4028,8 +4405,16 @@ fn cmd_learn_simulate(
 
     println!("\n{} Simulation complete", "✓".green().bold());
     println!("\nNext steps:");
-    println!("  {} {}", "1.".dimmed(), format!("claude-memory learn dashboard {}", project).cyan());
-    println!("  {} {}", "2.".dimmed(), format!("claude-memory learn optimize {} --dry-run", project).cyan());
+    println!(
+        "  {} {}",
+        "1.".dimmed(),
+        format!("claude-memory learn dashboard {}", project).cyan()
+    );
+    println!(
+        "  {} {}",
+        "2.".dimmed(),
+        format!("claude-memory learn optimize {} --dry-run", project).cyan()
+    );
 
     Ok(())
 }
@@ -4058,12 +4443,12 @@ fn cmd_learn_feedback(
     unhelpful: bool,
     comment: Option<&str>,
 ) -> Result<()> {
+    use learning::outcome_signals::{save_outcome_signal, ExplicitFeedback};
     use learning::{OutcomeSignal, Sentiment};
-    use learning::outcome_signals::{ExplicitFeedback, save_outcome_signal};
 
     if !helpful && !unhelpful {
         return Err(MemoryError::Config(
-            "Must specify either --helpful or --unhelpful".to_string()
+            "Must specify either --helpful or --unhelpful".to_string(),
         ));
     }
 
@@ -4080,7 +4465,7 @@ fn cmd_learn_feedback(
         timestamp: chrono::Utc::now(),
         session_id: session_id.clone(),
         project: project.to_string(),
-        knowledge_ids: vec![],  // Would be populated from actual usage
+        knowledge_ids: vec![], // Would be populated from actual usage
         sentiment,
         comment: comment.map(String::from),
     };
@@ -4109,8 +4494,6 @@ fn cmd_learn_feedback(
 // ── Hive commands ───────────────────────────────────────────────────────
 
 fn cmd_hive(command: HiveCommand) -> Result<()> {
-    use std::path::Path;
-    
     let home = dirs::home_dir()
         .ok_or_else(|| MemoryError::Config("Could not determine home directory".into()))?;
     let memory_dir = home.join("memory");
@@ -4211,10 +4594,17 @@ fn cmd_hive_install(
 
     let installed = installer.install(pack, registry)?;
 
-    println!("{} Pack '{}' installed successfully", "✓".green(), installed.name);
+    println!(
+        "{} Pack '{}' installed successfully",
+        "✓".green(),
+        installed.name
+    );
     println!("  Version: {}", installed.version);
     println!("  Registry: {}", installed.registry);
-    println!("  Installed at: {}", installed.installed_at.format("%Y-%m-%d %H:%M:%S"));
+    println!(
+        "  Installed at: {}",
+        installed.installed_at.format("%Y-%m-%d %H:%M:%S")
+    );
     println!("  Path: {}", installed.path.display());
 
     println!("\n💡 Use 'claude-memory recall' to access this pack's knowledge");
@@ -4255,7 +4645,10 @@ fn cmd_hive_list(memory_dir: &Path) -> Result<()> {
         println!("  {} {}", "●".green(), pack.name.bold());
         println!("    Version: {}", pack.version);
         println!("    Registry: {}", pack.registry);
-        println!("    Installed: {}", pack.installed_at.format("%Y-%m-%d %H:%M:%S"));
+        println!(
+            "    Installed: {}",
+            pack.installed_at.format("%Y-%m-%d %H:%M:%S")
+        );
         println!("    Path: {}", pack.path.display());
         println!();
     }
@@ -4295,11 +4688,7 @@ fn cmd_hive_update(pack: Option<&str>, memory_dir: &Path) -> Result<()> {
     Ok(())
 }
 
-fn cmd_hive_browse(
-    category: Option<&str>,
-    keyword: Option<&str>,
-    memory_dir: &Path,
-) -> Result<()> {
+fn cmd_hive_browse(category: Option<&str>, keyword: Option<&str>, memory_dir: &Path) -> Result<()> {
     use hive::{PackCategory, PackInstaller, RegistryManager};
     use std::str::FromStr;
 
@@ -4324,7 +4713,10 @@ fn cmd_hive_browse(
                 }
             }
             Err(e) => {
-                eprintln!("Warning: Failed to discover packs in '{}': {}", registry.name, e);
+                eprintln!(
+                    "Warning: Failed to discover packs in '{}': {}",
+                    registry.name, e
+                );
             }
         }
     }
@@ -4360,11 +4752,14 @@ fn cmd_hive_browse(
 
         println!("  {} {} {}", "●".blue(), pack.name.bold(), status);
         println!("    Description: {}", pack.description);
-        println!("    Categories: {}",
-            pack.categories.iter()
+        println!(
+            "    Categories: {}",
+            pack.categories
+                .iter()
                 .map(|c| c.to_string())
                 .collect::<Vec<_>>()
-                .join(", "));
+                .join(", ")
+        );
         println!("    Registry: {}", registry_name);
         println!("    Version: {}", pack.version);
         if !pack.keywords.is_empty() {
@@ -4462,6 +4857,7 @@ fn cmd_hive_pack(command: PackCommand, memory_dir: &Path) -> Result<()> {
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn cmd_hive_pack_create(
     name: &str,
     project: &str,
@@ -4572,7 +4968,12 @@ fn cmd_hive_pack_create(
         println!("\nThe following potential secrets were found:\n");
 
         for secret in &secrets {
-            println!("  {} {}:{}", "●".red(), secret.file_path, secret.line_number);
+            println!(
+                "  {} {}:{}",
+                "●".red(),
+                secret.file_path,
+                secret.line_number
+            );
             println!("    Type: {}", secret.pattern_name.yellow());
             println!("    Match: {}", secret.matched_text.dimmed());
             println!();
@@ -4601,7 +5002,14 @@ fn cmd_hive_pack_create(
 
     println!("\n{} Pack created successfully!", "✓".green());
     println!("  Location: {}", pack_dir.display());
-    println!("  Categories: {}", categories.iter().map(|c| c.to_string()).collect::<Vec<_>>().join(", "));
+    println!(
+        "  Categories: {}",
+        categories
+            .iter()
+            .map(|c| c.to_string())
+            .collect::<Vec<_>>()
+            .join(", ")
+    );
     println!("\n💡 Next steps:");
     println!("  1. Review content: cd {}", pack_dir.display());
     println!("  2. Initialize git: git init && git add . && git commit -m 'Initial pack'");
@@ -4612,7 +5020,7 @@ fn cmd_hive_pack_create(
 }
 
 fn cmd_hive_pack_stats(name: &str, memory_dir: &Path) -> Result<()> {
-    use hive::{PackInstaller};
+    use hive::PackInstaller;
 
     let installer = PackInstaller::new(memory_dir);
     let packs = installer.list()?;
@@ -4632,7 +5040,7 @@ fn cmd_hive_pack_stats(name: &str, memory_dir: &Path) -> Result<()> {
             println!("  {} {}", "Name:".bold(), pack.name);
             println!("  {} {}", "Version:".bold(), pack.version);
             println!("  {} {}", "Registry:".bold(), pack.registry);
-            
+
             if let Some(desc) = manifest.get("description").and_then(|v| v.as_str()) {
                 println!("  {} {}", "Description:".bold(), desc);
             }
@@ -4649,13 +5057,19 @@ fn cmd_hive_pack_stats(name: &str, memory_dir: &Path) -> Result<()> {
         let mut total_entries = 0;
         let mut total_size = 0;
 
-        for category in &["patterns.md", "solutions.md", "workflows.md", "decisions.md", "preferences.md"] {
+        for category in &[
+            "patterns.md",
+            "solutions.md",
+            "workflows.md",
+            "decisions.md",
+            "preferences.md",
+        ] {
             let file_path = knowledge_dir.join(category);
             if file_path.exists() {
                 if let Ok(content) = std::fs::read_to_string(&file_path) {
                     let entry_count = content.matches("## Session:").count();
                     let size = content.len();
-                    
+
                     total_entries += entry_count;
                     total_size += size;
 
@@ -4677,7 +5091,11 @@ fn cmd_hive_pack_stats(name: &str, memory_dir: &Path) -> Result<()> {
     }
 
     println!();
-    println!("  {} {}", "Installed:".bold(), pack.installed_at.format("%Y-%m-%d %H:%M:%S"));
+    println!(
+        "  {} {}",
+        "Installed:".bold(),
+        pack.installed_at.format("%Y-%m-%d %H:%M:%S")
+    );
     println!("  {} {}", "Path:".bold(), pack.path.display());
 
     Ok(())
@@ -4711,7 +5129,12 @@ fn cmd_hive_pack_publish(
 
     // Step 2: Load manifest
     let pack = hive::KnowledgePack::load(pack_dir)?;
-    println!("  {} Loaded manifest: {} v{}", "✓".green(), pack.name, pack.version);
+    println!(
+        "  {} Loaded manifest: {} v{}",
+        "✓".green(),
+        pack.name,
+        pack.version
+    );
 
     // Step 3: Security scan (unless skipped)
     if !skip_security {
@@ -4727,7 +5150,12 @@ fn cmd_hive_pack_publish(
                 println!("\nThe following potential secrets were found:\n");
 
                 for secret in &secrets {
-                    println!("  {} {}:{}", "●".red(), secret.file_path, secret.line_number);
+                    println!(
+                        "  {} {}:{}",
+                        "●".red(),
+                        secret.file_path,
+                        secret.line_number
+                    );
                     println!("    Type: {}", secret.pattern_name.yellow());
                     println!("    Match: {}", secret.matched_text.dimmed());
                     println!();
@@ -4735,7 +5163,10 @@ fn cmd_hive_pack_publish(
 
                 println!("{}", "Publishing blocked for security.".red().bold());
                 println!("\nPlease review and remove secrets, then try again.");
-                println!("Use {} to skip this check (NOT RECOMMENDED)", "--skip-security".yellow());
+                println!(
+                    "Use {} to skip this check (NOT RECOMMENDED)",
+                    "--skip-security".yellow()
+                );
 
                 return Err(MemoryError::Config(format!(
                     "{} secret(s) detected",
@@ -4758,12 +5189,14 @@ fn cmd_hive_pack_publish(
         println!("  {} Initializing git repository...", "→".blue());
 
         let status = std::process::Command::new("git")
-            .args(&["init"])
+            .args(["init"])
             .current_dir(pack_dir)
             .status()?;
 
         if !status.success() {
-            return Err(MemoryError::Config("Failed to initialize git repository".into()));
+            return Err(MemoryError::Config(
+                "Failed to initialize git repository".into(),
+            ));
         }
 
         println!("  {} Git repository initialized", "✓".green());
@@ -4778,7 +5211,7 @@ fn cmd_hive_pack_publish(
     println!("\n{} Committing changes...", "→".blue());
 
     std::process::Command::new("git")
-        .args(&["add", "."])
+        .args(["add", "."])
         .current_dir(pack_dir)
         .status()?;
 
@@ -4786,7 +5219,7 @@ fn cmd_hive_pack_publish(
     let message = commit_msg.unwrap_or(&default_msg);
 
     let commit_status = std::process::Command::new("git")
-        .args(&["commit", "-m", message])
+        .args(["commit", "-m", message])
         .current_dir(pack_dir)
         .status()?;
 
@@ -4802,7 +5235,7 @@ fn cmd_hive_pack_publish(
 
         // Check if remote exists
         let has_remote = std::process::Command::new("git")
-            .args(&["remote", "get-url", "origin"])
+            .args(["remote", "get-url", "origin"])
             .current_dir(pack_dir)
             .status()?
             .success();
@@ -4811,7 +5244,7 @@ fn cmd_hive_pack_publish(
             println!("  {} Adding remote: {}", "→".blue(), url);
 
             let status = std::process::Command::new("git")
-                .args(&["remote", "add", "origin", url])
+                .args(["remote", "add", "origin", url])
                 .current_dir(pack_dir)
                 .status()?;
 
@@ -4830,7 +5263,7 @@ fn cmd_hive_pack_publish(
         println!("\n{} Pushing to remote...", "→".blue());
 
         let status = std::process::Command::new("git")
-            .args(&["push", "-u", "origin", "HEAD"])
+            .args(["push", "-u", "origin", "HEAD"])
             .current_dir(pack_dir)
             .status()?;
 
@@ -4848,7 +5281,7 @@ fn cmd_hive_pack_publish(
 
     let tag = format!("v{}", pack.version);
     let tag_status = std::process::Command::new("git")
-        .args(&["tag", "-a", &tag, "-m", &format!("Release {}", tag)])
+        .args(["tag", "-a", &tag, "-m", &format!("Release {}", tag)])
         .current_dir(pack_dir)
         .status()?;
 
@@ -4857,7 +5290,7 @@ fn cmd_hive_pack_publish(
 
         if do_push {
             std::process::Command::new("git")
-                .args(&["push", "origin", &tag])
+                .args(["push", "origin", &tag])
                 .current_dir(pack_dir)
                 .status()?;
             println!("  {} Tag pushed", "✓".green());
@@ -4868,7 +5301,10 @@ fn cmd_hive_pack_publish(
     println!("\n💡 Share your pack:");
     if let Some(url) = repo_url {
         println!("  Users can install with:");
-        println!("  {}", format!("claude-memory hive registry add {}", url).cyan());
+        println!(
+            "  {}",
+            format!("claude-memory hive registry add {}", url).cyan()
+        );
     } else {
         println!("  1. Push to GitHub: git push -u origin main");
         println!("  2. Share the repository URL");
@@ -4910,20 +5346,24 @@ fn validate_pack_structure(pack_dir: &Path) -> Result<()> {
         ));
     }
 
-    let pack = hive::KnowledgePack::load(pack_dir)?;
+    let _pack = hive::KnowledgePack::load(pack_dir)?;
 
     // Check 3: Knowledge directory exists
     let knowledge_dir = pack_dir.join("knowledge");
     if !knowledge_dir.exists() {
-        return Err(MemoryError::Config(
-            "Missing knowledge/ directory".into(),
-        ));
+        return Err(MemoryError::Config("Missing knowledge/ directory".into()));
     }
 
     // Check 4: At least one knowledge file exists
-    let has_knowledge = ["patterns.md", "solutions.md", "workflows.md", "decisions.md", "preferences.md"]
-        .iter()
-        .any(|f| knowledge_dir.join(f).exists());
+    let has_knowledge = [
+        "patterns.md",
+        "solutions.md",
+        "workflows.md",
+        "decisions.md",
+        "preferences.md",
+    ]
+    .iter()
+    .any(|f| knowledge_dir.join(f).exists());
 
     if !has_knowledge {
         return Err(MemoryError::Config(
@@ -4952,7 +5392,11 @@ fn validate_pack_structure(pack_dir: &Path) -> Result<()> {
 
     println!("  {} Manifest valid", "✓".green());
     println!("  {} Knowledge directory exists", "✓".green());
-    println!("  {} Found categories: {}", "✓".green(), found_categories.join(", "));
+    println!(
+        "  {} Found categories: {}",
+        "✓".green(),
+        found_categories.join(", ")
+    );
 
     Ok(())
 }

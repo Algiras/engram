@@ -295,56 +295,99 @@ pub async fn extract_and_merge_knowledge(
     let ts = conversation.start_time.as_deref().unwrap_or("unknown date");
     if let Some(ref decisions) = decisions {
         let inbox_header = if let Some(ttl_val) = ttl {
-            format!("\n\n## Session: {}:decisions ({}) [ttl:{}]\n\n", conversation.session_id, ts, ttl_val)
+            format!(
+                "\n\n## Session: {}:decisions ({}) [ttl:{}]\n\n",
+                conversation.session_id, ts, ttl_val
+            )
         } else {
-            format!("\n\n## Session: {}:decisions ({})\n\n", conversation.session_id, ts)
+            format!(
+                "\n\n## Session: {}:decisions ({})\n\n",
+                conversation.session_id, ts
+            )
         };
         let inbox_content = format!("- category: decisions\n- scope: project\n\n{}", decisions);
         append_knowledge(&inbox_path, &inbox_header, &inbox_content)?;
     }
     if let Some(ref solutions) = solutions {
         let inbox_header = if let Some(ttl_val) = ttl {
-            format!("\n\n## Session: {}:solutions ({}) [ttl:{}]\n\n", conversation.session_id, ts, ttl_val)
+            format!(
+                "\n\n## Session: {}:solutions ({}) [ttl:{}]\n\n",
+                conversation.session_id, ts, ttl_val
+            )
         } else {
-            format!("\n\n## Session: {}:solutions ({})\n\n", conversation.session_id, ts)
+            format!(
+                "\n\n## Session: {}:solutions ({})\n\n",
+                conversation.session_id, ts
+            )
         };
         let inbox_content = format!("- category: solutions\n- scope: project\n\n{}", solutions);
         append_knowledge(&inbox_path, &inbox_header, &inbox_content)?;
     }
     if let Some(ref patterns) = patterns {
         let inbox_header = if let Some(ttl_val) = ttl {
-            format!("\n\n## Session: {}:patterns ({}) [ttl:{}]\n\n", conversation.session_id, ts, ttl_val)
+            format!(
+                "\n\n## Session: {}:patterns ({}) [ttl:{}]\n\n",
+                conversation.session_id, ts, ttl_val
+            )
         } else {
-            format!("\n\n## Session: {}:patterns ({})\n\n", conversation.session_id, ts)
+            format!(
+                "\n\n## Session: {}:patterns ({})\n\n",
+                conversation.session_id, ts
+            )
         };
         let inbox_content = format!("- category: patterns\n- scope: project\n\n{}", patterns);
         append_knowledge(&inbox_path, &inbox_header, &inbox_content)?;
     }
     if let Some(ref preferences) = preferences {
         let inbox_header = if let Some(ttl_val) = ttl {
-            format!("\n\n## Session: {}:preferences ({}) [ttl:{}]\n\n", conversation.session_id, ts, ttl_val)
+            format!(
+                "\n\n## Session: {}:preferences ({}) [ttl:{}]\n\n",
+                conversation.session_id, ts, ttl_val
+            )
         } else {
-            format!("\n\n## Session: {}:preferences ({})\n\n", conversation.session_id, ts)
+            format!(
+                "\n\n## Session: {}:preferences ({})\n\n",
+                conversation.session_id, ts
+            )
         };
-        let inbox_content = format!("- category: preferences\n- scope: global\n\n{}", preferences);
+        let inbox_content = format!(
+            "- category: preferences\n- scope: global\n\n{}",
+            preferences
+        );
         append_knowledge(&inbox_path, &inbox_header, &inbox_content)?;
     }
 
     if let Some(ref decisions) = decisions {
-        append_knowledge(&knowledge_dir.join("decisions.md"), &session_header, decisions)?;
+        append_knowledge(
+            &knowledge_dir.join("decisions.md"),
+            &session_header,
+            decisions,
+        )?;
     }
     if let Some(ref solutions) = solutions {
-        append_knowledge(&knowledge_dir.join("solutions.md"), &session_header, solutions)?;
+        append_knowledge(
+            &knowledge_dir.join("solutions.md"),
+            &session_header,
+            solutions,
+        )?;
     }
     if let Some(ref patterns) = patterns {
-        append_knowledge(&knowledge_dir.join("patterns.md"), &session_header, patterns)?;
+        append_knowledge(
+            &knowledge_dir.join("patterns.md"),
+            &session_header,
+            patterns,
+        )?;
     }
 
     // Global preferences
     let global_dir = config.memory_dir.join("knowledge").join("_global");
     std::fs::create_dir_all(&global_dir)?;
     if let Some(ref preferences) = preferences {
-        append_knowledge(&global_dir.join("preferences.md"), &session_header, preferences)?;
+        append_knowledge(
+            &global_dir.join("preferences.md"),
+            &session_header,
+            preferences,
+        )?;
     }
 
     // Write summary
@@ -485,8 +528,8 @@ fn collect_summaries(dir: &Path) -> Result<String> {
 
     for path in files {
         let content = std::fs::read_to_string(path)?;
-            summaries.push_str(&content);
-            summaries.push('\n');
+        summaries.push_str(&content);
+        summaries.push('\n');
     }
 
     Ok(summaries)

@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
 /// Learned parameter adjustments
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct LearnedParameters {
     /// Importance boosts for specific knowledge IDs
     pub importance_boosts: HashMap<String, f32>,
@@ -22,17 +22,6 @@ pub struct LearnedParameters {
     pub graph_weight_boosts: HashMap<String, f32>,
 }
 
-impl Default for LearnedParameters {
-    fn default() -> Self {
-        Self {
-            importance_boosts: HashMap::new(),
-            ttl_adjustments: HashMap::new(),
-            consolidation_strategy: None,
-            graph_weight_boosts: HashMap::new(),
-        }
-    }
-}
-
 /// Apply learned importance boosts to knowledge scores
 pub fn apply_importance_boosts(
     scores: &mut HashMap<String, KnowledgeScore>,
@@ -41,7 +30,7 @@ pub fn apply_importance_boosts(
     for (id, boost) in boosts {
         if let Some(score) = scores.get_mut(id) {
             // Apply boost while keeping within bounds [0.1, 1.0]
-            score.importance = (score.importance + boost).max(0.1).min(1.0);
+            score.importance = (score.importance + boost).clamp(0.1, 1.0);
         }
     }
 }
@@ -123,7 +112,10 @@ fn apply_graph_weight_boosts(
 ) -> Result<usize> {
     use crate::graph::KnowledgeGraph;
 
-    let graph_path = config.memory_dir.join("graph").join(format!("{}.json", project));
+    let graph_path = config
+        .memory_dir
+        .join("graph")
+        .join(format!("{}.json", project));
 
     if !graph_path.exists() {
         return Ok(0);
@@ -131,21 +123,22 @@ fn apply_graph_weight_boosts(
 
     // Load graph
     let mut graph = KnowledgeGraph::load(&graph_path)
-        .map_err(|e| MemoryError::Io(std::io::Error::new(std::io::ErrorKind::Other, e.to_string())))?;
+        .map_err(|e| MemoryError::Io(std::io::Error::other(e.to_string())))?;
 
     let mut count = 0;
 
     // Apply weight boosts to concepts
     for (id, boost) in boosts {
         if let Some(concept) = graph.concepts.get_mut(id) {
-            concept.importance = (concept.importance + boost).max(0.1).min(1.0);
+            concept.importance = (concept.importance + boost).clamp(0.1, 1.0);
             count += 1;
         }
     }
 
     // Save updated graph
-    graph.save(&graph_path)
-        .map_err(|e| MemoryError::Io(std::io::Error::new(std::io::ErrorKind::Other, e.to_string())))?;
+    graph
+        .save(&graph_path)
+        .map_err(|e| MemoryError::Io(std::io::Error::other(e.to_string())))?;
 
     Ok(count)
 }
@@ -191,7 +184,7 @@ pub fn preview_changes(
         preview.importance_changes.push(ImportanceChange {
             knowledge_id: id.clone(),
             current: 0.5, // Would load actual current value
-            proposed: (0.5 + boost).max(0.1).min(1.0),
+            proposed: (0.5 + boost).clamp(0.1, 1.0),
             boost: *boost,
         });
     }

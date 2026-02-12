@@ -1,0 +1,36 @@
+{
+  "name": "hive-implementation",
+  "version": "0.1.0",
+  "description": "Implementation guide for the Hive Mind distributed knowledge sharing system",
+  "author": {
+    "name": "Anonymous",
+    "email": null
+  },
+  "license": "MIT",
+  "keywords": [
+    "hive",
+    "distributed",
+    "git",
+    "knowledge-packs",
+    "implementation",
+    "rust"
+  ],
+  "categories": [
+    "Patterns",
+    "Solutions",
+    "Workflows"
+  ],
+  "homepage": null,
+  "repository": "https://github.com/user/hive-implementation",
+  "created_at": "2026-02-12T21:35:56.710955Z",
+  "updated_at": "2026-02-12T21:35:56.710955Z",
+  "privacy": {
+    "share_patterns": true,
+    "share_solutions": true,
+    "share_decisions": false,
+    "share_preferences": false,
+    "redact_secrets": true,
+    "require_review": true
+  },
+  "min_claude_memory_version": "0.1.0"
+}

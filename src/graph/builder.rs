@@ -1,4 +1,4 @@
-use super::{Concept, ConceptCategory, KnowledgeGraph, Relationship, RelationType};
+use super::{Concept, ConceptCategory, KnowledgeGraph, RelationType, Relationship};
 use crate::config::Config;
 use crate::error::Result;
 use crate::llm::client::LlmClient;
@@ -61,21 +61,19 @@ pub async fn build_graph_from_knowledge(
             .trim()
     } else if response.contains("```") {
         // Extract from generic code block
-        response
-            .split("```")
-            .nth(1)
-            .unwrap_or(&response)
-            .trim()
+        response.split("```").nth(1).unwrap_or(&response).trim()
     } else {
         response.trim()
     };
 
     // Parse LLM response as JSON
-    let parsed: serde_json::Value = serde_json::from_str(json_str)
-        .map_err(|e| {
-            eprintln!("LLM response:\n{}", &response[..response.len().min(500)]);
-            crate::error::MemoryError::Config(format!("Failed to parse graph JSON: {}. Try a better model (--provider anthropic)", e))
-        })?;
+    let parsed: serde_json::Value = serde_json::from_str(json_str).map_err(|e| {
+        eprintln!("LLM response:\n{}", &response[..response.len().min(500)]);
+        crate::error::MemoryError::Config(format!(
+            "Failed to parse graph JSON: {}. Try a better model (--provider anthropic)",
+            e
+        ))
+    })?;
 
     let mut graph = KnowledgeGraph::new(project.to_string());
 
@@ -122,7 +120,7 @@ pub async fn build_graph_from_knowledge(
                 rel_json.get("to").and_then(|t| t.as_str()),
                 rel_json.get("type").and_then(|t| t.as_str()),
             ) {
-                if let Some(rel_type) = RelationType::from_str(rel_type_str) {
+                if let Some(rel_type) = RelationType::parse(rel_type_str) {
                     let strength = rel_json
                         .get("strength")
                         .and_then(|s| s.as_f64())

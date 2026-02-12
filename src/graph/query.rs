@@ -1,4 +1,4 @@
-use super::{KnowledgeGraph, Relationship, RelationType};
+use super::{KnowledgeGraph, RelationType, Relationship};
 use petgraph::Direction;
 
 /// Find concepts related to a given concept within N hops
@@ -49,24 +49,13 @@ pub fn find_related(
 }
 
 /// Find shortest path between two concepts
-pub fn shortest_path(
-    graph: &KnowledgeGraph,
-    from: &str,
-    to: &str,
-) -> Option<Vec<String>> {
+pub fn shortest_path(graph: &KnowledgeGraph, from: &str, to: &str) -> Option<Vec<String>> {
     let (pg, node_map) = graph.to_petgraph();
 
     let start_idx = node_map.get(from)?;
     let end_idx = node_map.get(to)?;
 
-    petgraph::algo::astar(
-        &pg,
-        *start_idx,
-        |n| n == *end_idx,
-        |_| 1,
-        |_| 0,
-    )
-    .map(|(_, path)| {
+    petgraph::algo::astar(&pg, *start_idx, |n| n == *end_idx, |_| 1, |_| 0).map(|(_, path)| {
         path.iter()
             .filter_map(|&idx| pg.node_weight(idx))
             .map(|c| c.name.clone())
@@ -109,10 +98,7 @@ pub fn concepts_by_category(
 }
 
 /// Find all relationships of a specific type
-pub fn relationships_by_type(
-    graph: &KnowledgeGraph,
-    rel_type: RelationType,
-) -> Vec<Relationship> {
+pub fn relationships_by_type(graph: &KnowledgeGraph, rel_type: RelationType) -> Vec<Relationship> {
     graph
         .relationships
         .iter()

@@ -40,7 +40,7 @@ impl SemanticSearch {
             let chunks = chunk_text(&content, 1000);
 
             // Generate embeddings in batch
-            let chunk_texts: Vec<String> = chunks.iter().cloned().collect();
+            let chunk_texts: Vec<String> = chunks.to_vec();
             let embeddings = provider.embed_batch(&chunk_texts).await?;
 
             // Store chunks with embeddings

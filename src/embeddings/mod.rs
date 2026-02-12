@@ -20,7 +20,7 @@ pub struct EmbeddedChunk {
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct ChunkMetadata {
     pub project: String,
-    pub category: String,  // decisions, solutions, patterns, etc.
+    pub category: String, // decisions, solutions, patterns, etc.
     pub session_id: Option<String>,
     pub timestamp: String,
 }

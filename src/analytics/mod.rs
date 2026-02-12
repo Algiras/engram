@@ -1,6 +1,6 @@
-pub mod tracker;
-pub mod metrics;
 pub mod insights;
+pub mod metrics;
+pub mod tracker;
 
-pub use tracker::{EventTracker, UsageEvent, EventType};
 pub use insights::generate_insights;
+pub use tracker::{EventTracker, EventType, UsageEvent};

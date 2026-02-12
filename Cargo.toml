@@ -5,6 +5,11 @@ edition = "2021"
 description = "Conversation memory system for Claude Code - archive, extract knowledge, and analyze usage patterns"
 authors = ["Algiras"]
 license = "MIT"
+repository = "https://github.com/Algiras/claude-memory"
+homepage = "https://github.com/Algiras/claude-memory"
+keywords = ["claude", "memory", "knowledge", "ai", "llm"]
+categories = ["command-line-utilities", "development-tools"]
+readme = "README.md"
 
 [lib]
 name = "claude_memory"
