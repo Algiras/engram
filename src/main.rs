@@ -8,6 +8,7 @@ mod error;
 mod extractor;
 mod graph;
 mod health;
+mod hive;
 mod learning;
 mod llm;
 mod mcp;
@@ -20,7 +21,10 @@ mod tui;
 use std::path::{Path, PathBuf};
 
 use clap::Parser;
-use cli::{AuthCommand, Cli, Commands, GraphCommand, HooksCommand, LearnCommand, SyncCommand};
+use cli::{
+    AuthCommand, Cli, Commands, GraphCommand, HiveCommand, HooksCommand, LearnCommand,
+    RegistryCommand, SyncCommand,
+};
 use colored::Colorize;
 use config::Config;
 use error::{MemoryError, Result};
@@ -113,6 +117,11 @@ fn main() -> Result<()> {
             HooksCommand::Uninstall => cmd_hooks_uninstall(),
             HooksCommand::Status => cmd_hooks_status(),
         };
+    }
+
+    // Hive operations - distributed knowledge sharing (no Config/LLM auth needed)
+    if let Commands::Hive { command } = cli.command {
+        return cmd_hive(command);
     }
 
     // Extract provider override for commands that support it
@@ -306,7 +315,8 @@ fn main() -> Result<()> {
         | Commands::Doctor { .. }
         | Commands::Analytics { .. }
         | Commands::Diff { .. }
-        | Commands::Learn { .. } => {
+        | Commands::Learn { .. }
+        | Commands::Hive { .. } => {
             unreachable!()
         }
     }
@@ -2200,20 +2210,32 @@ fn cmd_recall(config: &Config, project: &str) -> Result<()> {
     let knowledge_dir = config.memory_dir.join("knowledge").join(project);
     let context_path = knowledge_dir.join("context.md");
 
-    let content = if context_path.exists() {
-        std::fs::read_to_string(&context_path)?
+    // Get local project knowledge
+    let local_content = if context_path.exists() {
+        Some(std::fs::read_to_string(&context_path)?)
     } else {
-        match build_raw_context(project, &knowledge_dir) {
-            Some(raw) => raw,
-            None => {
-                println!(
-                    "{} No context found for '{}'. Run 'ingest' first.",
-                    "Not found:".yellow(),
-                    project
-                );
-                return Ok(());
-            }
+        build_raw_context(project, &knowledge_dir)
+    };
+
+    // Get knowledge from installed packs
+    let pack_content = get_installed_pack_knowledge(&config.memory_dir)?;
+
+    // Combine local and pack knowledge
+    let content = if let Some(local) = local_content {
+        if pack_content.is_empty() {
+            local
+        } else {
+            format!("{}\n\n---\n\n# Installed Pack Knowledge\n\n{}", local, pack_content)
         }
+    } else if !pack_content.is_empty() {
+        format!("# Installed Pack Knowledge\n\n{}", pack_content)
+    } else {
+        println!(
+            "{} No context found for '{}'. Run 'ingest' first or install knowledge packs.",
+            "Not found:".yellow(),
+            project
+        );
+        return Ok(());
     };
 
     println!("{}", content);
@@ -2236,6 +2258,40 @@ fn cmd_recall(config: &Config, project: &str) -> Result<()> {
     }
 
     Ok(())
+}
+
+/// Get aggregated knowledge from all installed packs
+fn get_installed_pack_knowledge(memory_dir: &Path) -> Result<String> {
+    use hive::PackInstaller;
+
+    let installer = PackInstaller::new(memory_dir);
+    let knowledge_dirs = installer.get_installed_knowledge_dirs()?;
+
+    if knowledge_dirs.is_empty() {
+        return Ok(String::new());
+    }
+
+    let mut combined = String::new();
+
+    for (pack_name, knowledge_dir) in knowledge_dirs {
+        combined.push_str(&format!("## From pack: {}\n\n", pack_name));
+
+        // Read knowledge files from pack
+        for category in &["patterns.md", "solutions.md", "decisions.md", "preferences.md"] {
+            let file_path = knowledge_dir.join(category);
+            if file_path.exists() {
+                if let Ok(content) = std::fs::read_to_string(&file_path) {
+                    if !content.trim().is_empty() {
+                        combined.push_str(&format!("### {}\n\n", category.replace(".md", "")));
+                        combined.push_str(&content);
+                        combined.push_str("\n\n");
+                    }
+                }
+            }
+        }
+    }
+
+    Ok(combined)
 }
 
 fn cmd_context(config: &Config, project: &str) -> Result<()> {
@@ -3935,6 +3991,323 @@ fn cmd_learn_feedback(
     }
 
     println!("\n💡 This feedback will improve future learning for this project");
+
+    Ok(())
+}
+
+// ── Hive commands ───────────────────────────────────────────────────────
+
+fn cmd_hive(command: HiveCommand) -> Result<()> {
+    use std::path::Path;
+    
+    let home = dirs::home_dir()
+        .ok_or_else(|| MemoryError::Config("Could not determine home directory".into()))?;
+    let memory_dir = home.join("memory");
+
+    match command {
+        HiveCommand::Registry { command } => cmd_hive_registry(command, &memory_dir),
+        HiveCommand::Install {
+            pack,
+            registry,
+            scope,
+        } => cmd_hive_install(&pack, registry.as_deref(), &scope, &memory_dir),
+        HiveCommand::Uninstall { pack } => cmd_hive_uninstall(&pack, &memory_dir),
+        HiveCommand::List => cmd_hive_list(&memory_dir),
+        HiveCommand::Update { pack } => cmd_hive_update(pack.as_deref(), &memory_dir),
+        HiveCommand::Browse { category, keyword } => {
+            cmd_hive_browse(category.as_deref(), keyword.as_deref(), &memory_dir)
+        }
+        HiveCommand::Search { query } => cmd_hive_search(&query, &memory_dir),
+    }
+}
+
+fn cmd_hive_registry(command: RegistryCommand, memory_dir: &Path) -> Result<()> {
+    use hive::RegistryManager;
+
+    let manager = RegistryManager::new(memory_dir);
+
+    match command {
+        RegistryCommand::Add { url } => {
+            println!("{} Adding registry: {}", "→".blue(), url);
+            let registry = manager.add(&url)?;
+            println!(
+                "{} Registry '{}' added successfully",
+                "✓".green(),
+                registry.name
+            );
+            println!("  URL: {}", registry.url);
+        }
+        RegistryCommand::Remove { name } => {
+            println!("{} Removing registry: {}", "→".blue(), name);
+            manager.remove(&name)?;
+            println!("{} Registry '{}' removed", "✓".green(), name);
+        }
+        RegistryCommand::List => {
+            let registries = manager.list()?;
+            if registries.is_empty() {
+                println!("No registries configured.");
+                println!("\nAdd a registry with:");
+                println!("  claude-memory hive registry add owner/repo");
+                return Ok(());
+            }
+
+            println!("Knowledge Pack Registries:\n");
+            for reg in registries {
+                println!("  {} {}", "●".blue(), reg.name.bold());
+                println!("    URL: {}", reg.url);
+                if let Some(updated) = reg.last_updated {
+                    println!("    Last updated: {}", updated.format("%Y-%m-%d %H:%M:%S"));
+                }
+                println!();
+            }
+        }
+        RegistryCommand::Update { name } => {
+            if let Some(name) = name {
+                println!("{} Updating registry: {}", "→".blue(), name);
+                manager.update(&name)?;
+                println!("{} Registry '{}' updated", "✓".green(), name);
+            } else {
+                println!("{} Updating all registries", "→".blue());
+                let registries = manager.list()?;
+                for reg in registries {
+                    print!("  {} {}... ", "→".blue(), reg.name);
+                    manager.update(&reg.name)?;
+                    println!("{}", "✓".green());
+                }
+                println!("\n{} All registries updated", "✓".green());
+            }
+        }
+    }
+
+    Ok(())
+}
+
+fn cmd_hive_install(
+    pack: &str,
+    registry: Option<&str>,
+    _scope: &str,
+    memory_dir: &Path,
+) -> Result<()> {
+    use hive::PackInstaller;
+
+    let installer = PackInstaller::new(memory_dir);
+
+    println!("{} Installing pack: {}", "→".blue(), pack.bold());
+    if let Some(reg) = registry {
+        println!("  Registry: {}", reg);
+    }
+
+    let installed = installer.install(pack, registry)?;
+
+    println!("{} Pack '{}' installed successfully", "✓".green(), installed.name);
+    println!("  Version: {}", installed.version);
+    println!("  Registry: {}", installed.registry);
+    println!("  Installed at: {}", installed.installed_at.format("%Y-%m-%d %H:%M:%S"));
+    println!("  Path: {}", installed.path.display());
+
+    println!("\n💡 Use 'claude-memory recall' to access this pack's knowledge");
+
+    Ok(())
+}
+
+fn cmd_hive_uninstall(pack: &str, memory_dir: &Path) -> Result<()> {
+    use hive::PackInstaller;
+
+    let installer = PackInstaller::new(memory_dir);
+
+    println!("{} Uninstalling pack: {}", "→".blue(), pack.bold());
+    installer.uninstall(pack)?;
+
+    println!("{} Pack '{}' uninstalled successfully", "✓".green(), pack);
+
+    Ok(())
+}
+
+fn cmd_hive_list(memory_dir: &Path) -> Result<()> {
+    use hive::PackInstaller;
+
+    let installer = PackInstaller::new(memory_dir);
+    let packs = installer.list()?;
+
+    if packs.is_empty() {
+        println!("No packs installed.");
+        println!("\nBrowse available packs with:");
+        println!("  claude-memory hive browse");
+        println!("\nInstall a pack with:");
+        println!("  claude-memory hive install <pack-name>");
+        return Ok(());
+    }
+
+    println!("Installed Knowledge Packs:\n");
+    for pack in packs {
+        println!("  {} {}", "●".green(), pack.name.bold());
+        println!("    Version: {}", pack.version);
+        println!("    Registry: {}", pack.registry);
+        println!("    Installed: {}", pack.installed_at.format("%Y-%m-%d %H:%M:%S"));
+        println!("    Path: {}", pack.path.display());
+        println!();
+    }
+
+    Ok(())
+}
+
+fn cmd_hive_update(pack: Option<&str>, memory_dir: &Path) -> Result<()> {
+    use hive::PackInstaller;
+
+    let installer = PackInstaller::new(memory_dir);
+
+    if let Some(pack_name) = pack {
+        println!("{} Updating pack: {}", "→".blue(), pack_name.bold());
+        installer.update(pack_name)?;
+        println!("{} Pack '{}' updated successfully", "✓".green(), pack_name);
+    } else {
+        println!("{} Updating all installed packs", "→".blue());
+        let packs = installer.list()?;
+
+        if packs.is_empty() {
+            println!("No packs installed.");
+            return Ok(());
+        }
+
+        for pack in packs {
+            print!("  {} {}... ", "→".blue(), pack.name);
+            match installer.update(&pack.name) {
+                Ok(_) => println!("{}", "✓".green()),
+                Err(e) => println!("{} {}", "✗".red(), e),
+            }
+        }
+
+        println!("\n{} All packs updated", "✓".green());
+    }
+
+    Ok(())
+}
+
+fn cmd_hive_browse(
+    category: Option<&str>,
+    keyword: Option<&str>,
+    memory_dir: &Path,
+) -> Result<()> {
+    use hive::{PackCategory, PackInstaller, RegistryManager};
+    use std::str::FromStr;
+
+    let registry_manager = RegistryManager::new(memory_dir);
+    let installer = PackInstaller::new(memory_dir);
+
+    let registries = registry_manager.list()?;
+    if registries.is_empty() {
+        println!("No registries configured.");
+        println!("\nAdd a registry with:");
+        println!("  claude-memory hive registry add owner/repo");
+        return Ok(());
+    }
+
+    // Collect all packs from all registries
+    let mut all_packs = Vec::new();
+    for registry in registries {
+        match registry_manager.discover_packs(&registry.name) {
+            Ok(packs) => {
+                for pack in packs {
+                    all_packs.push((registry.name.clone(), pack));
+                }
+            }
+            Err(e) => {
+                eprintln!("Warning: Failed to discover packs in '{}': {}", registry.name, e);
+            }
+        }
+    }
+
+    // Filter by category if specified
+    if let Some(cat_str) = category {
+        let cat = PackCategory::from_str(cat_str)?;
+        all_packs.retain(|(_, pack)| pack.has_category(&cat));
+    }
+
+    // Filter by keyword if specified
+    if let Some(kw) = keyword {
+        all_packs.retain(|(_, pack)| pack.matches_keyword(kw));
+    }
+
+    if all_packs.is_empty() {
+        println!("No packs found matching criteria.");
+        return Ok(());
+    }
+
+    // Get installed packs for status display
+    let installed_packs = installer.list()?;
+    let installed_names: std::collections::HashSet<_> =
+        installed_packs.iter().map(|p| p.name.as_str()).collect();
+
+    println!("Available Knowledge Packs:\n");
+    for (registry_name, pack) in all_packs {
+        let status = if installed_names.contains(pack.name.as_str()) {
+            format!("[{}]", "INSTALLED".green())
+        } else {
+            format!("[{}]", "available".dimmed())
+        };
+
+        println!("  {} {} {}", "●".blue(), pack.name.bold(), status);
+        println!("    Description: {}", pack.description);
+        println!("    Categories: {}",
+            pack.categories.iter()
+                .map(|c| c.to_string())
+                .collect::<Vec<_>>()
+                .join(", "));
+        println!("    Registry: {}", registry_name);
+        println!("    Version: {}", pack.version);
+        if !pack.keywords.is_empty() {
+            println!("    Keywords: {}", pack.keywords.join(", "));
+        }
+        println!();
+    }
+
+    println!("\n💡 Install a pack with:");
+    println!("  claude-memory hive install <pack-name>");
+
+    Ok(())
+}
+
+fn cmd_hive_search(query: &str, memory_dir: &Path) -> Result<()> {
+    use hive::{PackInstaller, RegistryManager};
+
+    let registry_manager = RegistryManager::new(memory_dir);
+    let installer = PackInstaller::new(memory_dir);
+
+    println!("{} Searching for: {}", "→".blue(), query.bold());
+
+    let results = registry_manager.search_packs(query)?;
+
+    if results.is_empty() {
+        println!("\nNo packs found matching '{}'", query);
+        return Ok(());
+    }
+
+    // Get installed packs for status display
+    let installed_packs = installer.list()?;
+    let installed_names: std::collections::HashSet<_> =
+        installed_packs.iter().map(|p| p.name.as_str()).collect();
+
+    println!("\nSearch Results:\n");
+    for (registry_name, packs) in results {
+        println!("From registry '{}':", registry_name.bold());
+        for pack in packs {
+            let status = if installed_names.contains(pack.name.as_str()) {
+                format!("[{}]", "INSTALLED".green())
+            } else {
+                format!("[{}]", "available".dimmed())
+            };
+
+            println!("  {} {} {}", "●".blue(), pack.name.bold(), status);
+            println!("    {}", pack.description);
+            if !pack.keywords.is_empty() {
+                println!("    Keywords: {}", pack.keywords.join(", "));
+            }
+            println!();
+        }
+    }
+
+    println!("💡 Install a pack with:");
+    println!("  claude-memory hive install <pack-name>");
 
     Ok(())
 }

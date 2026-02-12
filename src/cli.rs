@@ -343,6 +343,12 @@ pub enum Commands {
         #[command(subcommand)]
         command: LearnCommand,
     },
+
+    /// Manage distributed knowledge sharing (Hive Mind)
+    Hive {
+        #[command(subcommand)]
+        command: HiveCommand,
+    },
 }
 
 #[derive(Subcommand)]
@@ -606,5 +612,84 @@ pub enum LearnCommand {
         /// Optional comment about the feedback
         #[arg(long)]
         comment: Option<String>,
+    },
+}
+
+#[derive(Subcommand)]
+pub enum HiveCommand {
+    /// Manage knowledge pack registries
+    Registry {
+        #[command(subcommand)]
+        command: RegistryCommand,
+    },
+
+    /// Install a knowledge pack
+    Install {
+        /// Pack name
+        pack: String,
+
+        /// Registry name (optional - searches all if not specified)
+        #[arg(long)]
+        registry: Option<String>,
+
+        /// Installation scope (user/project)
+        #[arg(long, default_value = "user")]
+        scope: String,
+    },
+
+    /// Uninstall a knowledge pack
+    Uninstall {
+        /// Pack name
+        pack: String,
+    },
+
+    /// List installed knowledge packs
+    List,
+
+    /// Update an installed pack
+    Update {
+        /// Pack name (updates all if not specified)
+        pack: Option<String>,
+    },
+
+    /// Browse available knowledge packs
+    Browse {
+        /// Filter by category
+        #[arg(long)]
+        category: Option<String>,
+
+        /// Filter by keyword
+        #[arg(long)]
+        keyword: Option<String>,
+    },
+
+    /// Search for knowledge packs
+    Search {
+        /// Search query
+        query: String,
+    },
+}
+
+#[derive(Subcommand)]
+pub enum RegistryCommand {
+    /// Add a knowledge pack registry
+    Add {
+        /// Registry URL (supports GitHub shorthand: owner/repo)
+        url: String,
+    },
+
+    /// Remove a registry
+    Remove {
+        /// Registry name
+        name: String,
+    },
+
+    /// List all registries
+    List,
+
+    /// Update a registry (git pull)
+    Update {
+        /// Registry name (updates all if not specified)
+        name: Option<String>,
     },
 }

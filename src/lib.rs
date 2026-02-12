@@ -10,6 +10,7 @@ pub mod error;
 pub mod extractor;
 pub mod graph;
 pub mod health;
+pub mod hive;
 pub mod learning;
 pub mod llm;
 pub mod mcp;
