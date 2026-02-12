@@ -1,0 +1,29 @@
+{
+  "name": "hive-knowledge",
+  "description": "Distributed knowledge sharing for claude-memory via Git-based registries",
+  "author": "claude-memory",
+  "version": "1.0.0",
+  "license": "MIT",
+  "repository": "https://github.com/Algiras/claude-memory",
+  "keywords": [
+    "knowledge-management",
+    "distributed-memory",
+    "knowledge-packs",
+    "git-based-sharing",
+    "hive-mind",
+    "claude-memory"
+  ],
+  "categories": [
+    "knowledge-management",
+    "productivity",
+    "collaboration"
+  ],
+  "triggers": [
+    "install knowledge pack",
+    "browse packs",
+    "hive mind",
+    "share knowledge",
+    "knowledge registry",
+    "distributed memory"
+  ]
+}
