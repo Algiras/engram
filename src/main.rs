@@ -501,6 +501,13 @@ fn cmd_inject(project: Option<String>) -> Result<()> {
     combined.push_str(&format!("## Project: {}\n\n", project_name));
     combined.push_str(&context_content);
 
+    // Include installed pack knowledge
+    let pack_content = get_installed_pack_knowledge(&memory_dir)?;
+    if !pack_content.is_empty() {
+        combined.push_str("\n\n---\n\n## Installed Pack Knowledge\n\n");
+        combined.push_str(&pack_content);
+    }
+
     // Write to MEMORY.md
     let memory_path = project_dir.join("memory");
     std::fs::create_dir_all(&memory_path)?;
@@ -1362,6 +1369,60 @@ fn cmd_lookup(project: &str, query: &str, include_all: bool) -> Result<()> {
                     }
                 }
                 println!();
+            }
+        }
+    }
+
+    // Also search installed packs
+    let installer = hive::PackInstaller::new(&memory_dir);
+    if let Ok(knowledge_dirs) = installer.get_installed_knowledge_dirs() {
+        for (pack_name, knowledge_dir) in knowledge_dirs {
+            for category in &["patterns.md", "solutions.md", "decisions.md", "preferences.md"] {
+                let file_path = knowledge_dir.join(category);
+                if !file_path.exists() {
+                    continue;
+                }
+                let content = match std::fs::read_to_string(&file_path) {
+                    Ok(c) => c,
+                    Err(_) => continue,
+                };
+
+                let (_preamble, blocks) = parse_session_blocks(&content);
+                for block in &blocks {
+                    if block.content.to_lowercase().contains(&query_lower)
+                        || block.header.to_lowercase().contains(&query_lower)
+                    {
+                        if !found {
+                            println!(
+                                "{} Results for '{}' in '{}':\n",
+                                "Lookup".green().bold(),
+                                query,
+                                project
+                            );
+                        }
+                        found = true;
+                        println!(
+                            "  {} [{}] {} (pack: {})",
+                            ">".green(),
+                            category.replace(".md", "").cyan(),
+                            block.session_id,
+                            pack_name.blue()
+                        );
+                        let mut match_count = 0;
+                        for line in block.content.lines() {
+                            if line.to_lowercase().contains(&query_lower) && !line.trim().is_empty()
+                            {
+                                println!("    {}", line.trim());
+                                match_count += 1;
+                                if match_count >= 5 {
+                                    println!("    {}", "...".dimmed());
+                                    break;
+                                }
+                            }
+                        }
+                        println!();
+                    }
+                }
             }
         }
     }

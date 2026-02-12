@@ -124,8 +124,10 @@ impl PackInstaller {
         let pack_dir = self.packs_dir.join(&pack.name);
         std::fs::create_dir_all(&pack_dir)?;
 
-        // Copy knowledge files from registry
-        let registry_pack_dir = found_registry.local_path(&self.hive_dir).join(&pack.name);
+        // Copy knowledge files from the pack's source path (set during discovery)
+        let registry_pack_dir = pack.source_path.as_ref().cloned().unwrap_or_else(|| {
+            found_registry.local_path(&self.hive_dir).join(&pack.name)
+        });
         self.copy_pack_content(&registry_pack_dir, &pack_dir)?;
 
         // Record installation
@@ -185,20 +187,21 @@ impl PackInstaller {
         let registry_manager = RegistryManager::new(self.hive_dir.parent().unwrap());
         registry_manager.update(&installed.registry)?;
 
-        // Get latest pack info from registry
-        let registry_store = crate::hive::registry::RegistryStore::load(&self.hive_dir)?;
-        let registry = registry_store.get(&installed.registry).ok_or_else(|| {
-            MemoryError::Config(format!("Registry '{}' not found", installed.registry))
+        // Re-discover the pack to get its actual source path
+        let packs = registry_manager.discover_packs(&installed.registry)?;
+        let pack = packs
+            .into_iter()
+            .find(|p| p.name == pack_name)
+            .ok_or_else(|| {
+                MemoryError::Config(format!(
+                    "Pack '{}' no longer exists in registry '{}'",
+                    pack_name, installed.registry
+                ))
+            })?;
+
+        let registry_pack_dir = pack.source_path.ok_or_else(|| {
+            MemoryError::Config(format!("Pack '{}' has no source path", pack_name))
         })?;
-
-        let registry_pack_dir = registry.local_path(&self.hive_dir).join(&installed.name);
-
-        if !registry_pack_dir.exists() {
-            return Err(MemoryError::Config(format!(
-                "Pack '{}' no longer exists in registry '{}'",
-                pack_name, installed.registry
-            )));
-        }
 
         // Copy updated content
         self.copy_pack_content(&registry_pack_dir, &installed.path)?;

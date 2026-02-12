@@ -6,7 +6,7 @@
 use crate::error::{MemoryError, Result};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 /// A shareable knowledge pack (similar to Claude Code plugin)
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -24,6 +24,10 @@ pub struct KnowledgePack {
     pub updated_at: DateTime<Utc>,
     pub privacy: PrivacyPolicy,
     pub min_claude_memory_version: String,
+
+    /// Directory where this pack was loaded from (not serialized)
+    #[serde(skip)]
+    pub source_path: Option<PathBuf>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -81,6 +85,7 @@ impl KnowledgePack {
             updated_at: Utc::now(),
             privacy: PrivacyPolicy::default(),
             min_claude_memory_version: env!("CARGO_PKG_VERSION").to_string(),
+            source_path: None,
         }
     }
 
@@ -95,9 +100,10 @@ impl KnowledgePack {
         }
 
         let content = std::fs::read_to_string(&manifest_path)?;
-        let pack: KnowledgePack = serde_json::from_str(&content)
+        let mut pack: KnowledgePack = serde_json::from_str(&content)
             .map_err(|e| MemoryError::Config(format!("Invalid pack manifest: {}", e)))?;
 
+        pack.source_path = Some(pack_dir.to_path_buf());
         pack.validate()?;
         Ok(pack)
     }
