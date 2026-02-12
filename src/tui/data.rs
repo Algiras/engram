@@ -3,6 +3,7 @@ use std::io;
 use std::path::{Path, PathBuf};
 
 use chrono::{DateTime, Utc};
+use serde::Deserialize;
 
 /// A browsable item in the right panel.
 #[derive(Clone)]
@@ -186,4 +187,88 @@ fn dir_stats(dir: &Path) -> (u64, DateTime<Utc>) {
     }
 
     (total_size, latest)
+}
+
+/// Installed pack entry for TUI display
+#[derive(Clone)]
+pub struct PackEntry {
+    pub name: String,
+    pub version: String,
+    pub description: String,
+    pub registry: String,
+    pub categories: Vec<String>,
+    pub keywords: Vec<String>,
+    pub installed_at: DateTime<Utc>,
+}
+
+#[derive(Deserialize)]
+struct InstalledPackStore {
+    packs: Vec<InstalledPackMetadata>,
+}
+
+#[derive(Deserialize)]
+struct InstalledPackMetadata {
+    name: String,
+    registry: String,
+    version: String,
+    installed_at: String,
+    path: PathBuf,
+}
+
+#[derive(Deserialize)]
+struct PackManifest {
+    name: String,
+    version: String,
+    description: String,
+    categories: Vec<String>,
+    keywords: Vec<String>,
+}
+
+/// Load installed packs for TUI display
+pub fn load_packs(memory_dir: &Path) -> Vec<PackEntry> {
+    let installed_packs_path = memory_dir.join("hive/installed_packs.json");
+
+    if !installed_packs_path.exists() {
+        return Vec::new();
+    }
+
+    let content = match fs::read_to_string(&installed_packs_path) {
+        Ok(c) => c,
+        Err(_) => return Vec::new(),
+    };
+
+    let store: InstalledPackStore = match serde_json::from_str(&content) {
+        Ok(s) => s,
+        Err(_) => return Vec::new(),
+    };
+
+    let mut entries = Vec::new();
+
+    for installed in store.packs {
+        // Load manifest for full details
+        let manifest_path = installed.path.join(".pack/manifest.json");
+        if let Ok(manifest_content) = fs::read_to_string(&manifest_path) {
+            if let Ok(manifest) = serde_json::from_str::<PackManifest>(&manifest_content) {
+                // Parse installed_at timestamp
+                let installed_at = DateTime::parse_from_rfc3339(&installed.installed_at)
+                    .map(|dt| dt.with_timezone(&Utc))
+                    .unwrap_or_else(|_| Utc::now());
+
+                entries.push(PackEntry {
+                    name: installed.name,
+                    version: installed.version,
+                    description: manifest.description,
+                    registry: installed.registry,
+                    categories: manifest.categories,
+                    keywords: manifest.keywords,
+                    installed_at,
+                });
+            }
+        }
+    }
+
+    // Sort by name
+    entries.sort_by(|a, b| a.name.cmp(&b.name));
+
+    entries
 }

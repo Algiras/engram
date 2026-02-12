@@ -272,3 +272,120 @@ fn render_delete_dialog(f: &mut Frame, app: &App) {
     f.render_widget(Clear, popup_area);
     f.render_widget(dialog, popup_area);
 }
+
+/// Render the packs browser screen
+pub fn render_packs(f: &mut Frame, app: &App) {
+    let area = f.area();
+
+    // Split into main area and status bar
+    let chunks = Layout::vertical([
+        Constraint::Min(3),
+        Constraint::Length(1),
+    ]).split(area);
+
+    // Title
+    let title_block = Block::default()
+        .title(" Installed Knowledge Packs ")
+        .borders(Borders::ALL)
+        .border_style(Style::default().fg(Color::Cyan));
+
+    if app.packs.is_empty() {
+        let empty_text = vec![
+            Line::from(""),
+            Line::from(Span::styled(
+                "No packs installed",
+                Style::default().fg(Color::Yellow),
+            )),
+            Line::from(""),
+            Line::from("Browse and install packs with:"),
+            Line::from(Span::styled(
+                "  claude-memory hive browse",
+                Style::default().fg(Color::Green),
+            )),
+            Line::from("  claude-memory hive install <pack-name>"),
+        ];
+
+        let paragraph = Paragraph::new(empty_text)
+            .block(title_block)
+            .alignment(Alignment::Center);
+
+        f.render_widget(paragraph, chunks[0]);
+    } else {
+        // Render pack list
+        let items: Vec<ListItem> = app
+            .packs
+            .iter()
+            .enumerate()
+            .map(|(i, pack)| {
+                let style = if i == app.pack_index {
+                    Style::default()
+                        .fg(Color::Black)
+                        .bg(Color::Cyan)
+                        .add_modifier(Modifier::BOLD)
+                } else {
+                    Style::default()
+                };
+
+                let categories = pack.categories.join(", ");
+                let keywords = if pack.keywords.is_empty() {
+                    String::new()
+                } else {
+                    format!(" [{}]", pack.keywords.join(", "))
+                };
+
+                let content = vec![
+                    Line::from(vec![
+                        Span::styled(
+                            format!("● {}", pack.name),
+                            Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD),
+                        ),
+                        Span::raw(format!(" v{}", pack.version)),
+                    ]),
+                    Line::from(vec![
+                        Span::styled("  ", Style::default()),
+                        Span::raw(&pack.description),
+                    ]),
+                    Line::from(vec![
+                        Span::styled("  Categories: ", Style::default().fg(Color::Gray)),
+                        Span::raw(categories),
+                    ]),
+                    Line::from(vec![
+                        Span::styled("  Registry: ", Style::default().fg(Color::Gray)),
+                        Span::raw(&pack.registry),
+                        Span::styled("  Installed: ", Style::default().fg(Color::Gray)),
+                        Span::raw(pack.installed_at.format("%Y-%m-%d").to_string()),
+                    ]),
+                ];
+
+                ListItem::new(content).style(style)
+            })
+            .collect();
+
+        let mut list_state = ListState::default();
+        list_state.select(Some(app.pack_index));
+
+        let list = List::new(items)
+            .block(title_block)
+            .highlight_style(
+                Style::default()
+                    .bg(Color::Cyan)
+                    .fg(Color::Black)
+                    .add_modifier(Modifier::BOLD),
+            );
+
+        f.render_stateful_widget(list, chunks[0], &mut list_state);
+    }
+
+    // Status bar
+    let status_text = if app.packs.is_empty() {
+        "ESC: back to browser  |  q: quit"
+    } else {
+        "j/k: navigate  |  r: reload  |  ESC: back to browser  |  q: quit"
+    };
+
+    let status_bar = Paragraph::new(status_text)
+        .style(Style::default().bg(Color::DarkGray).fg(Color::White))
+        .alignment(Alignment::Center);
+
+    f.render_widget(status_bar, chunks[1]);
+}

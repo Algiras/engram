@@ -16,6 +16,7 @@ use data::{MemoryItem, MemoryTree};
 enum Screen {
     Browser,
     Viewer,
+    Packs,
 }
 
 pub struct App {
@@ -34,11 +35,15 @@ pub struct App {
     search_matches: Vec<(usize, usize, i64)>, // (project_idx, item_idx, score)
     search_match_index: usize,
     fuzzy_matcher: SkimMatcherV2,
+    // Packs state
+    packs: Vec<data::PackEntry>,
+    pack_index: usize,
 }
 
 impl App {
     pub fn new(memory_dir: PathBuf) -> App {
         let tree = data::load_tree(&memory_dir);
+        let packs = data::load_packs(&memory_dir);
         App {
             screen: Screen::Browser,
             tree,
@@ -48,12 +53,14 @@ impl App {
             scroll_offset: 0,
             viewer_content: String::new(),
             show_delete: false,
-            memory_dir,
+            memory_dir: memory_dir.clone(),
             search_mode: false,
             search_query: String::new(),
             search_matches: Vec::new(),
             search_match_index: 0,
             fuzzy_matcher: SkimMatcherV2::default(),
+            packs,
+            pack_index: 0,
         }
     }
 
@@ -160,6 +167,7 @@ impl App {
             terminal.draw(|f| match self.screen {
                 Screen::Browser => ui::render_browser(f, self),
                 Screen::Viewer => ui::render_viewer(f, self),
+                Screen::Packs => ui::render_packs(f, self),
             })?;
 
             if let Event::Key(key) = event::read()? {
@@ -175,6 +183,11 @@ impl App {
                     }
                     Screen::Viewer => {
                         self.handle_viewer_keys(key.code, terminal)?;
+                    }
+                    Screen::Packs => {
+                        if self.handle_packs_keys(key.code) {
+                            return Ok(());
+                        }
                     }
                 }
             }
@@ -287,6 +300,35 @@ impl App {
                 }
             }
 
+            // Switch to Packs screen
+            KeyCode::Char('p') => {
+                self.screen = Screen::Packs;
+                self.pack_index = 0;
+            }
+
+            _ => {}
+        }
+        false
+    }
+
+    fn handle_packs_keys(&mut self, code: KeyCode) -> bool {
+        match code {
+            KeyCode::Char('q') => return true,
+            KeyCode::Esc => {
+                self.screen = Screen::Browser;
+            }
+            KeyCode::Char('j') | KeyCode::Down => {
+                if self.pack_index + 1 < self.packs.len() {
+                    self.pack_index += 1;
+                }
+            }
+            KeyCode::Char('k') | KeyCode::Up => {
+                self.pack_index = self.pack_index.saturating_sub(1);
+            }
+            KeyCode::Char('r') => {
+                // Reload packs
+                self.packs = data::load_packs(&self.memory_dir);
+            }
             _ => {}
         }
         false
