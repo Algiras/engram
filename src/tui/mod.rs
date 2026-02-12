@@ -49,6 +49,11 @@ pub struct App {
     pack_detail_scroll: u16,
     pub pack_action_message: Option<(String, bool)>, // (message, is_error)
     pub show_pack_confirm: Option<PackAction>,
+    // Pack search state
+    pack_search_mode: bool,
+    pack_search_query: String,
+    pack_search_matches: Vec<usize>, // Indices of matching packs
+    pack_search_index: usize,
 }
 
 impl App {
@@ -76,6 +81,10 @@ impl App {
             pack_detail_scroll: 0,
             pack_action_message: None,
             show_pack_confirm: None,
+            pack_search_mode: false,
+            pack_search_query: String::new(),
+            pack_search_matches: Vec::new(),
+            pack_search_index: 0,
         }
     }
 
@@ -204,6 +213,8 @@ impl App {
                         if self.pack_action_message.is_some() {
                             // Any key clears the message
                             self.pack_action_message = None;
+                        } else if self.pack_search_mode {
+                            self.handle_pack_search_keys(key.code);
                         } else if self.show_pack_confirm.is_some() {
                             self.handle_pack_confirm_keys(key.code);
                         } else if self.handle_packs_keys(key.code) {
@@ -352,6 +363,31 @@ impl App {
             KeyCode::Char('r') => {
                 // Reload packs
                 self.packs = data::load_packs(&self.memory_dir);
+            }
+            KeyCode::Char('/') => {
+                // Enter search mode
+                self.pack_search_mode = true;
+                self.pack_search_query.clear();
+                self.pack_search_matches.clear();
+                self.pack_search_index = 0;
+            }
+            KeyCode::Char('n') => {
+                // Next search match
+                if !self.pack_search_matches.is_empty() {
+                    self.pack_search_index = (self.pack_search_index + 1) % self.pack_search_matches.len();
+                    self.jump_to_pack_match();
+                }
+            }
+            KeyCode::Char('N') => {
+                // Previous search match
+                if !self.pack_search_matches.is_empty() {
+                    self.pack_search_index = if self.pack_search_index == 0 {
+                        self.pack_search_matches.len() - 1
+                    } else {
+                        self.pack_search_index - 1
+                    };
+                    self.jump_to_pack_match();
+                }
             }
             KeyCode::Enter => {
                 // View pack details
@@ -573,4 +609,81 @@ pub fn run_tui(memory_dir: PathBuf) -> io::Result<()> {
     terminal.show_cursor()?;
 
     result
+}
+
+    fn handle_pack_search_keys(&mut self, code: KeyCode) {
+        match code {
+            KeyCode::Esc => {
+                self.pack_search_mode = false;
+            }
+            KeyCode::Enter => {
+                self.pack_search_mode = false;
+                if !self.pack_search_matches.is_empty() {
+                    self.pack_search_index = 0;
+                    self.jump_to_pack_match();
+                }
+            }
+            KeyCode::Backspace => {
+                self.pack_search_query.pop();
+                self.compute_pack_search_matches();
+            }
+            KeyCode::Char(c) => {
+                self.pack_search_query.push(c);
+                self.compute_pack_search_matches();
+            }
+            _ => {}
+        }
+    }
+
+    fn compute_pack_search_matches(&mut self) {
+        self.pack_search_matches.clear();
+
+        if self.pack_search_query.is_empty() {
+            return;
+        }
+
+        for (i, pack) in self.packs.iter().enumerate() {
+            // Fuzzy match on pack name
+            if let Some(_score) = self.fuzzy_matcher.fuzzy_match(&pack.name, &self.pack_search_query) {
+                self.pack_search_matches.push(i);
+                continue;
+            }
+
+            // Match on description
+            if let Some(_score) = self.fuzzy_matcher.fuzzy_match(&pack.description, &self.pack_search_query) {
+                self.pack_search_matches.push(i);
+                continue;
+            }
+
+            // Match on keywords
+            for keyword in &pack.keywords {
+                if let Some(_score) = self.fuzzy_matcher.fuzzy_match(keyword, &self.pack_search_query) {
+                    self.pack_search_matches.push(i);
+                    break;
+                }
+            }
+
+            // Match on categories
+            for category in &pack.categories {
+                if let Some(_score) = self.fuzzy_matcher.fuzzy_match(category, &self.pack_search_query) {
+                    self.pack_search_matches.push(i);
+                    break;
+                }
+            }
+        }
+
+        if self.pack_search_index >= self.pack_search_matches.len() {
+            self.pack_search_index = 0;
+        }
+    }
+
+    fn jump_to_pack_match(&mut self) {
+        if let Some(&pack_idx) = self.pack_search_matches.get(self.pack_search_index) {
+            self.pack_index = pack_idx;
+        }
+    }
+
+    pub fn is_pack_search_match(&self, pack_idx: usize) -> bool {
+        self.pack_search_matches.contains(&pack_idx)
+    }
 }

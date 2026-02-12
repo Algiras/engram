@@ -377,10 +377,18 @@ pub fn render_packs(f: &mut Frame, app: &App) {
     }
 
     // Status bar
-    let status_text = if app.packs.is_empty() {
-        "ESC: back to browser  |  q: quit"
+    let status_text = if app.pack_search_mode {
+        format!("SEARCH: {}  (Enter: jump, ESC: cancel)", app.pack_search_query)
+    } else if !app.pack_search_matches.is_empty() {
+        format!(
+            "j/k: nav  |  Enter: details  |  u: update  |  d: del  |  /: search  |  n/N: match {}/{}  |  ESC: back  |  q: quit",
+            app.pack_search_index + 1,
+            app.pack_search_matches.len()
+        )
+    } else if app.packs.is_empty() {
+        "ESC: back to browser  |  q: quit".to_string()
     } else {
-        "j/k: navigate  |  Enter: details  |  u: update  |  d: uninstall  |  r: reload  |  ESC: back  |  q: quit"
+        "j/k: nav  |  Enter: details  |  u: update  |  d: del  |  /: search  |  r: reload  |  ESC: back  |  q: quit".to_string()
     };
 
     let status_bar = Paragraph::new(status_text)
