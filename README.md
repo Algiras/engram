@@ -105,17 +105,33 @@ Credentials are stored in `~/.config/claude-memory/auth.json` with `0600` permis
 |---------|-------------|
 | `ingest` | Parse JSONL conversations, archive as markdown, extract knowledge |
 | `search <query>` | Full-text regex search across all memory |
-| `recall <project>` | Display project knowledge context |
+| `recall <project>` | Display project knowledge context (includes installed packs) |
+| `lookup <project> <query>` | Search knowledge entries by content |
 | `context <project>` | Output context.md to stdout (for piping) |
+| `inject [project]` | Write combined knowledge to Claude Code MEMORY.md |
+| `add <project> <category> <content>` | Manually add a knowledge entry |
+| `forget <project> <session-id>` | Remove a specific knowledge entry |
 | `status` | Show memory statistics |
 | `projects` | List all discovered projects |
+| `doctor [--fix]` | Health check for knowledge files and packs |
+| `export <project> [--format json\|md]` | Export knowledge in various formats |
+| `tui` | Interactive terminal UI browser |
 | `auth login` | Configure LLM provider credentials |
 | `auth list` | Show configured providers |
 | `auth logout <provider>` | Remove provider credentials |
 | `auth status` | Show active provider |
 | `learn dashboard [project]` | View reinforcement learning progress and metrics |
 | `learn optimize <project>` | Apply learned parameter optimizations |
+| `learn simulate <project>` | Run learning simulation |
+| `learn feedback <project>` | Provide explicit feedback signal |
 | `learn reset <project>` | Reset learning state to defaults |
+| `hive browse` | Browse available knowledge packs |
+| `hive search <query>` | Search for packs across registries |
+| `hive install <pack>` | Install a knowledge pack |
+| `hive list` | List installed packs |
+| `hive registry add <url>` | Add a pack registry |
+
+See [HIVE_GUIDE.md](HIVE_GUIDE.md) for full hive commands. See [LEARNING_GUIDE.md](LEARNING_GUIDE.md) for the learning system.
 
 ## How It Works
 
@@ -126,7 +142,14 @@ Credentials are stored in `~/.config/claude-memory/auth.json` with `0600` permis
 5. **Synthesis** - Generates a `context.md` per project from accumulated knowledge
 6. **Reinforcement Learning** - Automatically optimizes knowledge importance, TTLs, and consolidation strategies based on usage patterns
 
-> **New!** claude-memory now includes a reinforcement learning system that continuously improves itself. See [LEARNING_GUIDE.md](LEARNING_GUIDE.md) for details.
+**Detailed Guides:**
+- [HIVE_GUIDE.md](HIVE_GUIDE.md) - Distributed knowledge sharing
+- [LEARNING_GUIDE.md](LEARNING_GUIDE.md) - Reinforcement learning system
+- [ANALYTICS_GUIDE.md](ANALYTICS_GUIDE.md) - Usage analytics
+- [GRAPH_GUIDE.md](GRAPH_GUIDE.md) - Knowledge graph
+- [EMBEDDINGS_GUIDE.md](EMBEDDINGS_GUIDE.md) - Semantic search
+- [SYNC_GUIDE.md](SYNC_GUIDE.md) - Knowledge synchronization
+- [EXPORT_GUIDE.md](EXPORT_GUIDE.md) - Export formats
 
 ### Output Structure
 
@@ -136,7 +159,9 @@ Credentials are stored in `~/.config/claude-memory/auth.json` with `0600` permis
 ├── summaries/{project}/                 # Brief session summaries
 ├── knowledge/{project}/                 # Decisions, solutions, patterns, context.md
 ├── knowledge/_global/                   # Cross-project preferences
-└── analytics/                           # Usage and activity data
+├── analytics/                           # Usage and activity data
+├── packs/installed/                     # Installed hive knowledge packs
+└── hive/registries/                     # Registry clones
 ```
 
 ## Claude Code Hook

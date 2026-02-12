@@ -166,5 +166,6 @@ fn test_doctor_hook() {
 
     // Verify hook executed successfully (no panic)
     let state = progress::load_state(&config.memory_dir, project).unwrap();
-    assert!(state.session_count() >= 0, "State should be valid");
+    // Verify state is valid (session_count returns usize, so just check it exists)
+    let _ = state.session_count();
 }

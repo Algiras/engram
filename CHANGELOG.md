@@ -2,51 +2,64 @@
 
 All notable changes to claude-memory will be documented in this file.
 
-## [Unreleased]
+## [0.3.0] - 2026-02-13
 
-### Added (2026-02-12)
+### Added
 
-#### MCP Server Support 🚀
+#### Hive Mind: Distributed Knowledge Sharing
+- **Knowledge pack system** - Create, publish, install, and share knowledge packs via Git
+- **Registry management** - Add Git-based registries (`hive registry add owner/repo`)
+- **Pack discovery** - Browse and search packs across registries
+- **Pack installation** - Install packs with automatic knowledge integration
+- **Pack creation** - Extract and package local knowledge for sharing
+- **Pack publishing** - Publish to Git with secret detection and privacy controls
+- **HTTPS→SSH fallback** - Automatic SSH retry for private repo cloning
+- **Pack health checks** - Doctor command validates installed packs
+- **TUI pack browser** - Browse, search, install, and manage packs in TUI
+- Full guide in [HIVE_GUIDE.md](HIVE_GUIDE.md)
+
+#### Reinforcement Learning System
+- **Q-learning for TTL optimization** - Automatically adjusts knowledge retention
+- **Multi-armed bandit for consolidation** - Learns optimal merge strategies
+- **Learning signals** - Extracts importance from usage patterns
+- **Outcome-based feedback** - Explicit feedback CLI command
+- **Learning dashboard** - View metrics, simulate, optimize
+- Full guide in [LEARNING_GUIDE.md](LEARNING_GUIDE.md)
+
+#### Knowledge Integration
+- `recall` now includes installed pack knowledge
+- `lookup` searches across installed packs
+- `inject` writes pack knowledge to Claude Code MEMORY.md
+- `search` covers installed pack files
+
+### Fixed
+- Pack install now correctly copies files from nested registry directories
+- Pack discovery scans subdirectories (not just registry root)
+- Version tracker test collisions (atomic counter for unique IDs)
+- All clippy warnings resolved (tests included)
+
+## [0.2.0] - 2026-02-12
+
+### Added
+
+#### MCP Server Support
 - **Model Context Protocol (MCP) server** for Claude Desktop integration
 - Direct tool access: `recall`, `search`, `lookup`, `projects`
 - Resource mounting: `memory://<project>/context`
-- Tested and verified with real projects
-- Full documentation in [MCP_SETUP.md](MCP_SETUP.md)
 
-#### Gemini API Support 🤖
+#### Gemini API Support
 - Google Gemini integration for knowledge extraction
 - Environment variable support: `GEMINI_API_KEY`
-- Configurable models via `CLAUDE_MEMORY_LLM_MODEL`
-- Documentation in [GEMINI_SETUP.md](GEMINI_SETUP.md)
 
-#### Fuzzy Search in TUI ⚡
+#### Fuzzy Search in TUI
 - Intelligent fuzzy matching using Skim algorithm
-- Score-based result ranking
 - Real-time search as you type
-- Navigate results with `n`/`N` keys
-- Handles typos and partial matches
-- Full guide in [TUI_GUIDE.md](TUI_GUIDE.md)
 
-#### Export Capabilities 📤
-- **Markdown export**: For documentation and wikis
-- **JSON export**: For programmatic access
-- **HTML export**: Standalone webpage with search
+#### Export Capabilities
+- Markdown, JSON, and HTML export formats
 - Optional conversation inclusion
 - Pipe-friendly stdout mode
-- Complete guide in [EXPORT_GUIDE.md](EXPORT_GUIDE.md)
-
-### Improved
-- README now highlights MCP and TUI features
-- Better error messages for Gemini API
-- Sorted search results by relevance
-- Enhanced TUI navigation
-
-### Technical
-- Added `fuzzy-matcher` dependency (0.3.7)
-- Added Gemini provider to auth module
-- Extended CLI with `export` command
-- Implemented `cmd_export` with 3 format handlers
-- Updated MCP protocol types
+- Guide in [EXPORT_GUIDE.md](EXPORT_GUIDE.md)
 
 ## [0.1.0] - 2026-02-11
 
@@ -75,53 +88,3 @@ All notable changes to claude-memory will be documented in this file.
 - TTL-based knowledge expiration
 - Hook-based Claude Code integration
 - Markdown-based storage
-- Session-based organization
-
----
-
-## Development Notes
-
-### Self-Improvement Methodology
-
-This project uses **dogfooding** - improving itself using its own capabilities:
-
-1. **Ingest** current sessions to capture work
-2. **Recall** project knowledge to understand patterns
-3. **Search** for relevant code and decisions
-4. **Implement** improvements guided by memory
-5. **Export** documentation for users
-
-### Testing Strategy
-
-- Manual testing via MCP protocol
-- TUI tested with real memory data
-- Export formats validated with multiple projects
-- Builds verified on macOS ARM
-
-### Performance
-
-- Fuzzy search: ~1ms for 1000 items
-- MCP response time: <100ms
-- Export: ~1s for typical project
-- Ingest: Depends on LLM provider (1-30s per session)
-
-### Future Roadmap
-
-See remaining tasks:
-- [ ] Semantic search using embeddings (#2)
-- [ ] Knowledge diffing and version control (#3)
-- [ ] Knowledge graph visualization (#5)
-- [ ] Smart knowledge consolidation (#6)
-- [ ] Collaborative features and sharing (#8)
-
-### Contributors
-
-- **Claude Sonnet 4.5** - AI pair programmer
-- **Human** - Project creator and tester
-
-### Acknowledgments
-
-- **ratatui** - Excellent TUI framework
-- **fuzzy-matcher** - Skim fuzzy matching
-- **clap** - CLI argument parsing
-- **MCP** - Model Context Protocol spec

@@ -243,7 +243,7 @@ fn assumption_optimization_produces_valid_changes() {
     // Check: Are the learned parameters valid?
     for (knowledge_id, boost) in &state.learned_parameters.importance_boosts {
         assert!(
-            boost >= &0.0 && boost <= &1.0,
+            (&0.0..=&1.0).contains(&boost),
             "Importance boost for '{}' should be in [0, 1], got: {}",
             knowledge_id,
             boost

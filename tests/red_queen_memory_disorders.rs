@@ -122,7 +122,7 @@ fn red_pill_false_memory_reinforcement() {
     let tracker = EventTracker::new(&config.memory_dir);
 
     // Create a false pattern that repeats
-    let false_pattern = vec!["A", "B", "C", "A", "B", "C"];
+    let false_pattern = ["A", "B", "C", "A", "B", "C"];
 
     for cycle in 0..5 {
         for (i, item) in false_pattern.iter().enumerate() {
@@ -321,7 +321,7 @@ fn red_pill_state_file_complete_corruption() {
         .join(project)
         .join("state.json");
     std::fs::create_dir_all(state_path.parent().unwrap()).unwrap();
-    std::fs::write(&state_path, &[0xFF, 0xFE, 0xFD, 0xFC, 0x00, 0x01, 0x02]).unwrap();
+    std::fs::write(&state_path, [0xFF, 0xFE, 0xFD, 0xFC, 0x00, 0x01, 0x02]).unwrap();
 
     // Try to load: Should either recover or fail gracefully
     let result = progress::load_state(&config.memory_dir, project);
@@ -339,9 +339,8 @@ fn red_pill_state_file_complete_corruption() {
             println!("State recovered with {} sessions", state.session_count());
         }
         Err(e) => {
-            // System failed gracefully (also acceptable)
+            // System failed gracefully (also acceptable) — reaching here is success
             println!("Graceful failure on corrupted state: {}", e);
-            assert!(true, "System failed gracefully on corrupted state");
         }
     }
 
@@ -464,7 +463,7 @@ fn red_pill_zero_divided_by_zero() {
         assert!(!reward.is_nan(), "Reward should not be NaN");
         assert!(!reward.is_infinite(), "Reward should not be infinite");
         assert!(
-            reward >= 0.0 && reward <= 1.0,
+            (0.0..=1.0).contains(&reward),
             "Reward should be in [0, 1], got: {}",
             reward
         );
@@ -499,7 +498,7 @@ fn red_pill_rapid_fire_updates() {
         // Check no corrupted values
         for (id, boost) in &state.learned_parameters.importance_boosts {
             assert!(
-                boost >= &0.0 && boost <= &1.0,
+                (&0.0..=&1.0).contains(&boost),
                 "Boost for {} should be valid: {}",
                 id,
                 boost

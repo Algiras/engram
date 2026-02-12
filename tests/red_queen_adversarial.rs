@@ -142,7 +142,7 @@ fn red_queen_extremely_high_frequency() {
     }
 
     let events = tracker.get_events(Some(project), 1000).unwrap();
-    let signals = signals::extract_signals_from_events(&events);
+    let _signals = signals::extract_signals_from_events(&events);
 
     // Challenge: Are importance values clamped properly?
     let result = learning::post_ingest_hook(&config, project);
@@ -158,7 +158,7 @@ fn red_queen_extremely_high_frequency() {
 
     // Importance should be bounded (not infinite)
     assert!(
-        boost >= 0.0 && boost <= 1.0,
+        (0.0..=1.0).contains(&boost),
         "Importance boost should be bounded: got {}",
         boost
     );
@@ -185,7 +185,7 @@ fn red_queen_concurrent_learning_sessions() {
         "Should track at least one session"
     );
     assert!(
-        state.metrics_history.len() >= 1,
+        !state.metrics_history.is_empty(),
         "Should have metrics history"
     );
 }
@@ -214,8 +214,7 @@ fn red_queen_learning_state_corruption() {
 
     // System should either recover or fail gracefully
     if result.is_err() {
-        // If it fails, it should be a proper error, not a panic
-        assert!(true, "System failed gracefully with corrupted state");
+        // If it fails, it should be a proper error, not a panic — reaching here is success
     } else {
         // If it succeeds, it should have recreated state
         let state = progress::load_state(&config.memory_dir, project).unwrap();
@@ -262,7 +261,7 @@ fn red_queen_reward_calculation_edge_cases() {
     for signal in test_signals {
         let reward = signal.to_reward();
         assert!(
-            reward >= 0.0 && reward <= 1.0,
+            (0.0..=1.0).contains(&reward),
             "Reward should be in [0, 1], got: {} for signal: {:?}",
             reward,
             signal
