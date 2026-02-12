@@ -380,7 +380,7 @@ pub fn render_packs(f: &mut Frame, app: &App) {
     let status_text = if app.packs.is_empty() {
         "ESC: back to browser  |  q: quit"
     } else {
-        "j/k: navigate  |  r: reload  |  ESC: back to browser  |  q: quit"
+        "j/k: navigate  |  Enter: details  |  u: update  |  d: uninstall  |  r: reload  |  ESC: back  |  q: quit"
     };
 
     let status_bar = Paragraph::new(status_text)
@@ -388,4 +388,137 @@ pub fn render_packs(f: &mut Frame, app: &App) {
         .alignment(Alignment::Center);
 
     f.render_widget(status_bar, chunks[1]);
+
+    // Overlays
+    if app.show_pack_confirm.is_some() {
+        render_pack_confirm_dialog(f, app);
+    }
+
+    if app.pack_action_message.is_some() {
+        render_pack_action_message(f, app);
+    }
+}
+
+/// Render pack detail screen
+pub fn render_pack_detail(f: &mut Frame, app: &App) {
+    let area = f.area();
+
+    // Split into content area and status bar
+    let chunks = Layout::vertical([
+        Constraint::Min(3),
+        Constraint::Length(1),
+    ]).split(area);
+
+    let block = Block::default()
+        .title(" Pack Details ")
+        .borders(Borders::ALL)
+        .border_style(Style::default().fg(Color::Cyan));
+
+    let paragraph = Paragraph::new(app.pack_detail_content.as_str())
+        .block(block)
+        .wrap(Wrap { trim: false })
+        .scroll((app.pack_detail_scroll, 0));
+
+    f.render_widget(paragraph, chunks[0]);
+
+    // Status bar
+    let help = format!(
+        " Esc: back to packs | PgUp/PgDn/j/k: scroll | Line {} ",
+        app.pack_detail_scroll + 1
+    );
+    let bar = Paragraph::new(help)
+        .style(Style::default().fg(Color::White).bg(Color::DarkGray))
+        .alignment(Alignment::Center);
+
+    f.render_widget(bar, chunks[1]);
+}
+
+/// Render pack action confirmation dialog
+fn render_pack_confirm_dialog(f: &mut Frame, app: &App) {
+    let area = f.area();
+
+    let popup_width = 60u16.min(area.width.saturating_sub(4));
+    let popup_height = 10u16.min(area.height.saturating_sub(2));
+    let x = (area.width.saturating_sub(popup_width)) / 2;
+    let y = (area.height.saturating_sub(popup_height)) / 2;
+    let popup_area = Rect::new(x, y, popup_width, popup_height);
+
+    if let Some(action) = &app.show_pack_confirm {
+        let pack_name = app.packs.get(app.pack_index)
+            .map(|p| p.name.as_str())
+            .unwrap_or("unknown");
+
+        let (title, message, warning) = match action {
+            super::PackAction::Update => (
+                "Update Pack",
+                format!("Update pack '{}'?", pack_name),
+                "This will pull the latest version from the registry."
+            ),
+            super::PackAction::Uninstall => (
+                "Uninstall Pack",
+                format!("Uninstall pack '{}'?", pack_name),
+                "This will remove the pack and all its knowledge from your system."
+            ),
+        };
+
+        let text = vec![
+            Line::from(""),
+            Line::from(Span::styled(
+                title,
+                Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD),
+            )),
+            Line::from(""),
+            Line::from(message),
+            Line::from(""),
+            Line::from(Span::styled(warning, Style::default().fg(Color::Gray))),
+            Line::from(""),
+            Line::from(Span::styled(
+                "Continue? (y/n)",
+                Style::default().add_modifier(Modifier::BOLD),
+            )),
+        ];
+
+        let block = Block::default()
+            .borders(Borders::ALL)
+            .border_style(Style::default().fg(Color::Yellow));
+
+        let paragraph = Paragraph::new(text).block(block).alignment(Alignment::Center);
+
+        f.render_widget(Clear, popup_area);
+        f.render_widget(paragraph, popup_area);
+    }
+}
+
+/// Render pack action message (success/error)
+fn render_pack_action_message(f: &mut Frame, app: &App) {
+    if let Some((message, is_error)) = &app.pack_action_message {
+        let area = f.area();
+        
+        let popup_width = (message.len() as u16 + 10).min(area.width.saturating_sub(4));
+        let popup_height = 5u16;
+        let x = (area.width.saturating_sub(popup_width)) / 2;
+        let y = (area.height.saturating_sub(popup_height)) / 2;
+        let popup_area = Rect::new(x, y, popup_width, popup_height);
+
+        let color = if *is_error { Color::Red } else { Color::Green };
+
+        let text = vec![
+            Line::from(""),
+            Line::from(Span::styled(
+                message,
+                Style::default().fg(color).add_modifier(Modifier::BOLD),
+            )),
+            Line::from(""),
+            Line::from(Span::styled("Press any key to continue", Style::default().fg(Color::Gray))),
+        ];
+
+        let block = Block::default()
+            .borders(Borders::ALL)
+            .border_style(Style::default().fg(color));
+
+        let paragraph = Paragraph::new(text).block(block).alignment(Alignment::Center);
+
+        f.render_widget(Clear, popup_area);
+        f.render_widget(paragraph, popup_area);
+    }
 }

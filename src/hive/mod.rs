@@ -9,8 +9,10 @@
 pub mod pack;
 pub mod registry;
 pub mod installer;
+pub mod security;
 
 // Re-export commonly used types
 pub use pack::{Author, KnowledgePack, PackCategory, PrivacyPolicy};
 pub use registry::{Registry, RegistryManager};
 pub use installer::{InstalledPack, PackInstaller};
+pub use security::{SecretDetector, DetectedSecret};

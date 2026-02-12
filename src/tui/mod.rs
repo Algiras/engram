@@ -17,6 +17,13 @@ enum Screen {
     Browser,
     Viewer,
     Packs,
+    PackDetail,
+}
+
+#[derive(Clone, PartialEq)]
+pub enum PackAction {
+    Uninstall,
+    Update,
 }
 
 pub struct App {
@@ -38,6 +45,10 @@ pub struct App {
     // Packs state
     packs: Vec<data::PackEntry>,
     pack_index: usize,
+    pack_detail_content: String,
+    pack_detail_scroll: u16,
+    pub pack_action_message: Option<(String, bool)>, // (message, is_error)
+    pub show_pack_confirm: Option<PackAction>,
 }
 
 impl App {
@@ -61,6 +72,10 @@ impl App {
             fuzzy_matcher: SkimMatcherV2::default(),
             packs,
             pack_index: 0,
+            pack_detail_content: String::new(),
+            pack_detail_scroll: 0,
+            pack_action_message: None,
+            show_pack_confirm: None,
         }
     }
 
@@ -168,6 +183,7 @@ impl App {
                 Screen::Browser => ui::render_browser(f, self),
                 Screen::Viewer => ui::render_viewer(f, self),
                 Screen::Packs => ui::render_packs(f, self),
+                Screen::PackDetail => ui::render_pack_detail(f, self),
             })?;
 
             if let Event::Key(key) = event::read()? {
@@ -185,9 +201,17 @@ impl App {
                         self.handle_viewer_keys(key.code, terminal)?;
                     }
                     Screen::Packs => {
-                        if self.handle_packs_keys(key.code) {
+                        if self.pack_action_message.is_some() {
+                            // Any key clears the message
+                            self.pack_action_message = None;
+                        } else if self.show_pack_confirm.is_some() {
+                            self.handle_pack_confirm_keys(key.code);
+                        } else if self.handle_packs_keys(key.code) {
                             return Ok(());
                         }
+                    }
+                    Screen::PackDetail => {
+                        self.handle_pack_detail_keys(key.code, terminal)?;
                     }
                 }
             }
@@ -329,9 +353,136 @@ impl App {
                 // Reload packs
                 self.packs = data::load_packs(&self.memory_dir);
             }
+            KeyCode::Enter => {
+                // View pack details
+                self.open_pack_detail();
+            }
+            KeyCode::Char('u') => {
+                // Update pack
+                if !self.packs.is_empty() {
+                    self.show_pack_confirm = Some(PackAction::Update);
+                }
+            }
+            KeyCode::Char('d') => {
+                // Uninstall pack
+                if !self.packs.is_empty() {
+                    self.show_pack_confirm = Some(PackAction::Uninstall);
+                }
+            }
             _ => {}
         }
         false
+    }
+
+    fn handle_pack_confirm_keys(&mut self, code: KeyCode) {
+        match code {
+            KeyCode::Char('y') | KeyCode::Char('Y') => {
+                if let Some(action) = self.show_pack_confirm.clone() {
+                    if let Some(pack) = self.packs.get(self.pack_index) {
+                        let pack_name = pack.name.clone();
+                        self.execute_pack_action(action, &pack_name);
+                    }
+                }
+                self.show_pack_confirm = None;
+            }
+            KeyCode::Char('n') | KeyCode::Char('N') | KeyCode::Esc => {
+                self.show_pack_confirm = None;
+            }
+            _ => {}
+        }
+    }
+
+    fn execute_pack_action(&mut self, action: PackAction, pack_name: &str) {
+        use crate::hive::PackInstaller;
+
+        let installer = PackInstaller::new(&self.memory_dir);
+
+        match action {
+            PackAction::Update => {
+                match installer.update(pack_name) {
+                    Ok(_) => {
+                        self.pack_action_message = Some((
+                            format!("✓ Pack '{}' updated successfully", pack_name),
+                            false,
+                        ));
+                        self.packs = data::load_packs(&self.memory_dir);
+                    }
+                    Err(e) => {
+                        self.pack_action_message = Some((
+                            format!("✗ Update failed: {}", e),
+                            true,
+                        ));
+                    }
+                }
+            }
+            PackAction::Uninstall => {
+                match installer.uninstall(pack_name) {
+                    Ok(_) => {
+                        self.pack_action_message = Some((
+                            format!("✓ Pack '{}' uninstalled", pack_name),
+                            false,
+                        ));
+                        self.packs = data::load_packs(&self.memory_dir);
+                        // Adjust index if needed
+                        if self.pack_index >= self.packs.len() && !self.packs.is_empty() {
+                            self.pack_index = self.packs.len() - 1;
+                        }
+                    }
+                    Err(e) => {
+                        self.pack_action_message = Some((
+                            format!("✗ Uninstall failed: {}", e),
+                            true,
+                        ));
+                    }
+                }
+            }
+        }
+    }
+
+    fn open_pack_detail(&mut self) {
+        if let Some(pack) = self.packs.get(self.pack_index) {
+            self.pack_detail_content = data::render_pack_detail(pack, &self.memory_dir);
+            self.pack_detail_scroll = 0;
+            self.screen = Screen::PackDetail;
+        }
+    }
+
+    fn handle_pack_detail_keys(
+        &mut self,
+        code: KeyCode,
+        terminal: &Terminal<CrosstermBackend<io::Stdout>>,
+    ) -> io::Result<()> {
+        let page_size = terminal.size()?.height.saturating_sub(4);
+        let total_lines = self.pack_detail_content.lines().count() as u16;
+
+        match code {
+            KeyCode::Esc | KeyCode::Char('q') => {
+                self.screen = Screen::Packs;
+                self.pack_detail_content.clear();
+            }
+            KeyCode::Char('j') | KeyCode::Down => {
+                if self.pack_detail_scroll < total_lines {
+                    self.pack_detail_scroll += 1;
+                }
+            }
+            KeyCode::Char('k') | KeyCode::Up => {
+                self.pack_detail_scroll = self.pack_detail_scroll.saturating_sub(1);
+            }
+            KeyCode::PageDown | KeyCode::Char(' ') => {
+                self.pack_detail_scroll = self.pack_detail_scroll.saturating_add(page_size).min(total_lines);
+            }
+            KeyCode::PageUp => {
+                self.pack_detail_scroll = self.pack_detail_scroll.saturating_sub(page_size);
+            }
+            KeyCode::Home | KeyCode::Char('g') => {
+                self.pack_detail_scroll = 0;
+            }
+            KeyCode::End | KeyCode::Char('G') => {
+                self.pack_detail_scroll = total_lines;
+            }
+            _ => {}
+        }
+        Ok(())
     }
 
     fn handle_delete_keys(&mut self, code: KeyCode) {

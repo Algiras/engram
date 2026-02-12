@@ -23,7 +23,7 @@ use std::path::{Path, PathBuf};
 use clap::Parser;
 use cli::{
     AuthCommand, Cli, Commands, GraphCommand, HiveCommand, HooksCommand, LearnCommand,
-    RegistryCommand, SyncCommand,
+    PackCommand, RegistryCommand, SyncCommand,
 };
 use colored::Colorize;
 use config::Config;
@@ -4006,6 +4006,7 @@ fn cmd_hive(command: HiveCommand) -> Result<()> {
 
     match command {
         HiveCommand::Registry { command } => cmd_hive_registry(command, &memory_dir),
+        HiveCommand::Pack { command } => cmd_hive_pack(command, &memory_dir),
         HiveCommand::Install {
             pack,
             registry,
@@ -4308,6 +4309,251 @@ fn cmd_hive_search(query: &str, memory_dir: &Path) -> Result<()> {
 
     println!("💡 Install a pack with:");
     println!("  claude-memory hive install <pack-name>");
+
+    Ok(())
+}
+
+fn cmd_hive_pack(command: PackCommand, memory_dir: &Path) -> Result<()> {
+    match command {
+        PackCommand::Create {
+            name,
+            project,
+            description,
+            author,
+            keywords,
+            categories,
+            output,
+        } => cmd_hive_pack_create(
+            &name,
+            &project,
+            description.as_deref(),
+            author.as_deref(),
+            keywords.as_deref(),
+            categories.as_deref(),
+            output.as_deref(),
+            memory_dir,
+        ),
+        PackCommand::Stats { name } => cmd_hive_pack_stats(&name, memory_dir),
+    }
+}
+
+fn cmd_hive_pack_create(
+    name: &str,
+    project: &str,
+    description: Option<&str>,
+    author_name: Option<&str>,
+    keywords_str: Option<&str>,
+    categories_str: Option<&str>,
+    output_dir: Option<&str>,
+    memory_dir: &Path,
+) -> Result<()> {
+    use hive::{Author, KnowledgePack, PackCategory, PrivacyPolicy};
+    use std::str::FromStr;
+
+    println!("{} Creating knowledge pack: {}", "→".blue(), name.bold());
+
+    // Verify source project exists
+    let source_knowledge = memory_dir.join("knowledge").join(project);
+    if !source_knowledge.exists() {
+        return Err(MemoryError::Config(format!(
+            "Project '{}' not found. Run 'ingest' first.",
+            project
+        )));
+    }
+
+    // Determine output directory
+    let pack_dir = if let Some(out) = output_dir {
+        PathBuf::from(out)
+    } else {
+        std::env::current_dir()?.join("packs").join(name)
+    };
+
+    if pack_dir.exists() {
+        return Err(MemoryError::Config(format!(
+            "Pack directory already exists: {}",
+            pack_dir.display()
+        )));
+    }
+
+    // Create pack structure
+    std::fs::create_dir_all(&pack_dir)?;
+    std::fs::create_dir_all(pack_dir.join(".pack"))?;
+    std::fs::create_dir_all(pack_dir.join("knowledge"))?;
+
+    // Collect metadata (with prompts if not provided)
+    let desc = description
+        .map(String::from)
+        .unwrap_or_else(|| format!("Knowledge pack from {}", project));
+
+    let author = Author::new(
+        author_name
+            .map(String::from)
+            .unwrap_or_else(|| "Anonymous".to_string()),
+    );
+
+    let keywords: Vec<String> = keywords_str
+        .map(|s| s.split(',').map(|k| k.trim().to_string()).collect())
+        .unwrap_or_default();
+
+    let categories: Vec<PackCategory> = categories_str
+        .map(|s| {
+            s.split(',')
+                .filter_map(|c| PackCategory::from_str(c.trim()).ok())
+                .collect()
+        })
+        .unwrap_or_else(|| vec![PackCategory::Patterns, PackCategory::Solutions]);
+
+    // Create manifest
+    let mut pack = KnowledgePack::new(
+        name.to_string(),
+        desc,
+        author,
+        format!("https://github.com/user/{}", name),
+    );
+    pack.keywords = keywords;
+    pack.categories = categories.clone();
+
+    // Save manifest
+    pack.save(&pack_dir)?;
+
+    // Copy knowledge files based on privacy settings and categories
+    let privacy = PrivacyPolicy::default();
+    let knowledge_dest = pack_dir.join("knowledge");
+
+    for (category_name, should_include) in [
+        ("patterns.md", privacy.share_patterns),
+        ("solutions.md", privacy.share_solutions),
+        ("decisions.md", privacy.share_decisions),
+        ("preferences.md", privacy.share_preferences),
+    ] {
+        if should_include {
+            let source_file = source_knowledge.join(category_name);
+            let dest_file = knowledge_dest.join(category_name);
+
+            if source_file.exists() {
+                std::fs::copy(&source_file, &dest_file)?;
+                println!("  {} Copied {}", "✓".green(), category_name);
+            }
+        }
+    }
+
+    // Scan for secrets
+    println!("\n{} Scanning for secrets...", "→".blue());
+    let detector = hive::SecretDetector::new()?;
+    let secrets = detector.scan_directory(&knowledge_dest)?;
+
+    if !secrets.is_empty() {
+        println!("\n{} Secrets detected!", "✗".red().bold());
+        println!("\nThe following potential secrets were found:\n");
+
+        for secret in &secrets {
+            println!("  {} {}:{}", "●".red(), secret.file_path, secret.line_number);
+            println!("    Type: {}", secret.pattern_name.yellow());
+            println!("    Match: {}", secret.matched_text.dimmed());
+            println!();
+        }
+
+        println!("{}", "Pack creation blocked for security.".red().bold());
+        println!("\nPlease review and remove secrets, then try again.");
+
+        // Clean up
+        std::fs::remove_dir_all(&pack_dir)?;
+
+        return Err(MemoryError::Config(format!(
+            "{} secret(s) detected",
+            secrets.len()
+        )));
+    }
+
+    println!("  {} No secrets detected", "✓".green());
+
+    // Create README
+    let readme_content = format!(
+        "# {}\n\n{}\n\n## Installation\n\n```bash\nclaude-memory hive install {}\n```\n\n## Contents\n\n",
+        name, pack.description, name
+    );
+    std::fs::write(pack_dir.join("README.md"), readme_content)?;
+
+    println!("\n{} Pack created successfully!", "✓".green());
+    println!("  Location: {}", pack_dir.display());
+    println!("  Categories: {}", categories.iter().map(|c| c.to_string()).collect::<Vec<_>>().join(", "));
+    println!("\n💡 Next steps:");
+    println!("  1. Review content: cd {}", pack_dir.display());
+    println!("  2. Initialize git: git init && git add . && git commit -m 'Initial pack'");
+    println!("  3. Push to GitHub: git remote add origin <url> && git push");
+    println!("  4. Share: claude-memory hive registry add <owner>/<repo>");
+
+    Ok(())
+}
+
+fn cmd_hive_pack_stats(name: &str, memory_dir: &Path) -> Result<()> {
+    use hive::{PackInstaller};
+
+    let installer = PackInstaller::new(memory_dir);
+    let packs = installer.list()?;
+
+    let pack = packs
+        .iter()
+        .find(|p| p.name == name)
+        .ok_or_else(|| MemoryError::Config(format!("Pack '{}' not installed", name)))?;
+
+    println!("{} Pack Statistics: {}", "→".blue(), pack.name.bold());
+    println!();
+
+    // Load manifest
+    let manifest_path = pack.path.join(".pack/manifest.json");
+    if let Ok(content) = std::fs::read_to_string(&manifest_path) {
+        if let Ok(manifest) = serde_json::from_str::<serde_json::Value>(&content) {
+            println!("  {} {}", "Name:".bold(), pack.name);
+            println!("  {} {}", "Version:".bold(), pack.version);
+            println!("  {} {}", "Registry:".bold(), pack.registry);
+            
+            if let Some(desc) = manifest.get("description").and_then(|v| v.as_str()) {
+                println!("  {} {}", "Description:".bold(), desc);
+            }
+        }
+    }
+
+    println!();
+
+    // Knowledge statistics
+    let knowledge_dir = pack.path.join("knowledge");
+    if knowledge_dir.exists() {
+        println!("  {}", "Knowledge:".bold());
+
+        let mut total_entries = 0;
+        let mut total_size = 0;
+
+        for category in &["patterns.md", "solutions.md", "workflows.md", "decisions.md", "preferences.md"] {
+            let file_path = knowledge_dir.join(category);
+            if file_path.exists() {
+                if let Ok(content) = std::fs::read_to_string(&file_path) {
+                    let entry_count = content.matches("## Session:").count();
+                    let size = content.len();
+                    
+                    total_entries += entry_count;
+                    total_size += size;
+
+                    if entry_count > 0 {
+                        println!(
+                            "    {} {} entries ({} KB)",
+                            category.replace(".md", "").cyan(),
+                            entry_count,
+                            size / 1024
+                        );
+                    }
+                }
+            }
+        }
+
+        println!();
+        println!("  {} {} entries", "Total:".bold(), total_entries);
+        println!("  {} {} KB", "Size:".bold(), total_size / 1024);
+    }
+
+    println!();
+    println!("  {} {}", "Installed:".bold(), pack.installed_at.format("%Y-%m-%d %H:%M:%S"));
+    println!("  {} {}", "Path:".bold(), pack.path.display());
 
     Ok(())
 }

@@ -623,6 +623,12 @@ pub enum HiveCommand {
         command: RegistryCommand,
     },
 
+    /// Manage knowledge packs
+    Pack {
+        #[command(subcommand)]
+        command: PackCommand,
+    },
+
     /// Install a knowledge pack
     Install {
         /// Pack name
@@ -667,6 +673,45 @@ pub enum HiveCommand {
     Search {
         /// Search query
         query: String,
+    },
+}
+
+#[derive(Subcommand)]
+pub enum PackCommand {
+    /// Create a new knowledge pack from local knowledge
+    Create {
+        /// Pack name
+        name: String,
+
+        /// Source project
+        #[arg(long)]
+        project: String,
+
+        /// Pack description
+        #[arg(long)]
+        description: Option<String>,
+
+        /// Author name
+        #[arg(long)]
+        author: Option<String>,
+
+        /// Keywords (comma-separated)
+        #[arg(long)]
+        keywords: Option<String>,
+
+        /// Categories (comma-separated: patterns,solutions,decisions,workflows,preferences)
+        #[arg(long)]
+        categories: Option<String>,
+
+        /// Output directory (default: ./packs/<name>)
+        #[arg(long)]
+        output: Option<String>,
+    },
+
+    /// Show pack statistics
+    Stats {
+        /// Pack name
+        name: String,
     },
 }
 
