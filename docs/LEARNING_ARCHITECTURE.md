@@ -493,4 +493,3 @@ When extending the learning system:
 
 - [LEARNING_GUIDE.md](LEARNING_GUIDE.md) - User-facing documentation
 - [ANALYTICS_GUIDE.md](ANALYTICS_GUIDE.md) - Analytics system details
-- [DOGFOODING_INSIGHTS.md](DOGFOODING_INSIGHTS.md) - Real-world results

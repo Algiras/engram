@@ -125,9 +125,11 @@ impl PackInstaller {
         std::fs::create_dir_all(&pack_dir)?;
 
         // Copy knowledge files from the pack's source path (set during discovery)
-        let registry_pack_dir = pack.source_path.as_ref().cloned().unwrap_or_else(|| {
-            found_registry.local_path(&self.hive_dir).join(&pack.name)
-        });
+        let registry_pack_dir = pack
+            .source_path
+            .as_ref()
+            .cloned()
+            .unwrap_or_else(|| found_registry.local_path(&self.hive_dir).join(&pack.name));
         self.copy_pack_content(&registry_pack_dir, &pack_dir)?;
 
         // Record installation

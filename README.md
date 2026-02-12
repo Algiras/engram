@@ -66,7 +66,7 @@ claude-memory learn dashboard
 
 2. Restart Claude Desktop
 
-Claude can now directly access your memory during conversations! See [MCP_SETUP.md](MCP_SETUP.md) for detailed setup and usage.
+Claude can now directly access your memory during conversations! See [MCP_SETUP.md](docs/MCP_SETUP.md) for detailed setup and usage.
 
 ## LLM Providers
 
@@ -131,7 +131,7 @@ Credentials are stored in `~/.config/claude-memory/auth.json` with `0600` permis
 | `hive list` | List installed packs |
 | `hive registry add <url>` | Add a pack registry |
 
-See [HIVE_GUIDE.md](HIVE_GUIDE.md) for full hive commands. See [LEARNING_GUIDE.md](LEARNING_GUIDE.md) for the learning system.
+See [HIVE_GUIDE.md](docs/HIVE_GUIDE.md) for full hive commands. See [LEARNING_GUIDE.md](docs/LEARNING_GUIDE.md) for the learning system.
 
 ## How It Works
 
@@ -143,13 +143,13 @@ See [HIVE_GUIDE.md](HIVE_GUIDE.md) for full hive commands. See [LEARNING_GUIDE.m
 6. **Reinforcement Learning** - Automatically optimizes knowledge importance, TTLs, and consolidation strategies based on usage patterns
 
 **Detailed Guides:**
-- [HIVE_GUIDE.md](HIVE_GUIDE.md) - Distributed knowledge sharing
-- [LEARNING_GUIDE.md](LEARNING_GUIDE.md) - Reinforcement learning system
-- [ANALYTICS_GUIDE.md](ANALYTICS_GUIDE.md) - Usage analytics
-- [GRAPH_GUIDE.md](GRAPH_GUIDE.md) - Knowledge graph
-- [EMBEDDINGS_GUIDE.md](EMBEDDINGS_GUIDE.md) - Semantic search
-- [SYNC_GUIDE.md](SYNC_GUIDE.md) - Knowledge synchronization
-- [EXPORT_GUIDE.md](EXPORT_GUIDE.md) - Export formats
+- [HIVE_GUIDE.md](docs/HIVE_GUIDE.md) - Distributed knowledge sharing
+- [LEARNING_GUIDE.md](docs/LEARNING_GUIDE.md) - Reinforcement learning system
+- [ANALYTICS_GUIDE.md](docs/ANALYTICS_GUIDE.md) - Usage analytics
+- [GRAPH_GUIDE.md](docs/GRAPH_GUIDE.md) - Knowledge graph
+- [EMBEDDINGS_GUIDE.md](docs/EMBEDDINGS_GUIDE.md) - Semantic search
+- [SYNC_GUIDE.md](docs/SYNC_GUIDE.md) - Knowledge synchronization
+- [EXPORT_GUIDE.md](docs/EXPORT_GUIDE.md) - Export formats
 
 ### Output Structure
 

@@ -1377,7 +1377,12 @@ fn cmd_lookup(project: &str, query: &str, include_all: bool) -> Result<()> {
     let installer = hive::PackInstaller::new(&memory_dir);
     if let Ok(knowledge_dirs) = installer.get_installed_knowledge_dirs() {
         for (pack_name, knowledge_dir) in knowledge_dirs {
-            for category in &["patterns.md", "solutions.md", "decisions.md", "preferences.md"] {
+            for category in &[
+                "patterns.md",
+                "solutions.md",
+                "decisions.md",
+                "preferences.md",
+            ] {
                 let file_path = knowledge_dir.join(category);
                 if !file_path.exists() {
                     continue;

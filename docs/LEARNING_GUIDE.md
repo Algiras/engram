@@ -279,4 +279,3 @@ A: Currently, each project learns independently. Future versions may support tra
 
 - [LEARNING_ARCHITECTURE.md](LEARNING_ARCHITECTURE.md) - Technical implementation details
 - [ANALYTICS_GUIDE.md](ANALYTICS_GUIDE.md) - Understanding usage analytics
-- [DOGFOODING_INSIGHTS.md](DOGFOODING_INSIGHTS.md) - Real-world learning examples

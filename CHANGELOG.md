@@ -16,7 +16,7 @@ All notable changes to claude-memory will be documented in this file.
 - **HTTPS→SSH fallback** - Automatic SSH retry for private repo cloning
 - **Pack health checks** - Doctor command validates installed packs
 - **TUI pack browser** - Browse, search, install, and manage packs in TUI
-- Full guide in [HIVE_GUIDE.md](HIVE_GUIDE.md)
+- Full guide in [HIVE_GUIDE.md](docs/HIVE_GUIDE.md)
 
 #### Reinforcement Learning System
 - **Q-learning for TTL optimization** - Automatically adjusts knowledge retention
@@ -24,7 +24,7 @@ All notable changes to claude-memory will be documented in this file.
 - **Learning signals** - Extracts importance from usage patterns
 - **Outcome-based feedback** - Explicit feedback CLI command
 - **Learning dashboard** - View metrics, simulate, optimize
-- Full guide in [LEARNING_GUIDE.md](LEARNING_GUIDE.md)
+- Full guide in [LEARNING_GUIDE.md](docs/LEARNING_GUIDE.md)
 
 #### Knowledge Integration
 - `recall` now includes installed pack knowledge
@@ -59,7 +59,7 @@ All notable changes to claude-memory will be documented in this file.
 - Markdown, JSON, and HTML export formats
 - Optional conversation inclusion
 - Pipe-friendly stdout mode
-- Guide in [EXPORT_GUIDE.md](EXPORT_GUIDE.md)
+- Guide in [EXPORT_GUIDE.md](docs/EXPORT_GUIDE.md)
 
 ## [0.1.0] - 2026-02-11
 

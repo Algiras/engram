@@ -234,8 +234,7 @@ impl RegistryManager {
     /// Convert HTTPS GitHub URL to SSH URL
     fn https_to_ssh(url: &str) -> Option<String> {
         // https://github.com/owner/repo.git -> git@github.com:owner/repo.git
-        let trimmed = url
-            .strip_prefix("https://github.com/")?;
+        let trimmed = url.strip_prefix("https://github.com/")?;
         Some(format!("git@github.com:{}", trimmed))
     }
 
@@ -321,7 +320,11 @@ impl RegistryManager {
         if let Ok(entries) = std::fs::read_dir(&local_path) {
             for entry in entries.flatten() {
                 let path = entry.path();
-                if path.is_dir() && !path.file_name().is_some_and(|n| n.to_string_lossy().starts_with('.')) {
+                if path.is_dir()
+                    && !path
+                        .file_name()
+                        .is_some_and(|n| n.to_string_lossy().starts_with('.'))
+                {
                     dirs_to_scan.push(path);
                 }
             }
@@ -335,7 +338,11 @@ impl RegistryManager {
                         match KnowledgePack::load(&path) {
                             Ok(pack) => packs.push(pack),
                             Err(e) => {
-                                eprintln!("Warning: Failed to load pack at {}: {}", path.display(), e);
+                                eprintln!(
+                                    "Warning: Failed to load pack at {}: {}",
+                                    path.display(),
+                                    e
+                                );
                             }
                         }
                     }
