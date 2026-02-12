@@ -3601,6 +3601,117 @@ fn cmd_doctor(config: &Config, project: Option<&str>, auto_fix: bool, verbose: b
         println!("💡 Run with {} to automatically fix issues", "--fix".cyan());
     }
 
+    // Check installed packs health
+    println!("{}", "📦 Installed Packs Health".green().bold());
+    println!("{}", "=".repeat(60));
+    println!();
+
+    check_pack_health(&config.memory_dir, auto_fix, verbose)?;
+
+    Ok(())
+}
+
+fn check_pack_health(memory_dir: &Path, auto_fix: bool, verbose: bool) -> Result<()> {
+    use hive::PackInstaller;
+
+    let installer = PackInstaller::new(memory_dir);
+    let packs = installer.list()?;
+
+    if packs.is_empty() {
+        println!("   {} No packs installed\n", "ℹ".cyan());
+        return Ok(());
+    }
+
+    let mut total_issues = 0;
+
+    for pack in &packs {
+        print!("   {} {}... ", "●".blue(), pack.name.bold());
+
+        let mut pack_issues = Vec::new();
+
+        // Check 1: Manifest exists and is valid
+        let manifest_path = pack.path.join(".pack/manifest.json");
+        if !manifest_path.exists() {
+            pack_issues.push("Missing manifest file");
+        } else if let Err(_) = hive::KnowledgePack::load(&pack.path) {
+            pack_issues.push("Invalid manifest");
+        }
+
+        // Check 2: Knowledge directory exists
+        let knowledge_dir = pack.path.join("knowledge");
+        if !knowledge_dir.exists() {
+            pack_issues.push("Missing knowledge directory");
+        } else {
+            // Check 3: At least one knowledge file exists
+            let has_knowledge = ["patterns.md", "solutions.md", "workflows.md", "decisions.md", "preferences.md"]
+                .iter()
+                .any(|f| knowledge_dir.join(f).exists());
+
+            if !has_knowledge {
+                pack_issues.push("No knowledge files found");
+            }
+        }
+
+        // Check 4: Registry still exists
+        let registry_path = memory_dir.join("hive/registries").join(&pack.registry);
+        if !registry_path.exists() {
+            pack_issues.push("Registry removed (orphaned pack)");
+        }
+
+        if pack_issues.is_empty() {
+            println!("{}", "✓ Healthy".green());
+        } else {
+            println!("{} {} issue(s)", "⚠".yellow(), pack_issues.len());
+            total_issues += pack_issues.len();
+
+            if verbose || pack_issues.len() > 0 {
+                for issue in &pack_issues {
+                    println!("       {} {}", "•".yellow(), issue);
+                }
+            }
+
+            if auto_fix {
+                // Auto-fix: Re-download corrupted packs
+                if pack_issues.iter().any(|i| i.contains("Missing") || i.contains("Invalid")) {
+                    println!("       {} Attempting to repair...", "🔧".to_string());
+
+                    if let Err(e) = installer.update(&pack.name) {
+                        println!("       {} Repair failed: {}", "✗".red(), e);
+                    } else {
+                        println!("       {} Repaired successfully", "✓".green());
+                        total_issues -= pack_issues.len();
+                    }
+                }
+
+                // Auto-fix: Remove orphaned packs
+                if pack_issues.iter().any(|i| i.contains("orphaned")) {
+                    println!("       {} Removing orphaned pack...", "🔧".to_string());
+
+                    if let Err(e) = installer.uninstall(&pack.name) {
+                        println!("       {} Removal failed: {}", "✗".red(), e);
+                    } else {
+                        println!("       {} Removed successfully", "✓".green());
+                        total_issues -= pack_issues.len();
+                    }
+                }
+            }
+        }
+    }
+
+    println!();
+
+    if total_issues == 0 {
+        println!("   {} All packs healthy!", "✓".green().bold());
+    } else {
+        println!("   {} {} total issue(s) found", "⚠".yellow(), total_issues);
+
+        if !auto_fix {
+            println!("   💡 Run with {} to attempt automatic repairs", "--fix".cyan());
+        }
+    }
+
+    println!();
+
     Ok(())
 }
 
