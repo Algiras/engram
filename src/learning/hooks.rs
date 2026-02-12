@@ -1,7 +1,7 @@
 use crate::analytics::tracker::EventTracker;
 use crate::config::Config;
 use crate::error::Result;
-use crate::learning::{progress, signals};
+use crate::learning::{progress, signals, outcome_signals};
 
 /// Hook called after ingest to extract learning signals
 pub fn post_ingest_hook(config: &Config, project: &str) -> Result<()> {
@@ -36,7 +36,7 @@ pub fn post_ingest_hook(config: &Config, project: &str) -> Result<()> {
         storage_size,
     );
 
-    // Apply learning algorithms to signals
+    // Apply learning algorithms to usage-based signals
     for signal in &learning_signals {
         let reward = signal.to_reward();
 
@@ -53,6 +53,36 @@ pub fn post_ingest_hook(config: &Config, project: &str) -> Result<()> {
                 current_importance,
                 reward,
                 state.hyperparameters.importance_learning_rate,
+            );
+
+            state
+                .learned_parameters
+                .importance_boosts
+                .insert(knowledge_id, new_importance);
+        }
+    }
+
+    // Process outcome-based signals (feedback, errors, success rates)
+    let outcome_signals = outcome_signals::load_outcome_signals(&config.memory_dir, project)?;
+
+    for outcome in &outcome_signals {
+        let reward = outcome.to_reward();
+
+        // Outcome signals have higher weight than usage signals
+        let weighted_reward = reward * 1.5;  // 50% more weight for explicit outcomes
+
+        for knowledge_id in outcome.knowledge_ids() {
+            let current_importance = state
+                .learned_parameters
+                .importance_boosts
+                .get(&knowledge_id)
+                .copied()
+                .unwrap_or(0.0);
+
+            let new_importance = crate::learning::algorithms::learn_importance(
+                current_importance,
+                weighted_reward,
+                state.hyperparameters.importance_learning_rate * 1.2,  // Learn faster from outcomes
             );
 
             state
