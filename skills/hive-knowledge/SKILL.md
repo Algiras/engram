@@ -41,10 +41,16 @@ Trigger phrases:
 **Required**: claude-memory CLI tool
 
 ```bash
-# Install from source
-git clone https://github.com/Algiras/claude-memory
-cd claude-memory
-cargo install --path .
+# Install via curl (auto-detects OS/arch)
+curl -fsSL https://raw.githubusercontent.com/Algiras/claude-memory/master/install.sh | sh
+
+# Or pin a version
+curl -fsSL https://raw.githubusercontent.com/Algiras/claude-memory/master/install.sh | VERSION=v0.3.0 sh
+
+# Fallback: install from source
+# git clone https://github.com/Algiras/claude-memory
+# cd claude-memory
+# cargo install --path .
 
 # Verify installation
 claude-memory --version

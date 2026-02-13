@@ -34,8 +34,14 @@ This skill teaches Claude Code how to:
 **Required:** claude-memory CLI tool
 
 ```bash
-# Install claude-memory
-cargo install --git https://github.com/Algiras/claude-memory
+# Install claude-memory (auto-detects OS/arch)
+curl -fsSL https://raw.githubusercontent.com/Algiras/claude-memory/master/install.sh | sh
+
+# Optional: pin a version
+curl -fsSL https://raw.githubusercontent.com/Algiras/claude-memory/master/install.sh | VERSION=v0.3.0 sh
+
+# Fallback: source install
+# cargo install --git https://github.com/Algiras/claude-memory
 
 # Verify
 claude-memory --version

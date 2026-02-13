@@ -80,3 +80,43 @@ jobs:
         with:
           name: claude-memory-${{ matrix.target }}
           path: target/${{ matrix.target }}/release/${{ matrix.artifact }}
+
+  install-validation:
+    name: Install Validation
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Build Linux release binary
+        run: cargo build --release --target x86_64-unknown-linux-gnu
+
+      - name: Create mock release assets
+        run: |
+          mkdir -p /tmp/claude-memory-mock/releases/download/vtest
+          cp target/x86_64-unknown-linux-gnu/release/claude-memory /tmp/claude-memory-mock/
+          cd /tmp/claude-memory-mock
+          tar czf claude-memory-x86_64-unknown-linux-gnu.tar.gz claude-memory
+          mv claude-memory-x86_64-unknown-linux-gnu.tar.gz releases/download/vtest/
+          cd releases/download/vtest
+          sha256sum claude-memory-x86_64-unknown-linux-gnu.tar.gz > checksums.txt
+
+      - name: Validate installer
+        run: |
+          mkdir -p /tmp/claude-memory-install/bin
+          VERSION=vtest \
+          INSTALL_DIR=/tmp/claude-memory-install/bin \
+          RELEASE_BASE_URL=file:///tmp/claude-memory-mock/releases/download \
+          sh ./install.sh
+          /tmp/claude-memory-install/bin/claude-memory --version
+
+  release-workflow-guard:
+    name: Release Workflow Guard
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Assert checksum generation exists
+        run: |
+          grep -q "Generate SHA-256 checksums" .github/workflows/release.yml
+          grep -q "checksums.txt" .github/workflows/release.yml

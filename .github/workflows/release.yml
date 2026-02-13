@@ -20,15 +20,15 @@ jobs:
           - name: Linux x86_64
             os: ubuntu-latest
             target: x86_64-unknown-linux-gnu
-            archive: claude-memory-linux-x86_64.tar.gz
+            archive: claude-memory-x86_64-unknown-linux-gnu.tar.gz
           - name: macOS ARM
             os: macos-latest
             target: aarch64-apple-darwin
-            archive: claude-memory-darwin-arm64.tar.gz
+            archive: claude-memory-aarch64-apple-darwin.tar.gz
           - name: Windows x86_64
             os: windows-latest
             target: x86_64-pc-windows-msvc
-            archive: claude-memory-windows-x86_64.zip
+            archive: claude-memory-x86_64-pc-windows-msvc.zip
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
@@ -70,6 +70,16 @@ jobs:
         with:
           path: artifacts
 
+      - name: Generate SHA-256 checksums
+        run: |
+          cd artifacts
+          sha256sum \
+            claude-memory-x86_64-unknown-linux-gnu.tar.gz/claude-memory-x86_64-unknown-linux-gnu.tar.gz \
+            claude-memory-aarch64-apple-darwin.tar.gz/claude-memory-aarch64-apple-darwin.tar.gz \
+            claude-memory-x86_64-pc-windows-msvc.zip/claude-memory-x86_64-pc-windows-msvc.zip \
+            | sed 's|  .*/|  |' > checksums.txt
+          cat checksums.txt
+
       - name: Create GitHub Release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -77,6 +87,7 @@ jobs:
           gh release create ${{ github.ref_name }} \
             --title "${{ github.ref_name }}" \
             --generate-notes \
-            artifacts/claude-memory-linux-x86_64.tar.gz/claude-memory-linux-x86_64.tar.gz \
-            artifacts/claude-memory-darwin-arm64.tar.gz/claude-memory-darwin-arm64.tar.gz \
-            artifacts/claude-memory-windows-x86_64.zip/claude-memory-windows-x86_64.zip
+            artifacts/claude-memory-x86_64-unknown-linux-gnu.tar.gz/claude-memory-x86_64-unknown-linux-gnu.tar.gz \
+            artifacts/claude-memory-aarch64-apple-darwin.tar.gz/claude-memory-aarch64-apple-darwin.tar.gz \
+            artifacts/claude-memory-x86_64-pc-windows-msvc.zip/claude-memory-x86_64-pc-windows-msvc.zip \
+            artifacts/checksums.txt

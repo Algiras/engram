@@ -10,6 +10,27 @@ Conversation memory system for Claude Code. Archives conversation sessions, extr
 curl -fsSL https://raw.githubusercontent.com/Algiras/claude-memory/master/install.sh | sh
 ```
 
+The installer auto-detects your OS/architecture and downloads the matching release asset.
+
+**Manual checksum verification (optional):**
+
+```bash
+VERSION=v0.3.0
+ASSET=claude-memory-aarch64-apple-darwin.tar.gz   # choose your platform asset
+
+curl -fsSLO https://github.com/Algiras/claude-memory/releases/download/${VERSION}/${ASSET}
+curl -fsSLO https://github.com/Algiras/claude-memory/releases/download/${VERSION}/checksums.txt
+
+# macOS
+shasum -a 256 ${ASSET}
+
+# Linux
+sha256sum ${ASSET}
+
+# Compare output hash with the matching line in checksums.txt
+grep " ${ASSET}$" checksums.txt
+```
+
 **From source:**
 
 ```bash
@@ -114,7 +135,7 @@ Credentials are stored in `~/.config/claude-memory/auth.json` with `0600` permis
 | `status` | Show memory statistics |
 | `projects` | List all discovered projects |
 | `doctor [--fix]` | Health check for knowledge files and packs |
-| `export <project> [--format json\|md]` | Export knowledge in various formats |
+| `export <project> [markdown\|json\|html]` | Export project knowledge to various formats |
 | `tui` | Interactive terminal UI browser |
 | `auth login` | Configure LLM provider credentials |
 | `auth list` | Show configured providers |
@@ -150,6 +171,7 @@ See [HIVE_GUIDE.md](docs/HIVE_GUIDE.md) for full hive commands. See [LEARNING_GU
 - [EMBEDDINGS_GUIDE.md](docs/EMBEDDINGS_GUIDE.md) - Semantic search
 - [SYNC_GUIDE.md](docs/SYNC_GUIDE.md) - Knowledge synchronization
 - [EXPORT_GUIDE.md](docs/EXPORT_GUIDE.md) - Export formats
+- [PUBLISHING.md](docs/PUBLISHING.md) - Release and publishing checklist
 
 ### Output Structure
 

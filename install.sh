@@ -1,113 +1,164 @@
 #!/bin/sh
 # Install claude-memory
 #
-# Public repo:  curl -fsSL https://raw.githubusercontent.com/Algiras/claude-memory/master/install.sh | sh
-# Private repo: GH_TOKEN=ghp_... sh install.sh
-#               or: gh auth token | INSTALL_DIR=~/.local/bin sh install.sh
+# Usage: curl -fsSL https://raw.githubusercontent.com/Algiras/claude-memory/master/install.sh | sh
+#
+# Options:
+#   INSTALL_DIR=~/.local/bin  - Custom install directory (default: /usr/local/bin)
+#   VERSION=v0.3.0            - Install a specific release tag (default: latest)
 
 set -e
 
-REPO="Algiras/claude-memory"
+REPO="${REPO:-Algiras/claude-memory}"
 BINARY="claude-memory"
 INSTALL_DIR="${INSTALL_DIR:-/usr/local/bin}"
+RELEASES_API_URL="${RELEASES_API_URL:-https://api.github.com/repos/${REPO}/releases}"
+RELEASE_BASE_URL="${RELEASE_BASE_URL:-https://github.com/${REPO}/releases/download}"
 
-# Detect OS and architecture
+require_cmd() {
+    if ! command -v "$1" >/dev/null 2>&1; then
+        echo "Error: required command '$1' not found." >&2
+        exit 1
+    fi
+}
+
+check_dependencies() {
+    require_cmd curl
+    require_cmd uname
+    require_cmd mktemp
+    require_cmd install
+    require_cmd awk
+}
+
+sha256_file() {
+    file="$1"
+    if command -v sha256sum >/dev/null 2>&1; then
+        sha256sum "$file" | awk '{print $1}'
+    elif command -v shasum >/dev/null 2>&1; then
+        shasum -a 256 "$file" | awk '{print $1}'
+    else
+        echo "Error: SHA-256 tool not found (need sha256sum or shasum)." >&2
+        exit 1
+    fi
+}
+
+verify_checksum() {
+    archive_name="$1"
+    archive_path="$2"
+    checksum_file="$3"
+
+    expected="$(awk -v name="$archive_name" '$2 == name {print $1}' "$checksum_file" | head -n 1)"
+    if [ -z "$expected" ]; then
+        echo "Error: checksum for $archive_name not found in checksums.txt." >&2
+        exit 1
+    fi
+
+    actual="$(sha256_file "$archive_path")"
+    if [ "$actual" != "$expected" ]; then
+        echo "Error: checksum verification failed for $archive_name." >&2
+        echo "Expected: $expected" >&2
+        echo "Actual:   $actual" >&2
+        exit 1
+    fi
+}
+
 detect_platform() {
     OS="$(uname -s)"
     ARCH="$(uname -m)"
+    LEGACY_ARCHIVE=""
 
-    case "$OS" in
-        Linux)  PLATFORM="linux" ;;
-        Darwin) PLATFORM="darwin" ;;
-        MINGW*|MSYS*|CYGWIN*) PLATFORM="windows" ;;
-        *) echo "Error: unsupported OS: $OS" >&2; exit 1 ;;
+    case "${OS}-${ARCH}" in
+        Linux-x86_64|Linux-amd64)
+            TARGET="x86_64-unknown-linux-gnu"
+            EXT="tar.gz"
+            LEGACY_ARCHIVE="claude-memory-linux-x86_64.tar.gz"
+            ;;
+        Linux-aarch64|Linux-arm64)
+            echo "Error: no prebuilt binary for Linux ARM64 yet." >&2
+            echo "Build from source: cargo install --git https://github.com/${REPO}" >&2
+            exit 1
+            ;;
+        Darwin-arm64|Darwin-aarch64)
+            TARGET="aarch64-apple-darwin"
+            EXT="tar.gz"
+            LEGACY_ARCHIVE="claude-memory-darwin-arm64.tar.gz"
+            ;;
+        Darwin-x86_64)
+            echo "Error: no prebuilt binary for macOS Intel (x86_64)." >&2
+            echo "Build from source: cargo install --git https://github.com/${REPO}" >&2
+            exit 1
+            ;;
+        MINGW*-x86_64|MSYS*-x86_64|CYGWIN*-x86_64)
+            TARGET="x86_64-pc-windows-msvc"
+            EXT="zip"
+            BINARY="claude-memory.exe"
+            LEGACY_ARCHIVE="claude-memory-windows-x86_64.zip"
+            ;;
+        *)
+            echo "Error: no prebuilt binary for ${OS}/${ARCH}" >&2
+            echo "Build from source: cargo install --git https://github.com/${REPO}" >&2
+            exit 1
+            ;;
     esac
 
-    case "$ARCH" in
-        x86_64|amd64)   ARCH="x86_64" ;;
-        arm64|aarch64)   ARCH="arm64" ;;
-        *) echo "Error: unsupported architecture: $ARCH" >&2; exit 1 ;;
-    esac
-
-    # Map to release asset names
-    case "${PLATFORM}-${ARCH}" in
-        linux-x86_64)   ARCHIVE="${BINARY}-linux-x86_64.tar.gz" ;;
-        darwin-arm64)    ARCHIVE="${BINARY}-darwin-arm64.tar.gz" ;;
-        darwin-x86_64)   ARCHIVE="${BINARY}-darwin-arm64.tar.gz" ;; # Rosetta
-        windows-x86_64)  ARCHIVE="${BINARY}-windows-x86_64.zip" ;;
-        *) echo "Error: no prebuilt binary for ${PLATFORM}-${ARCH}" >&2; exit 1 ;;
-    esac
+    ARCHIVE_PRIMARY="claude-memory-${TARGET}.${EXT}"
 }
 
-# Build auth header if token available
-auth_header() {
-    if [ -n "$GH_TOKEN" ]; then
-        echo "Authorization: token ${GH_TOKEN}"
-    elif command -v gh >/dev/null 2>&1; then
-        TOKEN="$(gh auth token 2>/dev/null || true)"
-        if [ -n "$TOKEN" ]; then
-            echo "Authorization: token ${TOKEN}"
-        fi
-    fi
-}
-
-# Get latest release tag
 get_latest_version() {
-    AUTH="$(auth_header)"
-    if [ -n "$AUTH" ]; then
-        CURL_AUTH="-H"
-    else
-        CURL_AUTH=""
-        AUTH=""
+    if [ -n "$VERSION" ]; then
+        return
     fi
 
-    VERSION="$(curl -fsSL ${CURL_AUTH:+"$CURL_AUTH"} ${AUTH:+"$AUTH"} \
-        "https://api.github.com/repos/${REPO}/releases/latest" \
+    VERSION="$(curl -fsSL "${RELEASES_API_URL}/latest" \
         | grep '"tag_name"' \
         | head -1 \
         | sed 's/.*"tag_name": *"\([^"]*\)".*/\1/')"
 
     if [ -z "$VERSION" ]; then
         echo "Error: could not determine latest version." >&2
-        echo "If the repo is private, set GH_TOKEN or install gh CLI first." >&2
         exit 1
     fi
 }
 
 main() {
+    check_dependencies
     detect_platform
     get_latest_version
 
-    AUTH="$(auth_header)"
-    URL="https://github.com/${REPO}/releases/download/${VERSION}/${ARCHIVE}"
+    case "$EXT" in
+        tar.gz) require_cmd tar ;;
+        zip) require_cmd unzip ;;
+    esac
+
     TMPDIR="$(mktemp -d)"
     trap 'rm -rf "$TMPDIR"' EXIT
 
-    echo "Installing ${BINARY} ${VERSION} (${PLATFORM}/${ARCH})..."
-    echo "  Downloading ${ARCHIVE}"
-
-    if [ -n "$AUTH" ]; then
-        # Private repo: find asset ID via API, download with octet-stream accept
-        RELEASE_JSON="$(curl -fsSL -H "$AUTH" \
-            "https://api.github.com/repos/${REPO}/releases/tags/${VERSION}")"
-
-        # Extract the API url for our asset (sits on the line before the asset name)
-        ASSET_URL="$(echo "$RELEASE_JSON" \
-            | grep -B5 "\"name\": *\"${ARCHIVE}\"" \
-            | grep '"url"' \
-            | head -1 \
-            | sed 's/.*"url": *"\([^"]*\)".*/\1/')"
-
-        if [ -n "$ASSET_URL" ]; then
-            curl -fsSL -H "$AUTH" -H "Accept: application/octet-stream" \
-                "$ASSET_URL" -o "${TMPDIR}/${ARCHIVE}"
-        else
-            echo "Error: could not find asset ${ARCHIVE} in release ${VERSION}" >&2
-            exit 1
-        fi
-    else
-        curl -fsSL -L "$URL" -o "${TMPDIR}/${ARCHIVE}"
+    CHECKSUMS_URL="${RELEASE_BASE_URL}/${VERSION}/checksums.txt"
+    CHECKSUMS_PATH="${TMPDIR}/checksums.txt"
+    if ! curl -fsSL -L "$CHECKSUMS_URL" -o "$CHECKSUMS_PATH"; then
+        echo "Error: could not download checksums.txt for ${VERSION}." >&2
+        exit 1
     fi
+
+    ARCHIVE=""
+    for candidate in "$ARCHIVE_PRIMARY" "$LEGACY_ARCHIVE"; do
+        [ -n "$candidate" ] || continue
+        URL="${RELEASE_BASE_URL}/${VERSION}/${candidate}"
+        CANDIDATE_PATH="${TMPDIR}/${candidate}"
+        if curl -fsSL -L "$URL" -o "$CANDIDATE_PATH"; then
+            verify_checksum "$candidate" "$CANDIDATE_PATH" "$CHECKSUMS_PATH"
+            ARCHIVE="$candidate"
+            break
+        fi
+    done
+
+    if [ -z "$ARCHIVE" ]; then
+        echo "Error: could not download a compatible binary for ${TARGET}." >&2
+        exit 1
+    fi
+
+    echo "Detected platform: ${OS}/${ARCH} -> ${TARGET}"
+    echo "Installing ${BINARY} ${VERSION} (${TARGET})..."
 
     # Extract
     cd "$TMPDIR"
@@ -116,23 +167,34 @@ main() {
         *.zip)    unzip -q "$ARCHIVE" ;;
     esac
 
-    # Install
-    if [ -w "$INSTALL_DIR" ]; then
-        mv "${BINARY}" "${INSTALL_DIR}/${BINARY}"
-    else
-        echo "  Installing to ${INSTALL_DIR} (requires sudo)"
-        sudo mv "${BINARY}" "${INSTALL_DIR}/${BINARY}"
+    SRC="${BINARY}"
+    if [ ! -f "$SRC" ]; then
+        SRC="$(find . -type f -name "$BINARY" | head -n 1)"
     fi
 
-    chmod +x "${INSTALL_DIR}/${BINARY}"
+    if [ -z "$SRC" ] || [ ! -f "$SRC" ]; then
+        echo "Error: extracted archive did not contain ${BINARY}." >&2
+        exit 1
+    fi
+
+    mkdir -p "$INSTALL_DIR"
+
+    # Install
+    if [ -w "$INSTALL_DIR" ]; then
+        install -m 755 "$SRC" "${INSTALL_DIR}/${BINARY}"
+    else
+        echo "  Installing to ${INSTALL_DIR} (requires sudo)"
+        sudo install -m 755 "$SRC" "${INSTALL_DIR}/${BINARY}"
+    fi
 
     echo ""
     echo "Installed ${BINARY} ${VERSION} to ${INSTALL_DIR}/${BINARY}"
     echo ""
     echo "Get started:"
-    echo "  ${BINARY} auth login              # Configure LLM provider"
-    echo "  ${BINARY} ingest --skip-knowledge  # Archive conversations"
-    echo "  ${BINARY} projects                 # List projects"
+    echo "  claude-memory auth login              # Configure LLM provider"
+    echo "  claude-memory ingest --skip-knowledge  # Archive conversations"
+    echo "  claude-memory projects                 # List projects"
+    echo "  claude-memory tui                      # Interactive browser"
 }
 
 main
