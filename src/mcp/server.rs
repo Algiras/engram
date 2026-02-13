@@ -150,6 +150,92 @@ impl McpServer {
                     "properties": {}
                 }),
             },
+            Tool {
+                name: "add".to_string(),
+                description: "Add a manual knowledge entry to a project".to_string(),
+                input_schema: json!({
+                    "type": "object",
+                    "properties": {
+                        "project": {
+                            "type": "string",
+                            "description": "Project name"
+                        },
+                        "category": {
+                            "type": "string",
+                            "description": "Category: decisions, solutions, patterns, or preferences",
+                            "enum": ["decisions", "solutions", "patterns", "preferences"]
+                        },
+                        "content": {
+                            "type": "string",
+                            "description": "Knowledge content in markdown format"
+                        },
+                        "label": {
+                            "type": "string",
+                            "description": "Optional label for the entry"
+                        }
+                    },
+                    "required": ["project", "category", "content"]
+                }),
+            },
+            Tool {
+                name: "analytics".to_string(),
+                description: "Show usage analytics and top knowledge for a project".to_string(),
+                input_schema: json!({
+                    "type": "object",
+                    "properties": {
+                        "project": {
+                            "type": "string",
+                            "description": "Project name (optional, shows all if not provided)"
+                        },
+                        "days": {
+                            "type": "number",
+                            "description": "Number of days to analyze (default: 30)",
+                            "default": 30
+                        }
+                    }
+                }),
+            },
+            Tool {
+                name: "search_semantic".to_string(),
+                description: "Semantic search using embeddings (vector similarity)".to_string(),
+                input_schema: json!({
+                    "type": "object",
+                    "properties": {
+                        "query": {
+                            "type": "string",
+                            "description": "Search query"
+                        },
+                        "project": {
+                            "type": "string",
+                            "description": "Limit to specific project (optional)"
+                        },
+                        "limit": {
+                            "type": "number",
+                            "description": "Maximum results to return (default: 10)",
+                            "default": 10
+                        }
+                    },
+                    "required": ["query"]
+                }),
+            },
+            Tool {
+                name: "graph_query".to_string(),
+                description: "Query knowledge graph for concept relationships and connections".to_string(),
+                input_schema: json!({
+                    "type": "object",
+                    "properties": {
+                        "project": {
+                            "type": "string",
+                            "description": "Project name"
+                        },
+                        "concept": {
+                            "type": "string",
+                            "description": "Concept to query (e.g., 'authentication', 'database')"
+                        }
+                    },
+                    "required": ["project", "concept"]
+                }),
+            },
         ];
 
         Response::success(id, json!({ "tools": tools }))
@@ -168,6 +254,10 @@ impl McpServer {
             "search" => self.tool_search(args),
             "lookup" => self.tool_lookup(args),
             "projects" => self.tool_projects(args),
+            "add" => self.tool_add(args),
+            "analytics" => self.tool_analytics(args),
+            "search_semantic" => self.tool_search_semantic(args),
+            "graph_query" => self.tool_graph_query(args),
             _ => Err(MemoryError::Config(format!("Unknown tool: {}", tool_name))),
         };
 
@@ -483,5 +573,104 @@ impl McpServer {
         }
 
         Some(out)
+    }
+
+    fn tool_add(&self, args: serde_json::Value) -> Result<String> {
+        let project = args["project"]
+            .as_str()
+            .ok_or_else(|| MemoryError::Config("Missing project parameter".into()))?;
+        let category = args["category"]
+            .as_str()
+            .ok_or_else(|| MemoryError::Config("Missing category parameter".into()))?;
+        let content = args["content"]
+            .as_str()
+            .ok_or_else(|| MemoryError::Config("Missing content parameter".into()))?;
+        let label = args["label"].as_str();
+
+        // Delegate to CLI command (simpler than reimplementing)
+        let mut cmd = std::process::Command::new("engram");
+        cmd.args(["add", project, category, content]);
+        if let Some(l) = label {
+            cmd.args(["--label", l]);
+        }
+
+        let output = cmd.output()?;
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            return Err(MemoryError::Config(format!("Add failed: {}", stderr)));
+        }
+
+        Ok(String::from_utf8_lossy(&output.stdout).to_string())
+    }
+
+    fn tool_analytics(&self, args: serde_json::Value) -> Result<String> {
+        let days = args["days"].as_u64().unwrap_or(30);
+
+        // Delegate to CLI
+        let mut cmd = std::process::Command::new("engram");
+        cmd.args(["analytics"]);
+
+        if let Some(proj) = args["project"].as_str() {
+            cmd.args([proj]);
+        }
+
+        cmd.args(["--days", &days.to_string()]);
+
+        let output = cmd.output()?;
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            return Err(MemoryError::Config(format!("Analytics failed: {}", stderr)));
+        }
+
+        Ok(String::from_utf8_lossy(&output.stdout).to_string())
+    }
+
+    fn tool_search_semantic(&self, args: serde_json::Value) -> Result<String> {
+        let query = args["query"]
+            .as_str()
+            .ok_or_else(|| MemoryError::Config("Missing query parameter".into()))?;
+        let limit = args["limit"].as_u64().unwrap_or(10);
+
+        // Delegate to CLI
+        let mut cmd = std::process::Command::new("engram");
+        cmd.args(["search-semantic", query]);
+
+        if let Some(proj) = args["project"].as_str() {
+            cmd.args(["--project", proj]);
+        }
+
+        cmd.args(["--limit", &limit.to_string()]);
+
+        let output = cmd.output()?;
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            return Err(MemoryError::Config(format!(
+                "Semantic search failed: {}",
+                stderr
+            )));
+        }
+
+        Ok(String::from_utf8_lossy(&output.stdout).to_string())
+    }
+
+    fn tool_graph_query(&self, args: serde_json::Value) -> Result<String> {
+        let project = args["project"]
+            .as_str()
+            .ok_or_else(|| MemoryError::Config("Missing project parameter".into()))?;
+        let concept = args["concept"]
+            .as_str()
+            .ok_or_else(|| MemoryError::Config("Missing concept parameter".into()))?;
+
+        // Delegate to CLI
+        let output = std::process::Command::new("engram")
+            .args(["graph", "query", project, concept])
+            .output()?;
+
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            return Err(MemoryError::Config(format!("Graph query failed: {}", stderr)));
+        }
+
+        Ok(String::from_utf8_lossy(&output.stdout).to_string())
     }
 }
