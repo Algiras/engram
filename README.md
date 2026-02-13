@@ -136,7 +136,7 @@ Credentials are stored in `~/.config/claude-memory/auth.json` with `0600` permis
 | `projects` | List all discovered projects |
 | `doctor [--fix]` | Health check for knowledge files and packs |
 | `export <project> [markdown\|json\|html]` | Export project knowledge to various formats |
-| `tui` | Interactive terminal UI browser |
+| `tui` | Interactive terminal UI (browse, search, packs, analytics, health, learning) |
 | `auth login` | Configure LLM provider credentials |
 | `auth list` | Show configured providers |
 | `auth logout <provider>` | Remove provider credentials |

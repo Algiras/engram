@@ -379,3 +379,163 @@ pub fn render_pack_detail(pack: &PackEntry, memory_dir: &Path) -> String {
 
     output
 }
+
+/// Load learning dashboard data for a project
+pub fn load_learning_dashboard(memory_dir: &Path, project: &str) -> String {
+    use crate::learning::progress::load_state;
+
+    let learning_dir = memory_dir.join("learning");
+
+    if !learning_dir.join(project).join("state.json").exists() {
+        return format!(
+            "No learning data for project '{}'\n\nRun learning simulation to generate data:\n  claude-memory learn simulate --project {}",
+            project, project
+        );
+    }
+
+    match load_state(memory_dir, project) {
+        Ok(state) => {
+            // Capture the display output as a string
+            let mut output = String::new();
+            output.push_str(&format!("Learning Progress: {}\n", project));
+            output.push_str(&format!("Created: {}\n", state.created_at.format("%Y-%m-%d %H:%M:%S")));
+            output.push_str(&format!("Updated: {}\n", state.updated_at.format("%Y-%m-%d %H:%M:%S")));
+            output.push_str(&format!("Sessions: {}\n\n", state.session_count()));
+            
+            let converged = state.has_converged();
+            output.push_str(&format!("Status: {}\n\n", if converged { "Converged ✓" } else { "Learning..." }));
+            
+            if let Some(latest) = state.metrics_history.last() {
+                output.push_str("Current Metrics:\n");
+                output.push_str(&format!("  Health Score: {}\n", latest.health_score));
+                output.push_str(&format!("  Avg Query Time: {} ms\n", latest.avg_query_time_ms));
+                output.push_str(&format!("  Stale Knowledge: {:.1}%\n", latest.stale_knowledge_pct));
+                output.push_str(&format!("  Storage Size: {:.1} MB\n", latest.storage_size_mb));
+            }
+            
+            output.push_str(&format!("\nAdaptation Success Rate: {:.1}%\n", state.adaptation_success_rate() * 100.0));
+            output.push_str(&format!("Total Adaptations: {}\n", state.adaptation_history.len()));
+            
+            output
+        }
+        Err(e) => format!("Error loading learning state: {}", e),
+    }
+}
+
+/// Load analytics data for a project
+pub fn load_analytics(memory_dir: &Path, project: &str, days: u32) -> String {
+    use crate::analytics::insights::generate_insights;
+    use crate::analytics::tracker::EventTracker;
+
+    let tracker = EventTracker::new(memory_dir);
+
+    match tracker.get_events(Some(project), days) {
+        Ok(events) => {
+            let insights = generate_insights(&events);
+
+            let mut output = String::new();
+            output.push_str(&format!("Analytics: {} (last {} days)\n\n", project, days));
+            output.push_str(&format!("Total Events: {}\n", insights.total_events));
+            output.push_str(&format!("Unique Projects: {}\n", insights.unique_projects));
+            
+            if let Some(most_active) = &insights.most_active_project {
+                output.push_str(&format!("Most Active Project: {}\n", most_active));
+            }
+            
+            output.push_str(&format!("Most Common Event: {}\n", insights.most_common_event));
+            output.push_str(&format!("Usage Trend: {}\n\n", insights.usage_trend));
+
+            if !insights.top_knowledge.is_empty() {
+                output.push_str("Top Knowledge:\n");
+                for item in &insights.top_knowledge {
+                    output.push_str(&format!("  • {}\n", item));
+                }
+                output.push('\n');
+            }
+
+            if !insights.stale_knowledge.is_empty() {
+                output.push_str("Stale Knowledge:\n");
+                for item in &insights.stale_knowledge {
+                    output.push_str(&format!("  • {}\n", item));
+                }
+                output.push('\n');
+            }
+
+            // Event log
+            output.push_str(&format!("Recent Events ({}):\n", events.len().min(20)));
+            for event in events.iter().rev().take(20) {
+                output.push_str(&format!(
+                    "  {} - {:?} [{}]\n",
+                    event.timestamp.format("%Y-%m-%d %H:%M:%S"),
+                    event.event_type,
+                    event.project
+                ));
+            }
+
+            output
+        }
+        Err(e) => format!("Error loading analytics: {}", e),
+    }
+}
+
+/// Load health check report for a project
+pub fn load_health_report(memory_dir: &Path, project: &str) -> String {
+    use crate::health::{check_project_health, Severity};
+
+    match check_project_health(memory_dir, project) {
+        Ok(report) => {
+            let mut output = String::new();
+            output.push_str(&format!("Health Check: {}\n\n", project));
+            output.push_str(&format!("Score: {}/100 ({})\n\n", report.score, report.health_status()));
+
+            if report.issues.is_empty() {
+                output.push_str("✓ No issues found!\n");
+            } else {
+                output.push_str(&format!("Issues ({}):\n", report.issues.len()));
+
+                // Group by severity
+                let critical: Vec<_> = report.issues.iter().filter(|i| i.severity == Severity::Critical).collect();
+                let warnings: Vec<_> = report.issues.iter().filter(|i| i.severity == Severity::Warning).collect();
+                let info: Vec<_> = report.issues.iter().filter(|i| i.severity == Severity::Info).collect();
+
+                if !critical.is_empty() {
+                    output.push_str("\nCRITICAL:\n");
+                    for issue in critical {
+                        output.push_str(&format!("  ✗ {}\n", issue.description));
+                        if let Some(cmd) = &issue.fix_command {
+                            output.push_str(&format!("    Fix: {}\n", cmd));
+                        }
+                    }
+                }
+
+                if !warnings.is_empty() {
+                    output.push_str("\nWARNINGS:\n");
+                    for issue in warnings {
+                        output.push_str(&format!("  ! {}\n", issue.description));
+                        if let Some(cmd) = &issue.fix_command {
+                            output.push_str(&format!("    Fix: {}\n", cmd));
+                        }
+                    }
+                }
+
+                if !info.is_empty() {
+                    output.push_str("\nINFO:\n");
+                    for issue in info {
+                        output.push_str(&format!("  • {}\n", issue.description));
+                    }
+                }
+            }
+
+            if !report.recommendations.is_empty() {
+                output.push_str("\nRecommendations:\n");
+                for rec in &report.recommendations {
+                    output.push_str(&format!("  → {}\n", rec));
+                }
+            }
+
+            output
+        }
+        Err(e) => format!("Error running health check: {}", e),
+    }
+}
+

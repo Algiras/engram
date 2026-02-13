@@ -19,7 +19,12 @@ cargo test
 cargo build --release
 ```
 
-CI also runs an installer smoke test (`Install Validation`) that executes `install.sh` against mocked release assets and verifies `claude-memory --version`.
+CI also runs installer validation (`Install Validation`) fully in CI:
+
+- version-pinned install path (`VERSION=vtest`)
+- latest-tag API lookup path
+- checksum tamper negative test (must fail)
+
 CI includes a release guard (`Release Workflow Guard`) that fails if checksum generation/upload is removed from `.github/workflows/release.yml`.
 
 Optional crate package validation:

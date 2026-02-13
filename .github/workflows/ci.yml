@@ -94,6 +94,7 @@ jobs:
 
       - name: Create mock release assets
         run: |
+          mkdir -p /tmp/claude-memory-mock/api/releases
           mkdir -p /tmp/claude-memory-mock/releases/download/vtest
           cp target/x86_64-unknown-linux-gnu/release/claude-memory /tmp/claude-memory-mock/
           cd /tmp/claude-memory-mock
@@ -101,15 +102,42 @@ jobs:
           mv claude-memory-x86_64-unknown-linux-gnu.tar.gz releases/download/vtest/
           cd releases/download/vtest
           sha256sum claude-memory-x86_64-unknown-linux-gnu.tar.gz > checksums.txt
+          printf '{"tag_name":"vtest"}\n' > /tmp/claude-memory-mock/api/releases/latest
 
-      - name: Validate installer
+      - name: Validate installer (VERSION pinned)
         run: |
-          mkdir -p /tmp/claude-memory-install/bin
+          mkdir -p /tmp/claude-memory-install/bin-pinned
           VERSION=vtest \
-          INSTALL_DIR=/tmp/claude-memory-install/bin \
+          INSTALL_DIR=/tmp/claude-memory-install/bin-pinned \
           RELEASE_BASE_URL=file:///tmp/claude-memory-mock/releases/download \
           sh ./install.sh
-          /tmp/claude-memory-install/bin/claude-memory --version
+          /tmp/claude-memory-install/bin-pinned/claude-memory --version
+
+      - name: Validate installer (latest API lookup)
+        run: |
+          mkdir -p /tmp/claude-memory-install/bin-latest
+          INSTALL_DIR=/tmp/claude-memory-install/bin-latest \
+          RELEASES_API_URL=file:///tmp/claude-memory-mock/api/releases \
+          RELEASE_BASE_URL=file:///tmp/claude-memory-mock/releases/download \
+          sh ./install.sh
+          /tmp/claude-memory-install/bin-latest/claude-memory --version
+
+      - name: Validate checksum tamper detection
+        run: |
+          mkdir -p /tmp/claude-memory-mock/releases/download/vtamper
+          cp /tmp/claude-memory-mock/releases/download/vtest/claude-memory-x86_64-unknown-linux-gnu.tar.gz \
+            /tmp/claude-memory-mock/releases/download/vtamper/
+          cp /tmp/claude-memory-mock/releases/download/vtest/checksums.txt \
+            /tmp/claude-memory-mock/releases/download/vtamper/
+          printf 'tamper' >> /tmp/claude-memory-mock/releases/download/vtamper/claude-memory-x86_64-unknown-linux-gnu.tar.gz
+
+          if VERSION=vtamper \
+            INSTALL_DIR=/tmp/claude-memory-install/bin-tamper \
+            RELEASE_BASE_URL=file:///tmp/claude-memory-mock/releases/download \
+            sh ./install.sh; then
+            echo "Expected checksum verification failure, but install succeeded" >&2
+            exit 1
+          fi
 
   release-workflow-guard:
     name: Release Workflow Guard

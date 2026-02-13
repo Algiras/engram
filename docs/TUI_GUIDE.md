@@ -2,11 +2,22 @@
 
 The `claude-memory` TUI provides an interactive interface for browsing and managing your conversation memory.
 
-## Launching
+## Quick Start
 
 ```bash
 claude-memory tui
 ```
+
+## What's New in v0.3.0 ⭐
+
+Three major features added to the TUI:
+
+1. **Learning Dashboard** (`L` key) - View reinforcement learning metrics, health scores, and adaptation success rates
+2. **Analytics Viewer** (`A` key) - Usage insights, event distribution, top/stale knowledge tracking with configurable time windows
+3. **Health Check** (`H` key) - Project diagnostics with issue severity, auto-fix commands, and recommendations
+4. **Help Screen** (`?` key) - Complete keyboard shortcuts reference
+
+See [TUI_FEATURES.md](TUI_FEATURES.md) for comprehensive documentation.
 
 ## Features
 

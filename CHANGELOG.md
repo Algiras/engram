@@ -2,6 +2,22 @@
 
 All notable changes to claude-memory will be documented in this file.
 
+## [Unreleased]
+
+### Added (TUI Enhancements)
+- **Learning Dashboard** (`L` key) - Interactive view of reinforcement learning metrics, health scores, adaptation success rates, and convergence status
+- **Analytics Viewer** (`A` key) - Usage insights with configurable time windows (±7 days), event distribution, top/stale knowledge tracking, and recent event log  
+- **Health Check** (`H` key) - Project diagnostics with severity-grouped issues, auto-fix commands, and recommendations
+- **Help Screen** (`?` key) - Complete keyboard shortcuts reference accessible from any screen
+- Lazy loading for all new screens to avoid startup delays
+- Consistent vim-style navigation across all screens
+
+### Documentation
+- `docs/TUI_ENHANCEMENT.md` - Design document with architecture and future roadmap
+- `docs/TUI_FEATURES.md` - Feature reference for all 8 TUI screens
+- `docs/TUI_IMPLEMENTATION_SUMMARY.md` - Implementation details
+- Updated `docs/TUI_GUIDE.md` and `README.md`
+
 ## [0.3.0] - 2026-02-13
 
 ### Added

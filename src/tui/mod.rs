@@ -17,8 +17,10 @@ enum Screen {
     Browser,
     Viewer,
     Packs,
-    PackDetail,
-}
+    PackDetail,    Learning,
+    Analytics,
+    Health,
+    Help,}
 
 #[derive(Clone, PartialEq)]
 pub enum PackAction {
@@ -54,6 +56,19 @@ pub struct App {
     pack_search_query: String,
     pack_search_matches: Vec<usize>, // Indices of matching packs
     pack_search_index: usize,
+    
+    // Learning state
+    learning_content: String,
+    learning_scroll: u16,
+    
+    // Analytics state
+    analytics_content: String,
+    analytics_scroll: u16,
+    analytics_days: u32,
+    
+    // Health state
+    health_content: String,
+    health_scroll: u16,
 }
 
 impl App {
@@ -85,6 +100,13 @@ impl App {
             pack_search_query: String::new(),
             pack_search_matches: Vec::new(),
             pack_search_index: 0,
+            learning_content: String::new(),
+            learning_scroll: 0,
+            analytics_content: String::new(),
+            analytics_scroll: 0,
+            analytics_days: 30,
+            health_content: String::new(),
+            health_scroll: 0,
         }
     }
 
@@ -203,6 +225,10 @@ impl App {
                 Screen::Viewer => ui::render_viewer(f, self),
                 Screen::Packs => ui::render_packs(f, self),
                 Screen::PackDetail => ui::render_pack_detail(f, self),
+                Screen::Learning => ui::render_learning(f, self),
+                Screen::Analytics => ui::render_analytics(f, self),
+                Screen::Health => ui::render_health(f, self),
+                Screen::Help => ui::render_help(f, self),
             })?;
 
             if let Event::Key(key) = event::read()? {
@@ -233,6 +259,18 @@ impl App {
                     }
                     Screen::PackDetail => {
                         self.handle_pack_detail_keys(key.code, terminal)?;
+                    }
+                    Screen::Learning => {
+                        self.handle_learning_keys(key.code, terminal)?;
+                    }
+                    Screen::Analytics => {
+                        self.handle_analytics_keys(key.code, terminal)?;
+                    }
+                    Screen::Health => {
+                        self.handle_health_keys(key.code, terminal)?;
+                    }
+                    Screen::Help => {
+                        self.handle_help_keys(key.code)?;
                     }
                 }
             }
@@ -349,6 +387,32 @@ impl App {
             KeyCode::Char('p') => {
                 self.screen = Screen::Packs;
                 self.pack_index = 0;
+            }
+
+            // Switch to Learning screen
+            KeyCode::Char('L') => {
+                self.load_learning_data();
+                self.screen = Screen::Learning;
+                self.learning_scroll = 0;
+            }
+
+            // Switch to Analytics screen
+            KeyCode::Char('A') => {
+                self.load_analytics_data();
+                self.screen = Screen::Analytics;
+                self.analytics_scroll = 0;
+            }
+
+            // Switch to Health screen
+            KeyCode::Char('H') => {
+                self.load_health_data();
+                self.screen = Screen::Health;
+                self.health_scroll = 0;
+            }
+
+            // Show Help
+            KeyCode::Char('?') => {
+                self.screen = Screen::Help;
             }
 
             _ => {}
@@ -669,6 +733,183 @@ impl App {
 
     pub fn is_pack_search_match(&self, pack_idx: usize) -> bool {
         self.pack_search_matches.contains(&pack_idx)
+    }
+
+    fn load_learning_data(&mut self) {
+        if let Some(project) = self.tree.projects.get(self.project_index) {
+            self.learning_content = data::load_learning_dashboard(&self.memory_dir, &project.name);
+        } else {
+            self.learning_content = "No project selected".to_string();
+        }
+    }
+
+    fn load_analytics_data(&mut self) {
+        if let Some(project) = self.tree.projects.get(self.project_index) {
+            self.analytics_content =
+                data::load_analytics(&self.memory_dir, &project.name, self.analytics_days);
+        } else {
+            self.analytics_content = "No project selected".to_string();
+        }
+    }
+
+    fn load_health_data(&mut self) {
+        if let Some(project) = self.tree.projects.get(self.project_index) {
+            self.health_content = data::load_health_report(&self.memory_dir, &project.name);
+        } else {
+            self.health_content = "No project selected".to_string();
+        }
+    }
+
+    fn handle_learning_keys(
+        &mut self,
+        code: KeyCode,
+        terminal: &Terminal<CrosstermBackend<io::Stdout>>,
+    ) -> io::Result<()> {
+        let page_size = terminal.size()?.height.saturating_sub(4);
+        let total_lines = self.learning_content.lines().count() as u16;
+
+        match code {
+            KeyCode::Esc | KeyCode::Char('q') => {
+                self.screen = Screen::Browser;
+            }
+            KeyCode::Char('r') => {
+                self.load_learning_data();
+                self.learning_scroll = 0;
+            }
+            KeyCode::Char('j') | KeyCode::Down => {
+                if self.learning_scroll < total_lines {
+                    self.learning_scroll += 1;
+                }
+            }
+            KeyCode::Char('k') | KeyCode::Up => {
+                self.learning_scroll = self.learning_scroll.saturating_sub(1);
+            }
+            KeyCode::PageDown | KeyCode::Char(' ') => {
+                self.learning_scroll = self
+                    .learning_scroll
+                    .saturating_add(page_size)
+                    .min(total_lines);
+            }
+            KeyCode::PageUp => {
+                self.learning_scroll = self.learning_scroll.saturating_sub(page_size);
+            }
+            KeyCode::Home | KeyCode::Char('g') => {
+                self.learning_scroll = 0;
+            }
+            KeyCode::End | KeyCode::Char('G') => {
+                self.learning_scroll = total_lines;
+            }
+            _ => {}
+        }
+        Ok(())
+    }
+
+    fn handle_analytics_keys(
+        &mut self,
+        code: KeyCode,
+        terminal: &Terminal<CrosstermBackend<io::Stdout>>,
+    ) -> io::Result<()> {
+        let page_size = terminal.size()?.height.saturating_sub(4);
+        let total_lines = self.analytics_content.lines().count() as u16;
+
+        match code {
+            KeyCode::Esc | KeyCode::Char('q') => {
+                self.screen = Screen::Browser;
+            }
+            KeyCode::Char('r') => {
+                self.load_analytics_data();
+                self.analytics_scroll = 0;
+            }
+            KeyCode::Char('+') => {
+                self.analytics_days = (self.analytics_days + 7).min(365);
+                self.load_analytics_data();
+                self.analytics_scroll = 0;
+            }
+            KeyCode::Char('-') => {
+                self.analytics_days = self.analytics_days.saturating_sub(7).max(1);
+                self.load_analytics_data();
+                self.analytics_scroll = 0;
+            }
+            KeyCode::Char('j') | KeyCode::Down => {
+                if self.analytics_scroll < total_lines {
+                    self.analytics_scroll += 1;
+                }
+            }
+            KeyCode::Char('k') | KeyCode::Up => {
+                self.analytics_scroll = self.analytics_scroll.saturating_sub(1);
+            }
+            KeyCode::PageDown | KeyCode::Char(' ') => {
+                self.analytics_scroll = self
+                    .analytics_scroll
+                    .saturating_add(page_size)
+                    .min(total_lines);
+            }
+            KeyCode::PageUp => {
+                self.analytics_scroll = self.analytics_scroll.saturating_sub(page_size);
+            }
+            KeyCode::Home | KeyCode::Char('g') => {
+                self.analytics_scroll = 0;
+            }
+            KeyCode::End | KeyCode::Char('G') => {
+                self.analytics_scroll = total_lines;
+            }
+            _ => {}
+        }
+        Ok(())
+    }
+
+    fn handle_health_keys(
+        &mut self,
+        code: KeyCode,
+        terminal: &Terminal<CrosstermBackend<io::Stdout>>,
+    ) -> io::Result<()> {
+        let page_size = terminal.size()?.height.saturating_sub(4);
+        let total_lines = self.health_content.lines().count() as u16;
+
+        match code {
+            KeyCode::Esc | KeyCode::Char('q') => {
+                self.screen = Screen::Browser;
+            }
+            KeyCode::Char('r') => {
+                self.load_health_data();
+                self.health_scroll = 0;
+            }
+            KeyCode::Char('j') | KeyCode::Down => {
+                if self.health_scroll < total_lines {
+                    self.health_scroll += 1;
+                }
+            }
+            KeyCode::Char('k') | KeyCode::Up => {
+                self.health_scroll = self.health_scroll.saturating_sub(1);
+            }
+            KeyCode::PageDown | KeyCode::Char(' ') => {
+                self.health_scroll = self
+                    .health_scroll
+                    .saturating_add(page_size)
+                    .min(total_lines);
+            }
+            KeyCode::PageUp => {
+                self.health_scroll = self.health_scroll.saturating_sub(page_size);
+            }
+            KeyCode::Home | KeyCode::Char('g') => {
+                self.health_scroll = 0;
+            }
+            KeyCode::End | KeyCode::Char('G') => {
+                self.health_scroll = total_lines;
+            }
+            _ => {}
+        }
+        Ok(())
+    }
+
+    fn handle_help_keys(&mut self, code: KeyCode) -> io::Result<()> {
+        match code {
+            KeyCode::Esc | KeyCode::Char('q') | KeyCode::Char('?') => {
+                self.screen = Screen::Browser;
+            }
+            _ => {}
+        }
+        Ok(())
     }
 }
 

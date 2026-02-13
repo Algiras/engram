@@ -535,3 +535,266 @@ fn render_pack_action_message(f: &mut Frame, app: &App) {
         f.render_widget(paragraph, popup_area);
     }
 }
+
+/// Render Learning Dashboard screen
+pub fn render_learning(f: &mut Frame, app: &App) {
+    let area = f.area();
+
+    // Reserve 1 row at bottom for status bar
+    let main_area = Rect {
+        height: area.height.saturating_sub(1),
+        ..area
+    };
+
+    // Scroll the content
+    let lines: Vec<Line> = app
+        .learning_content
+        .lines()
+        .skip(app.learning_scroll as usize)
+        .take(main_area.height.saturating_sub(2) as usize)
+        .map(|line| Line::from(line.to_string()))
+        .collect();
+
+    let title = if let Some(project) = app.tree.projects.get(app.project_index) {
+        format!(" Learning Dashboard: {} ", project.name)
+    } else {
+        " Learning Dashboard ".to_string()
+    };
+
+    let block = Block::default()
+        .title(title)
+        .borders(Borders::ALL)
+        .border_style(Style::default().fg(Color::Cyan));
+
+    let paragraph = Paragraph::new(lines).block(block).wrap(Wrap { trim: false });
+
+    f.render_widget(paragraph, main_area);
+
+    // Status bar
+    let status_area = Rect {
+        y: area.height.saturating_sub(1),
+        height: 1,
+        ..area
+    };
+
+    let status = Line::from(vec![
+        Span::raw(" ["),
+        Span::styled("q/Esc", Style::default().fg(Color::Cyan)),
+        Span::raw("] Back  ["),
+        Span::styled("r", Style::default().fg(Color::Cyan)),
+        Span::raw("] Reload  ["),
+        Span::styled("j/k", Style::default().fg(Color::Cyan)),
+        Span::raw("] Scroll"),
+    ]);
+
+    f.render_widget(
+        Paragraph::new(status).style(Style::default().bg(Color::DarkGray)),
+        status_area,
+    );
+}
+
+/// Render Analytics Viewer screen
+pub fn render_analytics(f: &mut Frame, app: &App) {
+    let area = f.area();
+
+    // Reserve 1 row at bottom for status bar
+    let main_area = Rect {
+        height: area.height.saturating_sub(1),
+        ..area
+    };
+
+    // Scroll the content
+    let lines: Vec<Line> = app
+        .analytics_content
+        .lines()
+        .skip(app.analytics_scroll as usize)
+        .take(main_area.height.saturating_sub(2) as usize)
+        .map(|line| Line::from(line.to_string()))
+        .collect();
+
+    let title = if let Some(project) = app.tree.projects.get(app.project_index) {
+        format!(" Analytics: {} ({} days) ", project.name, app.analytics_days)
+    } else {
+        format!(" Analytics ({} days) ", app.analytics_days)
+    };
+
+    let block = Block::default()
+        .title(title)
+        .borders(Borders::ALL)
+        .border_style(Style::default().fg(Color::Cyan));
+
+    let paragraph = Paragraph::new(lines).block(block).wrap(Wrap { trim: false });
+
+    f.render_widget(paragraph, main_area);
+
+    // Status bar
+    let status_area = Rect {
+        y: area.height.saturating_sub(1),
+        height: 1,
+        ..area
+    };
+
+    let status = Line::from(vec![
+        Span::raw(" ["),
+        Span::styled("q/Esc", Style::default().fg(Color::Cyan)),
+        Span::raw("] Back  ["),
+        Span::styled("r", Style::default().fg(Color::Cyan)),
+        Span::raw("] Reload  ["),
+        Span::styled("+/-", Style::default().fg(Color::Cyan)),
+        Span::raw("] Days  ["),
+        Span::styled("j/k", Style::default().fg(Color::Cyan)),
+        Span::raw("] Scroll"),
+    ]);
+
+    f.render_widget(
+        Paragraph::new(status).style(Style::default().bg(Color::DarkGray)),
+        status_area,
+    );
+}
+
+/// Render Health Check screen
+pub fn render_health(f: &mut Frame, app: &App) {
+    let area = f.area();
+
+    // Reserve 1 row at bottom for status bar
+    let main_area = Rect {
+        height: area.height.saturating_sub(1),
+        ..area
+    };
+
+    // Scroll the content
+    let lines: Vec<Line> = app
+        .health_content
+        .lines()
+        .skip(app.health_scroll as usize)
+        .take(main_area.height.saturating_sub(2) as usize)
+        .map(|line| Line::from(line.to_string()))
+        .collect();
+
+    let title = if let Some(project) = app.tree.projects.get(app.project_index) {
+        format!(" Health Check: {} ", project.name)
+    } else {
+        " Health Check ".to_string()
+    };
+
+    let block = Block::default()
+        .title(title)
+        .borders(Borders::ALL)
+        .border_style(Style::default().fg(Color::Cyan));
+
+    let paragraph = Paragraph::new(lines).block(block).wrap(Wrap { trim: false });
+
+    f.render_widget(paragraph, main_area);
+
+    // Status bar
+    let status_area = Rect {
+        y: area.height.saturating_sub(1),
+        height: 1,
+        ..area
+    };
+
+    let status = Line::from(vec![
+        Span::raw(" ["),
+        Span::styled("q/Esc", Style::default().fg(Color::Cyan)),
+        Span::raw("] Back  ["),
+        Span::styled("r", Style::default().fg(Color::Cyan)),
+        Span::raw("] Reload  ["),
+        Span::styled("j/k", Style::default().fg(Color::Cyan)),
+        Span::raw("] Scroll"),
+    ]);
+
+    f.render_widget(
+        Paragraph::new(status).style(Style::default().bg(Color::DarkGray)),
+        status_area,
+    );
+}
+
+/// Render Help screen
+pub fn render_help(f: &mut Frame, _app: &App) {
+    let area = f.area();
+
+    // Reserve 1 row at bottom for status bar
+    let main_area = Rect {
+        height: area.height.saturating_sub(1),
+        ..area
+    };
+
+    let help_text = vec![
+        Line::from(""),
+        Line::from(Span::styled(
+            "Keyboard Shortcuts",
+            Style::default()
+                .fg(Color::Cyan)
+                .add_modifier(Modifier::BOLD),
+        )),
+        Line::from(""),
+        Line::from("Navigation:"),
+        Line::from("  j/k, ↓/↑      - Move cursor up/down"),
+        Line::from("  h/l, ←/→, Tab - Switch panels"),
+        Line::from("  Enter         - View selected item"),
+        Line::from("  q, Ctrl+C     - Quit"),
+        Line::from("  Esc           - Go back"),
+        Line::from(""),
+        Line::from("Browser Screen:"),
+        Line::from("  /             - Search"),
+        Line::from("  n/N           - Next/previous search match"),
+        Line::from("  d             - Delete item"),
+        Line::from("  p             - View packs"),
+        Line::from("  L             - Learning dashboard"),
+        Line::from("  A             - Analytics viewer"),
+        Line::from("  H             - Health check"),
+        Line::from("  ?             - Show this help"),
+        Line::from(""),
+        Line::from("Packs Screen:"),
+        Line::from("  Enter         - View pack details"),
+        Line::from("  u             - Update pack"),
+        Line::from("  d             - Uninstall pack"),
+        Line::from("  r             - Reload packs"),
+        Line::from("  /             - Search packs"),
+        Line::from(""),
+        Line::from("Viewer/Detail Screens:"),
+        Line::from("  j/k           - Scroll line by line"),
+        Line::from("  Space/PgDn    - Scroll page down"),
+        Line::from("  PgUp          - Scroll page up"),
+        Line::from("  g/Home        - Go to top"),
+        Line::from("  G/End         - Go to bottom"),
+        Line::from(""),
+        Line::from("Analytics Screen:"),
+        Line::from("  +/-           - Increase/decrease days"),
+        Line::from(""),
+        Line::from(Span::styled(
+            format!("claude-memory v{}", env!("CARGO_PKG_VERSION")),
+            Style::default().fg(Color::Gray),
+        )),
+    ];
+
+    let block = Block::default()
+        .title(" Help ")
+        .borders(Borders::ALL)
+        .border_style(Style::default().fg(Color::Cyan));
+
+    let paragraph = Paragraph::new(help_text)
+        .block(block)
+        .wrap(Wrap { trim: false });
+
+    f.render_widget(paragraph, main_area);
+
+    // Status bar
+    let status_area = Rect {
+        y: area.height.saturating_sub(1),
+        height: 1,
+        ..area
+    };
+
+    let status = Line::from(vec![
+        Span::raw(" ["),
+        Span::styled("q/Esc/?", Style::default().fg(Color::Cyan)),
+        Span::raw("] Close"),
+    ]);
+
+    f.render_widget(
+        Paragraph::new(status).style(Style::default().bg(Color::DarkGray)),
+        status_area,
+    );
+}
+
