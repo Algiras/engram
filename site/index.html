@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>engram - Conversation Memory for Claude Code</title>
+  <meta name="description" content="Self-improving knowledge management for AI agents. Learn from conversations, prioritize by importance, sync to gists.">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<nav class="nav">
+  <div class="nav-inner">
+    <a href="index.html" class="nav-logo">engram</a>
+    <ul class="nav-links">
+      <li><a href="#features">Features</a></li>
+      <li><a href="#quickstart">Install</a></li>
+      <li><a href="docs.html">Docs</a></li>
+      <li><a href="llms.txt">llms.txt</a></li>
+      <li><a href="https://github.com/Algiras/engram">GitHub</a></li>
+    </ul>
+  </div>
+</nav>
+
+<section class="hero">
+  <h1>Conversation memory for <span>Claude Code</span></h1>
+  <p>Self-improving knowledge management for AI agents. Archive conversations, extract structured knowledge, and recall project context instantly.</p>
+  <div class="install-box">
+    <span class="prompt">$</span>
+    <code id="install-cmd">curl -fsSL https://raw.githubusercontent.com/Algiras/engram/master/install.sh | sh</code>
+    <button onclick="navigator.clipboard.writeText(document.getElementById('install-cmd').textContent)" title="Copy to clipboard">
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M0 6.75C0 5.784.784 5 1.75 5h1.5a.75.75 0 010 1.5h-1.5a.25.25 0 00-.25.25v7.5c0 .138.112.25.25.25h7.5a.25.25 0 00.25-.25v-1.5a.75.75 0 011.5 0v1.5A1.75 1.75 0 019.25 16h-7.5A1.75 1.75 0 010 14.25zM5 1.75C5 .784 5.784 0 6.75 0h7.5C15.216 0 16 .784 16 1.75v7.5A1.75 1.75 0 0114.25 11h-7.5A1.75 1.75 0 015 9.25zm1.75-.25a.25.25 0 00-.25.25v7.5c0 .138.112.25.25.25h7.5a.25.25 0 00.25-.25v-7.5a.25.25 0 00-.25-.25z"/></svg>
+    </button>
+  </div>
+</section>
+
+<section class="section" id="features">
+  <h2 class="section-title">Features</h2>
+  <p class="section-subtitle">Everything you need to give your AI agent persistent memory.</p>
+  <div class="features-grid">
+
+    <div class="feature-card">
+      <div class="feature-icon">&#x1F9E0;</div>
+      <h3>Knowledge Extraction</h3>
+      <p>Uses LLMs to extract decisions, solutions, patterns, and preferences from your conversations automatically.</p>
+    </div>
+
+    <div class="feature-card">
+      <div class="feature-icon">&#x1F41D;</div>
+      <h3>Hive Mind</h3>
+      <p>Share and discover knowledge packs via Git-based registries. Collaborate across teams without sharing raw conversations.</p>
+    </div>
+
+    <div class="feature-card">
+      <div class="feature-icon">&#x1F4C8;</div>
+      <h3>Reinforcement Learning</h3>
+      <p>Automatically optimizes knowledge importance, TTLs, and consolidation strategies based on usage patterns.</p>
+    </div>
+
+    <div class="feature-card">
+      <div class="feature-icon">&#x1F50D;</div>
+      <h3>Semantic Search</h3>
+      <p>Full-text regex search, semantic vector search, and knowledge graph queries across all your memory.</p>
+    </div>
+
+    <div class="feature-card">
+      <div class="feature-icon">&#x1F517;</div>
+      <h3>MCP Integration</h3>
+      <p>Built-in Model Context Protocol server for direct integration with Claude Desktop and other MCP clients.</p>
+    </div>
+
+    <div class="feature-card">
+      <div class="feature-icon">&#x1F5A5;</div>
+      <h3>Interactive TUI</h3>
+      <p>Terminal UI with fuzzy search, pack browser, analytics dashboard, health checks, and learning progress.</p>
+    </div>
+
+  </div>
+</section>
+
+<section class="section" id="quickstart">
+  <h2 class="section-title">Quick Start</h2>
+  <p class="section-subtitle">Get up and running in under a minute.</p>
+  <div class="quickstart-block">
+    <div class="quickstart-header">
+      <span class="quickstart-dot red"></span>
+      <span class="quickstart-dot yellow"></span>
+      <span class="quickstart-dot green"></span>
+    </div>
+    <div class="quickstart-body">
+      <div><span class="comment"># Archive conversations (skip LLM for speed)</span></div>
+      <div><span class="prompt">$ </span><span class="command">engram ingest --skip-knowledge</span></div>
+      <br>
+      <div><span class="comment"># Full pipeline with knowledge extraction</span></div>
+      <div><span class="prompt">$ </span><span class="command">engram ingest</span></div>
+      <br>
+      <div><span class="comment"># Search across all memory</span></div>
+      <div><span class="prompt">$ </span><span class="command">engram search "authentication"</span></div>
+      <br>
+      <div><span class="comment"># Show project context</span></div>
+      <div><span class="prompt">$ </span><span class="command">engram recall my-project</span></div>
+      <br>
+      <div><span class="comment"># Interactive TUI with fuzzy search</span></div>
+      <div><span class="prompt">$ </span><span class="command">engram tui</span></div>
+      <br>
+      <div><span class="comment"># View reinforcement learning progress</span></div>
+      <div><span class="prompt">$ </span><span class="command">engram learn dashboard</span></div>
+    </div>
+  </div>
+</section>
+
+<footer class="footer">
+  <p>MIT License &middot; v0.3.0 &middot; <a href="https://github.com/Algiras/engram">GitHub</a></p>
+</footer>
+
+</body>
+</html>

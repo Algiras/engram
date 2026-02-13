@@ -1,0 +1,61 @@
+# engram
+
+> Self-improving knowledge management for AI agents. Archives conversation sessions, extracts structured knowledge using LLMs, and enables full-text search and recall of project context. Built for Claude Code.
+
+## About
+
+Engram is a CLI tool that gives AI coding agents persistent memory. It archives Claude Code conversations, extracts decisions, solutions, patterns, and preferences using LLMs, and injects that knowledge back into future sessions. It includes a distributed knowledge sharing system (Hive Mind), reinforcement learning for knowledge optimization, semantic search, a knowledge graph, and an interactive terminal UI.
+
+## Install
+
+Quick install: `curl -fsSL https://raw.githubusercontent.com/Algiras/engram/master/install.sh | sh`
+From source: `cargo install --path .`
+Prebuilt binaries: https://github.com/Algiras/engram/releases
+
+## Core Commands
+
+- `engram ingest` - Parse conversations, archive as markdown, extract knowledge
+- `engram search <query>` - Full-text regex search across all memory
+- `engram recall <project>` - Display project knowledge context
+- `engram inject [project]` - Write combined knowledge to Claude Code MEMORY.md
+- `engram tui` - Interactive terminal UI with fuzzy search
+- `engram learn dashboard` - View reinforcement learning progress
+- `engram hive browse` - Browse available knowledge packs
+- `engram hive install <pack>` - Install a knowledge pack
+
+## Documentation
+
+- Getting Started
+  - [MCP Setup](https://github.com/Algiras/engram/blob/master/docs/MCP_SETUP.md): Configure engram as an MCP server for Claude Desktop
+  - [Gemini Setup](https://github.com/Algiras/engram/blob/master/docs/GEMINI_SETUP.md): Configure Google Gemini as an LLM provider
+
+- Architecture
+  - [Memory Architecture](https://github.com/Algiras/engram/blob/master/docs/MEMORY_ARCHITECTURE.md): How engram stores, organizes, and retrieves knowledge
+  - [Learning Architecture](https://github.com/Algiras/engram/blob/master/docs/LEARNING_ARCHITECTURE.md): Reinforcement learning system internals
+
+- Features
+  - [Hive Mind Guide](https://github.com/Algiras/engram/blob/master/docs/HIVE_GUIDE.md): Distributed knowledge sharing via Git-based registries
+  - [Learning Guide](https://github.com/Algiras/engram/blob/master/docs/LEARNING_GUIDE.md): Reinforcement learning for knowledge optimization
+  - [Analytics Guide](https://github.com/Algiras/engram/blob/master/docs/ANALYTICS_GUIDE.md): Usage analytics and activity tracking
+  - [Knowledge Graph](https://github.com/Algiras/engram/blob/master/docs/GRAPH_GUIDE.md): Graph-based knowledge relationships and queries
+  - [Semantic Search](https://github.com/Algiras/engram/blob/master/docs/EMBEDDINGS_GUIDE.md): Vector embeddings for semantic similarity search
+  - [Sync Guide](https://github.com/Algiras/engram/blob/master/docs/SYNC_GUIDE.md): Knowledge synchronization across machines
+  - [Gist Sharing](https://github.com/Algiras/engram/blob/master/docs/GIST_SHARING.md): Share knowledge via private GitHub Gists
+  - [Export Guide](https://github.com/Algiras/engram/blob/master/docs/EXPORT_GUIDE.md): Export project knowledge to Markdown, JSON, or HTML
+
+- Terminal UI
+  - [TUI Guide](https://github.com/Algiras/engram/blob/master/docs/TUI_GUIDE.md): Interactive terminal UI usage and keyboard shortcuts
+  - [TUI Features](https://github.com/Algiras/engram/blob/master/docs/TUI_FEATURES.md): Complete list of TUI capabilities
+  - [TUI Enhancement](https://github.com/Algiras/engram/blob/master/docs/TUI_ENHANCEMENT.md): Planned improvements and roadmap
+  - [TUI Implementation](https://github.com/Algiras/engram/blob/master/docs/TUI_IMPLEMENTATION_SUMMARY.md): Technical implementation details
+
+- Development
+  - [Publishing](https://github.com/Algiras/engram/blob/master/docs/PUBLISHING.md): Release checklist and publishing workflow
+
+## Source
+
+- Repository: https://github.com/Algiras/engram
+- README: https://github.com/Algiras/engram/blob/master/README.md
+- License: MIT
+- Language: Rust
+- Version: 0.3.0
