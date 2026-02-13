@@ -727,7 +727,7 @@ fn cmd_hooks_status() -> Result<()> {
     let inject_path = hooks_dir.join("inject-context.sh");
     let session_end_path = hooks_dir.join("session-end-hook.sh");
 
-    println!("{}", "Claude Memory Hooks Status".green().bold());
+    println!("{}", "Engram Hooks Status".green().bold());
     println!("{}", "=".repeat(50));
 
     let check = |path: &Path, name: &str, event: &str| {
@@ -2502,7 +2502,7 @@ fn cmd_status(config: &Config) -> Result<()> {
         0
     };
 
-    println!("{}", "Claude Memory Status".green().bold());
+    println!("{}", "Engram Status".green().bold());
     println!("{}", "=".repeat(40));
     println!(
         "  Memory directory:  {}",

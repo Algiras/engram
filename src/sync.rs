@@ -347,7 +347,7 @@ pub fn init_git_repo(repo_path: &std::path::Path) -> Result<()> {
     let readme = repo_path.join("README.md");
     std::fs::write(
         &readme,
-        "# Claude Memory Knowledge Repository\n\nShared knowledge base synced by engram.\n",
+        "# Engram Knowledge Repository\n\nShared knowledge base synced by engram.\n",
     )?;
 
     // Initial commit
