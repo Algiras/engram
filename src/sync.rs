@@ -1,4 +1,5 @@
 use crate::error::{MemoryError, Result};
+use colored::Colorize;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
@@ -294,17 +295,31 @@ pub fn read_knowledge_files(
 
     // Detect and redact secrets
     let detector = SecretDetector::new()?;
+    let mut total_secrets_redacted = 0;
 
     for file_name in &file_names {
         let path = knowledge_dir.join(file_name);
         if path.exists() {
             let content = std::fs::read_to_string(&path)?;
             if !content.trim().is_empty() {
+                // Scan for secrets
+                let secrets = detector.scan_file(&path)?;
+                total_secrets_redacted += secrets.len();
+
                 // Redact secrets before uploading
                 let redacted = detector.redact_secrets(&content);
                 files.insert(file_name.to_string(), redacted);
             }
         }
+    }
+
+    // Warn if secrets were found
+    if total_secrets_redacted > 0 {
+        eprintln!(
+            "{} Redacted {} secrets before upload",
+            "⚠️  Security:".yellow(),
+            total_secrets_redacted
+        );
     }
 
     // Add metadata

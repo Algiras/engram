@@ -29,6 +29,14 @@ pub struct LearningState {
 
     /// Adaptation history (what was applied and when)
     pub adaptation_history: Vec<AdaptationRecord>,
+
+    /// Last recorded health score (for measuring improvement)
+    #[serde(default)]
+    pub last_health_score: Option<u8>,
+
+    /// Last recorded storage size in MB (for measuring reduction)
+    #[serde(default)]
+    pub last_storage_size_mb: Option<f32>,
 }
 
 impl LearningState {
@@ -44,6 +52,8 @@ impl LearningState {
             hyperparameters: Hyperparameters::default(),
             metrics_history: Vec::new(),
             adaptation_history: Vec::new(),
+            last_health_score: None,
+            last_storage_size_mb: None,
         }
     }
 
