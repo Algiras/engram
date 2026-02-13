@@ -220,7 +220,8 @@ impl McpServer {
             },
             Tool {
                 name: "graph_query".to_string(),
-                description: "Query knowledge graph for concept relationships and connections".to_string(),
+                description: "Query knowledge graph for concept relationships and connections"
+                    .to_string(),
                 input_schema: json!({
                     "type": "object",
                     "properties": {
@@ -668,7 +669,10 @@ impl McpServer {
 
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr);
-            return Err(MemoryError::Config(format!("Graph query failed: {}", stderr)));
+            return Err(MemoryError::Config(format!(
+                "Graph query failed: {}",
+                stderr
+            )));
         }
 
         Ok(String::from_utf8_lossy(&output.stdout).to_string())

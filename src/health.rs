@@ -163,10 +163,7 @@ pub fn check_project_health(memory_dir: &Path, project: &str) -> Result<HealthRe
                         file_name, size_mb
                     ),
                     auto_fixable: false,
-                    fix_command: Some(format!(
-                        "engram consolidate {} --threshold 0.9",
-                        project
-                    )),
+                    fix_command: Some(format!("engram consolidate {} --threshold 0.9", project)),
                 });
             }
         }

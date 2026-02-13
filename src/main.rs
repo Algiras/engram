@@ -3309,10 +3309,7 @@ fn cmd_graph_build(config: &Config, project: &str) -> Result<()> {
         "  {}",
         format!("engram graph query {} <concept>", project).cyan()
     );
-    println!(
-        "  {}",
-        format!("engram graph viz {} ascii", project).cyan()
-    );
+    println!("  {}", format!("engram graph viz {} ascii", project).cyan());
 
     Ok(())
 }
@@ -5358,10 +5355,7 @@ fn cmd_hive_pack_publish(
     println!("\n💡 Share your pack:");
     if let Some(url) = repo_url {
         println!("  Users can install with:");
-        println!(
-            "  {}",
-            format!("engram hive registry add {}", url).cyan()
-        );
+        println!("  {}", format!("engram hive registry add {}", url).cyan());
     } else {
         println!("  1. Push to GitHub: git push -u origin main");
         println!("  2. Share the repository URL");

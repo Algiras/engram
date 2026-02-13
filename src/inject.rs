@@ -387,8 +387,7 @@ pub fn build_compact_memory(
 ) -> crate::Result<String> {
     let mut combined = String::new();
     combined.push_str("# Project Memory (auto-injected by engram)\n\n");
-    combined
-        .push_str("<!-- Compact mode: run `engram inject --full` for complete dump -->\n\n");
+    combined.push_str("<!-- Compact mode: run `engram inject --full` for complete dump -->\n\n");
 
     // 1. Project context first (most valuable)
     combined.push_str(&format!("## Project: {}\n\n", project_name));
