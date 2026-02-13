@@ -51,7 +51,7 @@ engram --version
 
 ```bash
 # Add the core registry
-engram hive registry add Algiras/engram
+engram hive registry add Algiras/engram-registry
 
 # Browse available packs
 engram hive browse
@@ -88,5 +88,5 @@ MIT
 ## Learn More
 
 - Main Repository: https://github.com/Algiras/engram
-- Core Registry: https://github.com/Algiras/engram/tree/master/registry
+- Example Registry: https://github.com/Algiras/engram/tree/master/examples/registry
 - Example Pack: engram-core (meta-knowledge)

@@ -236,7 +236,7 @@ The Hive Mind system enables you to:
 
 ```bash
 # Add a registry
-engram hive registry add Algiras/engram
+engram hive registry add Algiras/engram-registry
 
 # Browse available packs
 engram hive browse
@@ -389,7 +389,7 @@ my-pack/
     "redact_secrets": true,
     "require_review": true
   },
-  "min_claude_memory_version": "0.1.0"
+  "min_engram_version": "0.1.0"
 }
 ```
 
@@ -467,12 +467,12 @@ engram doctor --fix
 
 ### Core Registry
 
-This repository includes a meta-knowledge pack:
+This repository includes a meta-knowledge pack and an example registry structure in `examples/registry/`:
 
 ```bash
 # Add the core registry (from local clone)
 cd /path/to/engram
-engram hive registry add file://$(pwd)/registry
+engram hive registry add file://$(pwd)/examples/registry
 
 # Install the core pack
 engram hive install engram-core
@@ -483,6 +483,8 @@ engram hive install engram-core
 # - 7 complete workflows
 # - Documentation about engram itself!
 ```
+
+See `examples/registry/` for a reference implementation of a custom registry.
 
 ### Privacy Model
 

@@ -8,7 +8,7 @@ The Hive Mind is a Git-based distributed knowledge sharing system for engram. It
 
 ```bash
 # 1. Add a registry
-engram hive registry add Algiras/engram
+engram hive registry add Algiras/engram-registry
 
 # 2. Install the meta-knowledge pack
 engram hive install engram-core
@@ -171,7 +171,7 @@ my-pack/
     "redact_secrets": true,
     "require_review": true
   },
-  "min_claude_memory_version": "0.1.0"
+  "min_engram_version": "0.1.0"
 }
 ```
 
@@ -315,7 +315,7 @@ Included in this repository:
 ```bash
 # Add core registry
 cd /path/to/engram
-engram hive registry add file://$(pwd)/registry
+engram hive registry add file://$(pwd)/examples/registry
 
 # Install
 engram hive install engram-core
@@ -508,5 +508,5 @@ MIT - Same as engram
 ## Learn More
 
 - Main Repository: https://github.com/Algiras/engram
-- Core Registry: https://github.com/Algiras/engram/tree/master/registry
+- Example Registry: https://github.com/Algiras/engram/tree/master/examples/registry
 - Issues: https://github.com/Algiras/engram/issues

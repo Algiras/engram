@@ -1,0 +1,17 @@
+{
+  "version": "1.0.0",
+  "updated_at": "2026-02-13T18:40:00Z",
+  "packs": [
+    {
+      "name": "engram-core",
+      "repository": "https://github.com/Algiras/engram",
+      "description": "Core Engram knowledge - learning architecture, TUI patterns, progressive disclosure",
+      "author": "Algiras",
+      "categories": ["patterns", "architecture", "rust"],
+      "license": "MIT",
+      "verified": true,
+      "version": "0.3.0",
+      "tags": ["self-improving", "reinforcement-learning", "knowledge-management"]
+    }
+  ]
+}

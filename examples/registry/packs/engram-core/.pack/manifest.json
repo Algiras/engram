@@ -1,19 +1,19 @@
 {
   "name": "engram-core",
-  "version": "1.0.0",
-  "description": "Core knowledge about how engram's knowledge system works - a meta-knowledge pack for understanding memory extraction, management, and the hive system",
+  "version": "0.3.0",
+  "description": "Core Engram knowledge - learning architecture, TUI patterns, progressive disclosure",
   "author": {
-    "name": "Engram Project",
+    "name": "Algiras",
     "email": null
   },
   "license": "MIT",
   "keywords": [
     "engram",
-    "knowledge-extraction",
-    "memory-management",
-    "hive-system",
-    "meta-knowledge",
-    "documentation"
+    "self-improving",
+    "reinforcement-learning",
+    "knowledge-management",
+    "architecture",
+    "rust"
   ],
   "categories": [
     "Patterns",
@@ -22,8 +22,8 @@
   ],
   "homepage": "https://github.com/Algiras/engram",
   "repository": "https://github.com/Algiras/engram",
-  "created_at": "2026-02-12T00:00:00Z",
-  "updated_at": "2026-02-12T00:00:00Z",
+  "created_at": "2026-02-13T00:00:00Z",
+  "updated_at": "2026-02-13T00:00:00Z",
   "privacy": {
     "share_patterns": true,
     "share_solutions": true,

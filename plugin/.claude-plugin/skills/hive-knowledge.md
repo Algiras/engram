@@ -129,7 +129,7 @@ mkdir -p my-pack/{.pack,knowledge}
     "redact_secrets": true,
     "require_review": true
   },
-  "min_claude_memory_version": "0.1.0"
+  "min_engram_version": "0.1.0"
 }
 ```
 
@@ -163,10 +163,10 @@ The engram repository includes a core registry with meta-knowledge:
 ```bash
 # Add the core registry (from local repo)
 cd /path/to/engram
-engram hive registry add file://$(pwd)/registry
+engram hive registry add file://$(pwd)/examples/registry
 
 # Or from GitHub (once published)
-engram hive registry add Algiras/engram
+engram hive registry add Algiras/engram-registry
 
 # Browse available packs
 engram hive browse

@@ -339,7 +339,7 @@ engram graph query my-project "authentication" --depth 3 > auth-subgraph.txt
 ```
 📊 Knowledge Graph: engram
 
-🔵 Claude Memory (importance: 0.9)
+🔵 Engram (importance: 0.9)
 ├── ▶ Model Context Protocol (implements)
 ├── ▶ Conversation Memory System (implements)
 └── → Rust (uses)

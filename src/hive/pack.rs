@@ -23,6 +23,7 @@ pub struct KnowledgePack {
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
     pub privacy: PrivacyPolicy,
+    #[serde(alias = "min_claude_memory_version")]
     pub min_engram_version: String,
 
     /// Directory where this pack was loaded from (not serialized)

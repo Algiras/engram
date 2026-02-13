@@ -1,4 +1,4 @@
-# Claude Memory Core Registry
+# Engram Core Registry
 
 Official registry of core knowledge packs for engram.
 
@@ -46,10 +46,10 @@ engram recall <your-project>
 
 ```bash
 # Add the registry
-engram hive registry add Algiras/engram
+engram hive registry add Algiras/engram-registry
 
 # Or full URL
-engram hive registry add https://github.com/Algiras/engram
+engram hive registry add https://github.com/Algiras/engram-registry
 
 # Install packs
 engram hive install engram-core

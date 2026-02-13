@@ -67,7 +67,7 @@ cargo install --path /path/to/engram
 2. **Configure a registry:**
 ```bash
 # Add official registry
-engram hive registry add Algiras/engram
+engram hive registry add Algiras/engram-registry
 
 # Or add local registry
 engram hive registry add file:///path/to/registry

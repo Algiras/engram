@@ -203,7 +203,7 @@ Create `my-pack/.pack/manifest.json`:
     "redact_secrets": true,
     "require_review": true
   },
-  "min_claude_memory_version": "0.1.0"
+  "min_engram_version": "0.1.0"
 }
 ```
 
@@ -271,7 +271,7 @@ git clone https://github.com/Algiras/engram
 cd engram
 
 # Add the core registry
-engram hive registry add file://$(pwd)/registry
+engram hive registry add file://$(pwd)/examples/registry
 
 # Install the core pack
 engram hive install engram-core
@@ -476,5 +476,5 @@ See the engram-core pack in the repository for a complete example of:
 ## Learn More
 
 - Repository: https://github.com/Algiras/engram
-- Core Registry: https://github.com/Algiras/engram/tree/master/registry
+- Example Registry: https://github.com/Algiras/engram/tree/master/examples/registry
 - Issues: https://github.com/Algiras/engram/issues

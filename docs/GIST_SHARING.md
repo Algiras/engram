@@ -1,4 +1,4 @@
-# GitHub Gist Sharing for Claude Memory
+# GitHub Gist Sharing for Engram
 
 Share your engram knowledge to private GitHub Gists for backup, collaboration, and cross-machine sync.
 

@@ -1,4 +1,4 @@
-# Claude Memory Core Knowledge Pack
+# Engram Core Knowledge Pack
 
 A meta-knowledge pack containing comprehensive information about how engram's knowledge system works.
 
@@ -41,7 +41,7 @@ cd /path/to/engram
 engram hive registry add ./registry
 
 # Or from GitHub (once published)
-engram hive registry add Algiras/engram
+engram hive registry add Algiras/engram-registry
 
 # Install the pack
 engram hive install engram-core

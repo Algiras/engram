@@ -29,7 +29,7 @@ cargo install --path /path/to/engram
 
 2. **Add a registry:**
 ```bash
-engram hive registry add Algiras/engram
+engram hive registry add Algiras/engram-registry
 ```
 
 3. **Browse and install packs:**
