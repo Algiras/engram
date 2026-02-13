@@ -566,7 +566,9 @@ pub fn render_learning(f: &mut Frame, app: &App) {
         .borders(Borders::ALL)
         .border_style(Style::default().fg(Color::Cyan));
 
-    let paragraph = Paragraph::new(lines).block(block).wrap(Wrap { trim: false });
+    let paragraph = Paragraph::new(lines)
+        .block(block)
+        .wrap(Wrap { trim: false });
 
     f.render_widget(paragraph, main_area);
 
@@ -613,7 +615,10 @@ pub fn render_analytics(f: &mut Frame, app: &App) {
         .collect();
 
     let title = if let Some(project) = app.tree.projects.get(app.project_index) {
-        format!(" Analytics: {} ({} days) ", project.name, app.analytics_days)
+        format!(
+            " Analytics: {} ({} days) ",
+            project.name, app.analytics_days
+        )
     } else {
         format!(" Analytics ({} days) ", app.analytics_days)
     };
@@ -623,7 +628,9 @@ pub fn render_analytics(f: &mut Frame, app: &App) {
         .borders(Borders::ALL)
         .border_style(Style::default().fg(Color::Cyan));
 
-    let paragraph = Paragraph::new(lines).block(block).wrap(Wrap { trim: false });
+    let paragraph = Paragraph::new(lines)
+        .block(block)
+        .wrap(Wrap { trim: false });
 
     f.render_widget(paragraph, main_area);
 
@@ -682,7 +689,9 @@ pub fn render_health(f: &mut Frame, app: &App) {
         .borders(Borders::ALL)
         .border_style(Style::default().fg(Color::Cyan));
 
-    let paragraph = Paragraph::new(lines).block(block).wrap(Wrap { trim: false });
+    let paragraph = Paragraph::new(lines)
+        .block(block)
+        .wrap(Wrap { trim: false });
 
     f.render_widget(paragraph, main_area);
 
@@ -797,4 +806,3 @@ pub fn render_help(f: &mut Frame, _app: &App) {
         status_area,
     );
 }
-

@@ -87,6 +87,9 @@ pub enum Commands {
     Inject {
         /// Project name (defaults to basename of current directory)
         project: Option<String>,
+        /// Inject full (uncompacted) knowledge dump instead of compact summary
+        #[arg(long)]
+        full: bool,
     },
 
     /// Manage Claude Code hooks for automatic memory integration

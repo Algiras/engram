@@ -17,10 +17,12 @@ enum Screen {
     Browser,
     Viewer,
     Packs,
-    PackDetail,    Learning,
+    PackDetail,
+    Learning,
     Analytics,
     Health,
-    Help,}
+    Help,
+}
 
 #[derive(Clone, PartialEq)]
 pub enum PackAction {
@@ -56,16 +58,16 @@ pub struct App {
     pack_search_query: String,
     pack_search_matches: Vec<usize>, // Indices of matching packs
     pack_search_index: usize,
-    
+
     // Learning state
     learning_content: String,
     learning_scroll: u16,
-    
+
     // Analytics state
     analytics_content: String,
     analytics_scroll: u16,
     analytics_days: u32,
-    
+
     // Health state
     health_content: String,
     health_scroll: u16,

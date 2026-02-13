@@ -10,6 +10,7 @@ mod extractor;
 mod graph;
 mod health;
 mod hive;
+mod inject;
 mod learning;
 mod llm;
 mod mcp;
@@ -52,8 +53,8 @@ fn main() -> Result<()> {
     }
 
     // Inject operates on disk only — no Config/LLM auth needed
-    if let Commands::Inject { project } = cli.command {
-        return cmd_inject(project);
+    if let Commands::Inject { project, full } = cli.command {
+        return cmd_inject(project, full);
     }
 
     // Lookup operates on knowledge files — no Config/LLM auth needed
@@ -404,7 +405,7 @@ fn cmd_tui() -> Result<()> {
 
 // ── Inject command ──────────────────────────────────────────────────────
 
-fn cmd_inject(project: Option<String>) -> Result<()> {
+fn cmd_inject(project: Option<String>, full: bool) -> Result<()> {
     let home = dirs::home_dir()
         .ok_or_else(|| error::MemoryError::Config("Could not determine home directory".into()))?;
 
@@ -442,26 +443,18 @@ fn cmd_inject(project: Option<String>) -> Result<()> {
         }
     };
 
-    // Read global preferences (optional), filtering expired entries
+    // Read raw global preferences
     let preferences_path = knowledge_dir.join("_global").join("preferences.md");
-    let preferences_content = if preferences_path.exists() {
-        use extractor::knowledge::{parse_session_blocks, partition_by_expiry, reconstruct_blocks};
-        let raw = std::fs::read_to_string(&preferences_path)?;
-        let (preamble, blocks) = parse_session_blocks(&raw);
-        let (active, _expired) = partition_by_expiry(blocks);
-        Some(reconstruct_blocks(&preamble, &active))
+    let raw_preferences = if preferences_path.exists() {
+        Some(std::fs::read_to_string(&preferences_path)?)
     } else {
         None
     };
 
-    // Read global shared memory (optional), filtering expired entries
+    // Read raw global shared memory
     let shared_path = knowledge_dir.join("_global").join("shared.md");
-    let shared_content = if shared_path.exists() {
-        use extractor::knowledge::{parse_session_blocks, partition_by_expiry, reconstruct_blocks};
-        let raw = std::fs::read_to_string(&shared_path)?;
-        let (preamble, blocks) = parse_session_blocks(&raw);
-        let (active, _expired) = partition_by_expiry(blocks);
-        Some(reconstruct_blocks(&preamble, &active))
+    let raw_shared = if shared_path.exists() {
+        Some(std::fs::read_to_string(&shared_path)?)
     } else {
         None
     };
@@ -479,45 +472,38 @@ fn cmd_inject(project: Option<String>) -> Result<()> {
         return Ok(());
     };
 
-    // Build combined content
-    let mut combined = String::new();
-    combined.push_str("# Project Memory (auto-injected by claude-memory)\n\n");
-    combined.push_str(
-        "<!-- This file is auto-generated. Edit knowledge sources, not this file. -->\n\n",
-    );
-
-    if let Some(prefs) = &preferences_content {
-        combined.push_str("## Global Preferences\n\n");
-        combined.push_str(prefs);
-        combined.push_str("\n\n---\n\n");
-    }
-
-    if let Some(shared) = &shared_content {
-        combined.push_str("## Global Shared Memory\n\n");
-        combined.push_str(shared);
-        combined.push_str("\n\n---\n\n");
-    }
-
-    combined.push_str(&format!("## Project: {}\n\n", project_name));
-    combined.push_str(&context_content);
-
-    // Include installed pack knowledge
-    let pack_content = get_installed_pack_knowledge(&memory_dir)?;
-    if !pack_content.is_empty() {
-        combined.push_str("\n\n---\n\n## Installed Pack Knowledge\n\n");
-        combined.push_str(&pack_content);
-    }
+    let combined = if full {
+        inject::build_full_memory(
+            &project_name,
+            &context_content,
+            &raw_preferences,
+            &raw_shared,
+            &memory_dir,
+        )?
+    } else {
+        inject::build_compact_memory(
+            &project_name,
+            &context_content,
+            &raw_preferences,
+            &raw_shared,
+            &memory_dir,
+        )?
+    };
 
     // Write to MEMORY.md
     let memory_path = project_dir.join("memory");
     std::fs::create_dir_all(&memory_path)?;
     let memory_file = memory_path.join("MEMORY.md");
+    let line_count = combined.lines().count();
     std::fs::write(&memory_file, &combined)?;
 
+    let mode = if full { "full" } else { "compact" };
     println!(
-        "{} Injected knowledge for '{}' into {}",
+        "{} Injected {} knowledge for '{}' ({} lines) into {}",
         "Done!".green().bold(),
+        mode,
         project_name,
+        line_count,
         memory_file.display()
     );
 
@@ -2355,7 +2341,7 @@ fn cmd_recall(config: &Config, project: &str) -> Result<()> {
     };
 
     // Get knowledge from installed packs
-    let pack_content = get_installed_pack_knowledge(&config.memory_dir)?;
+    let pack_content = hive::get_installed_pack_knowledge(&config.memory_dir)?;
 
     // Combine local and pack knowledge
     let content = if let Some(local) = local_content {
@@ -2398,45 +2384,6 @@ fn cmd_recall(config: &Config, project: &str) -> Result<()> {
     }
 
     Ok(())
-}
-
-/// Get aggregated knowledge from all installed packs
-fn get_installed_pack_knowledge(memory_dir: &Path) -> Result<String> {
-    use hive::PackInstaller;
-
-    let installer = PackInstaller::new(memory_dir);
-    let knowledge_dirs = installer.get_installed_knowledge_dirs()?;
-
-    if knowledge_dirs.is_empty() {
-        return Ok(String::new());
-    }
-
-    let mut combined = String::new();
-
-    for (pack_name, knowledge_dir) in knowledge_dirs {
-        combined.push_str(&format!("## From pack: {}\n\n", pack_name));
-
-        // Read knowledge files from pack
-        for category in &[
-            "patterns.md",
-            "solutions.md",
-            "decisions.md",
-            "preferences.md",
-        ] {
-            let file_path = knowledge_dir.join(category);
-            if file_path.exists() {
-                if let Ok(content) = std::fs::read_to_string(&file_path) {
-                    if !content.trim().is_empty() {
-                        combined.push_str(&format!("### {}\n\n", category.replace(".md", "")));
-                        combined.push_str(&content);
-                        combined.push_str("\n\n");
-                    }
-                }
-            }
-        }
-    }
-
-    Ok(combined)
 }
 
 fn cmd_context(config: &Config, project: &str) -> Result<()> {

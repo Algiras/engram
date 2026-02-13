@@ -398,24 +398,52 @@ pub fn load_learning_dashboard(memory_dir: &Path, project: &str) -> String {
             // Capture the display output as a string
             let mut output = String::new();
             output.push_str(&format!("Learning Progress: {}\n", project));
-            output.push_str(&format!("Created: {}\n", state.created_at.format("%Y-%m-%d %H:%M:%S")));
-            output.push_str(&format!("Updated: {}\n", state.updated_at.format("%Y-%m-%d %H:%M:%S")));
+            output.push_str(&format!(
+                "Created: {}\n",
+                state.created_at.format("%Y-%m-%d %H:%M:%S")
+            ));
+            output.push_str(&format!(
+                "Updated: {}\n",
+                state.updated_at.format("%Y-%m-%d %H:%M:%S")
+            ));
             output.push_str(&format!("Sessions: {}\n\n", state.session_count()));
-            
+
             let converged = state.has_converged();
-            output.push_str(&format!("Status: {}\n\n", if converged { "Converged ✓" } else { "Learning..." }));
-            
+            output.push_str(&format!(
+                "Status: {}\n\n",
+                if converged {
+                    "Converged ✓"
+                } else {
+                    "Learning..."
+                }
+            ));
+
             if let Some(latest) = state.metrics_history.last() {
                 output.push_str("Current Metrics:\n");
                 output.push_str(&format!("  Health Score: {}\n", latest.health_score));
-                output.push_str(&format!("  Avg Query Time: {} ms\n", latest.avg_query_time_ms));
-                output.push_str(&format!("  Stale Knowledge: {:.1}%\n", latest.stale_knowledge_pct));
-                output.push_str(&format!("  Storage Size: {:.1} MB\n", latest.storage_size_mb));
+                output.push_str(&format!(
+                    "  Avg Query Time: {} ms\n",
+                    latest.avg_query_time_ms
+                ));
+                output.push_str(&format!(
+                    "  Stale Knowledge: {:.1}%\n",
+                    latest.stale_knowledge_pct
+                ));
+                output.push_str(&format!(
+                    "  Storage Size: {:.1} MB\n",
+                    latest.storage_size_mb
+                ));
             }
-            
-            output.push_str(&format!("\nAdaptation Success Rate: {:.1}%\n", state.adaptation_success_rate() * 100.0));
-            output.push_str(&format!("Total Adaptations: {}\n", state.adaptation_history.len()));
-            
+
+            output.push_str(&format!(
+                "\nAdaptation Success Rate: {:.1}%\n",
+                state.adaptation_success_rate() * 100.0
+            ));
+            output.push_str(&format!(
+                "Total Adaptations: {}\n",
+                state.adaptation_history.len()
+            ));
+
             output
         }
         Err(e) => format!("Error loading learning state: {}", e),
@@ -437,12 +465,15 @@ pub fn load_analytics(memory_dir: &Path, project: &str, days: u32) -> String {
             output.push_str(&format!("Analytics: {} (last {} days)\n\n", project, days));
             output.push_str(&format!("Total Events: {}\n", insights.total_events));
             output.push_str(&format!("Unique Projects: {}\n", insights.unique_projects));
-            
+
             if let Some(most_active) = &insights.most_active_project {
                 output.push_str(&format!("Most Active Project: {}\n", most_active));
             }
-            
-            output.push_str(&format!("Most Common Event: {}\n", insights.most_common_event));
+
+            output.push_str(&format!(
+                "Most Common Event: {}\n",
+                insights.most_common_event
+            ));
             output.push_str(&format!("Usage Trend: {}\n\n", insights.usage_trend));
 
             if !insights.top_knowledge.is_empty() {
@@ -486,7 +517,11 @@ pub fn load_health_report(memory_dir: &Path, project: &str) -> String {
         Ok(report) => {
             let mut output = String::new();
             output.push_str(&format!("Health Check: {}\n\n", project));
-            output.push_str(&format!("Score: {}/100 ({})\n\n", report.score, report.health_status()));
+            output.push_str(&format!(
+                "Score: {}/100 ({})\n\n",
+                report.score,
+                report.health_status()
+            ));
 
             if report.issues.is_empty() {
                 output.push_str("✓ No issues found!\n");
@@ -494,9 +529,21 @@ pub fn load_health_report(memory_dir: &Path, project: &str) -> String {
                 output.push_str(&format!("Issues ({}):\n", report.issues.len()));
 
                 // Group by severity
-                let critical: Vec<_> = report.issues.iter().filter(|i| i.severity == Severity::Critical).collect();
-                let warnings: Vec<_> = report.issues.iter().filter(|i| i.severity == Severity::Warning).collect();
-                let info: Vec<_> = report.issues.iter().filter(|i| i.severity == Severity::Info).collect();
+                let critical: Vec<_> = report
+                    .issues
+                    .iter()
+                    .filter(|i| i.severity == Severity::Critical)
+                    .collect();
+                let warnings: Vec<_> = report
+                    .issues
+                    .iter()
+                    .filter(|i| i.severity == Severity::Warning)
+                    .collect();
+                let info: Vec<_> = report
+                    .issues
+                    .iter()
+                    .filter(|i| i.severity == Severity::Info)
+                    .collect();
 
                 if !critical.is_empty() {
                     output.push_str("\nCRITICAL:\n");
@@ -538,4 +585,3 @@ pub fn load_health_report(memory_dir: &Path, project: &str) -> String {
         Err(e) => format!("Error running health check: {}", e),
     }
 }
-
