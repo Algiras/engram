@@ -4,10 +4,10 @@
 //! If a test passes, the system is robust. If it fails, we found a vulnerability.
 
 use chrono::Utc;
-use claude_memory::analytics::tracker::{EventTracker, EventType, UsageEvent};
-use claude_memory::auth::providers::{Provider, ResolvedProvider};
-use claude_memory::config::Config;
-use claude_memory::learning::{self, progress, signals};
+use engram::analytics::tracker::{EventTracker, EventType, UsageEvent};
+use engram::auth::providers::{Provider, ResolvedProvider};
+use engram::config::Config;
+use engram::learning::{self, progress, signals};
 use tempfile::TempDir;
 
 fn create_test_config(temp: &TempDir) -> Config {
@@ -224,7 +224,7 @@ fn red_queen_learning_state_corruption() {
 
 #[test]
 fn red_queen_reward_calculation_edge_cases() {
-    use claude_memory::learning::signals::LearningSignal;
+    use engram::learning::signals::LearningSignal;
 
     // Challenge: Are rewards always in valid range?
     let test_signals = vec![

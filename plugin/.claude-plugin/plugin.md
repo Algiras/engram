@@ -1,6 +1,6 @@
 # Hive Knowledge Plugin
 
-Distributed knowledge sharing for claude-memory via the Hive Mind system.
+Distributed knowledge sharing for engram via the Hive Mind system.
 
 ## Overview
 
@@ -59,18 +59,18 @@ Search for knowledge packs by keyword or description.
 
 ## Prerequisites
 
-1. **Install claude-memory:**
+1. **Install engram:**
 ```bash
-cargo install --path /path/to/claude-memory
+cargo install --path /path/to/engram
 ```
 
 2. **Configure a registry:**
 ```bash
 # Add official registry
-claude-memory hive registry add Algiras/claude-memory
+engram hive registry add Algiras/engram
 
 # Or add local registry
-claude-memory hive registry add file:///path/to/registry
+engram hive registry add file:///path/to/registry
 ```
 
 ## Getting Started
@@ -82,14 +82,14 @@ claude-memory hive registry add file:///path/to/registry
 
 2. **Install a pack:**
 ```bash
-/hive-install claude-memory-core
+/hive-install engram-core
 ```
 
 3. **Use the knowledge:**
 The installed pack's knowledge is now automatically included when you use:
-- `claude-memory recall <project>`
-- `claude-memory search <query>`
-- `claude-memory lookup <project> <topic>`
+- `engram recall <project>`
+- `engram search <query>`
+- `engram lookup <project> <topic>`
 
 ## Creating Your Own Packs
 
@@ -98,14 +98,14 @@ See the hive-knowledge skill for detailed instructions on creating and publishin
 ## Integration
 
 This plugin integrates with:
-- **claude-memory CLI** - All hive commands
+- **engram CLI** - All hive commands
 - **TUI** - Press 'p' in TUI to browse packs
 - **Recall system** - Installed packs automatically included
 
 ## Support
 
-- Repository: https://github.com/Algiras/claude-memory
-- Issues: https://github.com/Algiras/claude-memory/issues
+- Repository: https://github.com/Algiras/engram
+- Issues: https://github.com/Algiras/engram/issues
 - Documentation: See hive-knowledge skill
 
 ## License

@@ -1,7 +1,7 @@
 #!/bin/sh
-# Install claude-memory
+# Install engram
 #
-# Usage: curl -fsSL https://raw.githubusercontent.com/Algiras/claude-memory/master/install.sh | sh
+# Usage: curl -fsSL https://raw.githubusercontent.com/Algiras/engram/master/install.sh | sh
 #
 # Options:
 #   INSTALL_DIR=~/.local/bin  - Custom install directory (default: /usr/local/bin)
@@ -9,8 +9,8 @@
 
 set -e
 
-REPO="${REPO:-Algiras/claude-memory}"
-BINARY="claude-memory"
+REPO="${REPO:-Algiras/engram}"
+BINARY="engram"
 INSTALL_DIR="${INSTALL_DIR:-/usr/local/bin}"
 RELEASES_API_URL="${RELEASES_API_URL:-https://api.github.com/repos/${REPO}/releases}"
 RELEASE_BASE_URL="${RELEASE_BASE_URL:-https://github.com/${REPO}/releases/download}"
@@ -71,7 +71,7 @@ detect_platform() {
         Linux-x86_64|Linux-amd64)
             TARGET="x86_64-unknown-linux-gnu"
             EXT="tar.gz"
-            LEGACY_ARCHIVE="claude-memory-linux-x86_64.tar.gz"
+            LEGACY_ARCHIVE="engram-linux-x86_64.tar.gz"
             ;;
         Linux-aarch64|Linux-arm64)
             echo "Error: no prebuilt binary for Linux ARM64 yet." >&2
@@ -81,7 +81,7 @@ detect_platform() {
         Darwin-arm64|Darwin-aarch64)
             TARGET="aarch64-apple-darwin"
             EXT="tar.gz"
-            LEGACY_ARCHIVE="claude-memory-darwin-arm64.tar.gz"
+            LEGACY_ARCHIVE="engram-darwin-arm64.tar.gz"
             ;;
         Darwin-x86_64)
             echo "Error: no prebuilt binary for macOS Intel (x86_64)." >&2
@@ -91,8 +91,8 @@ detect_platform() {
         MINGW*-x86_64|MSYS*-x86_64|CYGWIN*-x86_64)
             TARGET="x86_64-pc-windows-msvc"
             EXT="zip"
-            BINARY="claude-memory.exe"
-            LEGACY_ARCHIVE="claude-memory-windows-x86_64.zip"
+            BINARY="engram.exe"
+            LEGACY_ARCHIVE="engram-windows-x86_64.zip"
             ;;
         *)
             echo "Error: no prebuilt binary for ${OS}/${ARCH}" >&2
@@ -101,7 +101,7 @@ detect_platform() {
             ;;
     esac
 
-    ARCHIVE_PRIMARY="claude-memory-${TARGET}.${EXT}"
+    ARCHIVE_PRIMARY="engram-${TARGET}.${EXT}"
 }
 
 get_latest_version() {
@@ -191,10 +191,10 @@ main() {
     echo "Installed ${BINARY} ${VERSION} to ${INSTALL_DIR}/${BINARY}"
     echo ""
     echo "Get started:"
-    echo "  claude-memory auth login              # Configure LLM provider"
-    echo "  claude-memory ingest --skip-knowledge  # Archive conversations"
-    echo "  claude-memory projects                 # List projects"
-    echo "  claude-memory tui                      # Interactive browser"
+    echo "  engram auth login              # Configure LLM provider"
+    echo "  engram ingest --skip-knowledge  # Archive conversations"
+    echo "  engram projects                 # List projects"
+    echo "  engram tui                      # Interactive browser"
 }
 
 main

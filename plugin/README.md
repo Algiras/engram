@@ -22,20 +22,20 @@ claude plugin add anthropics/hive-knowledge-plugin
 
 ## Quick Start
 
-1. **Install claude-memory:**
+1. **Install engram:**
 ```bash
-cargo install --path /path/to/claude-memory
+cargo install --path /path/to/engram
 ```
 
 2. **Add a registry:**
 ```bash
-claude-memory hive registry add Algiras/claude-memory
+engram hive registry add Algiras/engram
 ```
 
 3. **Browse and install packs:**
 ```bash
 /hive-browse
-/hive-install claude-memory-core
+/hive-install engram-core
 ```
 
 ## Features

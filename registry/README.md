@@ -1,11 +1,11 @@
 # Claude Memory Core Registry
 
-Official registry of core knowledge packs for claude-memory.
+Official registry of core knowledge packs for engram.
 
 ## Available Packs
 
-### claude-memory-core
-Meta-knowledge about the claude-memory system itself.
+### engram-core
+Meta-knowledge about the engram system itself.
 
 **Categories:** Patterns, Solutions, Workflows
 **Version:** 1.0.0
@@ -19,8 +19,8 @@ Meta-knowledge about the claude-memory system itself.
 
 **Install:**
 ```bash
-claude-memory hive registry add /path/to/claude-memory/registry
-claude-memory hive install claude-memory-core
+engram hive registry add /path/to/engram/registry
+engram hive install engram-core
 ```
 
 ## Using This Registry
@@ -29,30 +29,30 @@ claude-memory hive install claude-memory-core
 
 ```bash
 # Add the registry (from repo root)
-cd /path/to/claude-memory
-claude-memory hive registry add ./registry
+cd /path/to/engram
+engram hive registry add ./registry
 
 # Browse available packs
-claude-memory hive browse
+engram hive browse
 
 # Install the core pack
-claude-memory hive install claude-memory-core
+engram hive install engram-core
 
 # View the knowledge
-claude-memory recall <your-project>
+engram recall <your-project>
 ```
 
 ### From GitHub (Once Published)
 
 ```bash
 # Add the registry
-claude-memory hive registry add Algiras/claude-memory
+engram hive registry add Algiras/engram
 
 # Or full URL
-claude-memory hive registry add https://github.com/Algiras/claude-memory
+engram hive registry add https://github.com/Algiras/engram
 
 # Install packs
-claude-memory hive install claude-memory-core
+engram hive install engram-core
 ```
 
 ## Pack Structure
@@ -81,7 +81,7 @@ To add a pack to this registry:
 2. Add `.pack/manifest.json` with complete metadata
 3. Add knowledge files in `knowledge/` directory
 4. Add a README.md documenting the pack
-5. Test locally: `claude-memory hive install <pack-name>`
+5. Test locally: `engram hive install <pack-name>`
 6. Submit a PR
 
 ### Pack Naming Conventions

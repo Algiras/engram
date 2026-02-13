@@ -28,7 +28,7 @@ Here's a breakdown of the codebase patterns and conventions discovered in the Cl
 **2. Hook-Based Context Injection:**
 
 *   **Pattern:** Session-Specific Context Injection via Hooks
-*   **Details:** The system uses hooks (e.g., `claude-memory-hook.sh`, `inject-context.sh`, `session-end-hook.sh`) to automatically inject the synthesized project context into Claude Code sessions at the start, during tool use, or at session end. This is a key mechanism for providing Claude with relevant information.
+*   **Details:** The system uses hooks (e.g., `engram-hook.sh`, `inject-context.sh`, `session-end-hook.sh`) to automatically inject the synthesized project context into Claude Code sessions at the start, during tool use, or at session end. This is a key mechanism for providing Claude with relevant information.
 *   **Files:** `hooks/**/*`
 
 **3. MCP (Model Context Protocol) Server:**

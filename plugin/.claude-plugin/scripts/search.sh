@@ -13,10 +13,10 @@ QUERY="$*"
 echo "🔎 Searching for: $QUERY"
 echo ""
 
-if ! command -v claude-memory &> /dev/null; then
-    echo "❌ claude-memory not found in PATH"
-    echo "   Install: cargo install --path /path/to/claude-memory"
+if ! command -v engram &> /dev/null; then
+    echo "❌ engram not found in PATH"
+    echo "   Install: cargo install --path /path/to/engram"
     exit 1
 fi
 
-claude-memory hive search "$QUERY"
+engram hive search "$QUERY"

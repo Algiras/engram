@@ -2,19 +2,19 @@
 
 ## Overview
 
-The Hive Mind is a Git-based distributed knowledge sharing system for claude-memory. It enables teams to create, publish, discover, and install knowledge packs.
+The Hive Mind is a Git-based distributed knowledge sharing system for engram. It enables teams to create, publish, discover, and install knowledge packs.
 
 ## Quick Start (3 Commands)
 
 ```bash
 # 1. Add a registry
-claude-memory hive registry add Algiras/claude-memory
+engram hive registry add Algiras/engram
 
 # 2. Install the meta-knowledge pack
-claude-memory hive install claude-memory-core
+engram hive install engram-core
 
 # 3. Use it
-claude-memory recall <your-project>
+engram recall <your-project>
 # Knowledge from pack now appears automatically!
 ```
 
@@ -24,38 +24,38 @@ claude-memory recall <your-project>
 
 ```bash
 # Add a registry (one-time setup)
-claude-memory hive registry add owner/repo
+engram hive registry add owner/repo
 
 # Browse available packs
-claude-memory hive browse
-claude-memory hive browse --category patterns
-claude-memory hive browse --keyword rust
+engram hive browse
+engram hive browse --category patterns
+engram hive browse --keyword rust
 
 # Search for specific knowledge
-claude-memory hive search "async patterns"
+engram hive search "async patterns"
 
 # Install a pack
-claude-memory hive install <pack-name>
+engram hive install <pack-name>
 
 # Use the knowledge (automatic integration!)
-claude-memory recall <project>   # Includes pack knowledge
-claude-memory search "query"      # Searches packs too
+engram recall <project>   # Includes pack knowledge
+engram search "query"      # Searches packs too
 
 # Keep packs updated
-claude-memory hive update
+engram hive update
 
 # Remove if no longer needed
-claude-memory hive uninstall <pack-name>
+engram hive uninstall <pack-name>
 ```
 
 ### For Creators (Share Your Knowledge)
 
 ```bash
 # 1. Extract knowledge from your work
-claude-memory ingest --project my-project
+engram ingest --project my-project
 
 # 2. Create a pack
-claude-memory hive pack create my-pack \
+engram hive pack create my-pack \
   --project my-project \
   --description "My awesome patterns" \
   --keywords "rust,async,patterns" \
@@ -71,10 +71,10 @@ cat .pack/manifest.json
 ls knowledge/
 
 # 4. Validate
-claude-memory hive pack validate .
+engram hive pack validate .
 
 # 5. Publish
-claude-memory hive pack publish . \
+engram hive pack publish . \
   --repo https://github.com/user/my-pack \
   --push
 
@@ -83,7 +83,7 @@ claude-memory hive pack publish . \
 # → Pushes to GitHub
 
 # 6. Share with others
-# Users can now: claude-memory hive registry add user/my-pack
+# Users can now: engram hive registry add user/my-pack
 ```
 
 ## Commands Reference
@@ -240,13 +240,13 @@ In manifest `privacy` section:
 
 ```bash
 # Check all projects + packs
-claude-memory doctor
+engram doctor
 
 # Auto-fix issues
-claude-memory doctor --fix
+engram doctor --fix
 
 # Verbose output
-claude-memory doctor --verbose
+engram doctor --verbose
 ```
 
 **Pack Health Checks:**
@@ -262,7 +262,7 @@ claude-memory doctor --verbose
 ## TUI (Interactive Browser)
 
 ```bash
-claude-memory tui
+engram tui
 
 # In Packs screen (press 'p'):
 # j/k       - Navigate
@@ -284,13 +284,13 @@ Once packs are installed, their knowledge appears in:
 
 ```bash
 # Recall shows local + pack knowledge
-claude-memory recall <project>
+engram recall <project>
 
 # Search across all sources
-claude-memory search "pattern"
+engram search "pattern"
 
 # Lookup in combined knowledge
-claude-memory lookup <project> "topic"
+engram lookup <project> "topic"
 ```
 
 ### Claude Code Integration
@@ -308,17 +308,17 @@ claude-memory lookup <project> "topic"
 
 ## Example Packs
 
-### claude-memory-core (Meta-Knowledge)
+### engram-core (Meta-Knowledge)
 
 Included in this repository:
 
 ```bash
 # Add core registry
-cd /path/to/claude-memory
-claude-memory hive registry add file://$(pwd)/registry
+cd /path/to/engram
+engram hive registry add file://$(pwd)/registry
 
 # Install
-claude-memory hive install claude-memory-core
+engram hive install engram-core
 
 # Contains:
 # - How knowledge extraction works
@@ -331,18 +331,18 @@ claude-memory hive install claude-memory-core
 
 ```bash
 # 1. Work on your project, extract knowledge
-claude-memory ingest --project my-rust-proj
+engram ingest --project my-rust-proj
 
 # 2. Create pack
-claude-memory hive pack create rust-patterns \
+engram hive pack create rust-patterns \
   --project my-rust-proj \
   --description "Rust async patterns" \
   --keywords "rust,async,tokio" \
   --categories "patterns,solutions"
 
 # 3. Validate & publish
-claude-memory hive pack validate ./packs/rust-patterns
-claude-memory hive pack publish ./packs/rust-patterns \
+engram hive pack validate ./packs/rust-patterns
+engram hive pack publish ./packs/rust-patterns \
   --repo https://github.com/user/rust-patterns \
   --push
 ```
@@ -364,30 +364,30 @@ claude-memory hive pack publish ./packs/rust-patterns \
 
 ```bash
 # Update registries first
-claude-memory hive registry update
+engram hive registry update
 
 # Check if pack exists
-claude-memory hive browse | grep <pack-name>
+engram hive browse | grep <pack-name>
 ```
 
 ### Knowledge Not Appearing
 
 ```bash
 # Verify installation
-claude-memory hive list
+engram hive list
 
 # Check files
 ls ~/memory/packs/installed/<pack>/knowledge/
 
 # Check health
-claude-memory doctor
+engram doctor
 ```
 
 ### Registry Clone Failed
 
 ```bash
 # Use full HTTPS URL
-claude-memory hive registry add https://github.com/owner/repo.git
+engram hive registry add https://github.com/owner/repo.git
 
 # Test git access
 git ls-remote <url>
@@ -432,7 +432,7 @@ git ls-remote <url>
 ### Pack Statistics
 
 ```bash
-claude-memory hive pack stats <pack-name>
+engram hive pack stats <pack-name>
 
 # Shows:
 # - Entry counts per category
@@ -445,7 +445,7 @@ claude-memory hive pack stats <pack-name>
 
 ```bash
 # Check everything
-claude-memory doctor
+engram doctor
 
 # Checks:
 # - Manifest validity
@@ -454,13 +454,13 @@ claude-memory doctor
 # - Pack integrity
 
 # Auto-fix issues
-claude-memory doctor --fix
+engram doctor --fix
 ```
 
 ### Validation
 
 ```bash
-claude-memory hive pack validate <path>
+engram hive pack validate <path>
 
 # Checks:
 # - Manifest exists and valid JSON
@@ -499,14 +499,14 @@ Contribute packs to the community:
 1. Create high-quality knowledge packs
 2. Publish to GitHub
 3. Share registry URL
-4. Submit to claude-memory community registry (planned)
+4. Submit to engram community registry (planned)
 
 ## License
 
-MIT - Same as claude-memory
+MIT - Same as engram
 
 ## Learn More
 
-- Main Repository: https://github.com/Algiras/claude-memory
-- Core Registry: https://github.com/Algiras/claude-memory/tree/master/registry
-- Issues: https://github.com/Algiras/claude-memory/issues
+- Main Repository: https://github.com/Algiras/engram
+- Core Registry: https://github.com/Algiras/engram/tree/master/registry
+- Issues: https://github.com/Algiras/engram/issues

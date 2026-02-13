@@ -16,9 +16,9 @@ Claude-memory follows a systematic workflow for knowledge management:
 
 **Key Commands:**
 ```bash
-claude-memory ingest [--project <name>]  # Extract knowledge from conversations
-claude-memory recall <project>            # View synthesized knowledge
-claude-memory inject [project]            # Inject into Claude Code
+engram ingest [--project <name>]  # Extract knowledge from conversations
+engram recall <project>            # View synthesized knowledge
+engram inject [project]            # Inject into Claude Code
 ```
 
 ## Session: knowledge-categorization (2026-02-12T00:00:00Z) [ttl:never]
@@ -72,7 +72,7 @@ Multiple paragraphs supported.
 
 **TTL Management:**
 - Expired entries are marked `[EXPIRED]` in recall
-- Use `claude-memory forget --expired` to clean up
+- Use `engram forget --expired` to clean up
 - Default TTL: 30 days (configurable with `--ttl`)
 
 ## Session: hive-mind-architecture (2026-02-12T00:00:00Z) [ttl:never]
@@ -128,10 +128,10 @@ Relationships (edges)
 
 **Operations:**
 ```bash
-claude-memory graph build <project>     # Build graph
-claude-memory graph query <concept>     # Explore concept
-claude-memory graph viz <project>       # Visualize
-claude-memory graph path <from> <to>    # Find connections
+engram graph build <project>     # Build graph
+engram graph query <concept>     # Explore concept
+engram graph viz <project>       # Visualize
+engram graph path <from> <to>    # Find connections
 ```
 
 **Use Cases:**
@@ -154,9 +154,9 @@ Claude-memory includes a reinforcement learning system:
 
 **Commands:**
 ```bash
-claude-memory learn dashboard          # View learning progress
-claude-memory learn optimize <project> # Apply optimizations
-claude-memory learn feedback --helpful # Explicit feedback
+engram learn dashboard          # View learning progress
+engram learn optimize <project> # Apply optimizations
+engram learn feedback --helpful # Explicit feedback
 ```
 
 **Signals:**

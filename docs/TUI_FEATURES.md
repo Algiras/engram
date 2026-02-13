@@ -2,7 +2,7 @@
 
 ## Overview
 
-The claude-memory TUI provides an interactive interface for browsing conversations, managing knowledge, and monitoring system health. This document describes all available screens and keyboard shortcuts.
+The engram TUI provides an interactive interface for browsing conversations, managing knowledge, and monitoring system health. This document describes all available screens and keyboard shortcuts.
 
 ## Screens
 
@@ -197,9 +197,9 @@ Most screens load data only when accessed:
 - Health checks: Can be slow for large projects
 
 ### Troubleshooting
-1. **No data in Learning/Analytics**: Run `claude-memory ingest` first
+1. **No data in Learning/Analytics**: Run `engram ingest` first
 2. **Empty Health Check**: Project needs knowledge directory
-3. **Packs not showing**: Run `claude-memory hive install <pack>`
+3. **Packs not showing**: Run `engram hive install <pack>`
 4. **Search not working**: Ensure directories exist in `~/memory/`
 
 ## Architecture Notes

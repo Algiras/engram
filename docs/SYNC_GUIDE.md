@@ -11,23 +11,23 @@ Share and version your knowledge using GitHub Gists or Git repositories.
 export GITHUB_TOKEN='your-token-here'
 
 # 2. Push knowledge to a private gist
-claude-memory sync push my-project
+engram sync push my-project
 
 # 3. On another machine, pull the knowledge
-claude-memory sync pull my-project <gist-id>
+engram sync pull my-project <gist-id>
 ```
 
 ### Git Repository (Multi-agent collaboration)
 
 ```bash
 # 1. Initialize a shared memory repo
-claude-memory sync init-repo ~/shared-memory
+engram sync init-repo ~/shared-memory
 
 # 2. Push knowledge
-claude-memory sync push-repo my-project ~/shared-memory
+engram sync push-repo my-project ~/shared-memory
 
 # 3. Other agents pull changes
-claude-memory sync pull-repo my-project ~/shared-memory
+engram sync pull-repo my-project ~/shared-memory
 ```
 
 ## GitHub Gists
@@ -54,13 +54,13 @@ Create or update a private gist:
 
 ```bash
 # First push (creates new gist)
-claude-memory sync push my-project
+engram sync push my-project
 
 # Update existing gist
-claude-memory sync push my-project --gist-id abc123
+engram sync push my-project --gist-id abc123
 
 # Custom description
-claude-memory sync push my-project --description "My Team's Project Knowledge"
+engram sync push my-project --description "My Team's Project Knowledge"
 ```
 
 #### Pull Knowledge
@@ -69,13 +69,13 @@ Download knowledge from a gist:
 
 ```bash
 # Pull to existing project
-claude-memory sync pull my-project abc123
+engram sync pull my-project abc123
 
 # Overwrite local knowledge
-claude-memory sync pull my-project abc123 --force
+engram sync pull my-project abc123 --force
 
 # Clone to new project
-claude-memory sync clone abc123 new-project
+engram sync clone abc123 new-project
 ```
 
 #### List Gists
@@ -83,7 +83,7 @@ claude-memory sync clone abc123 new-project
 Find gists for a project:
 
 ```bash
-claude-memory sync list my-project
+engram sync list my-project
 ```
 
 #### Version History
@@ -92,13 +92,13 @@ View and restore previous versions:
 
 ```bash
 # Show all versions
-claude-memory sync history abc123
+engram sync history abc123
 
 # View specific version
-claude-memory sync history abc123 --version 1234567890abcdef
+engram sync history abc123 --version 1234567890abcdef
 
 # Restore a version
-claude-memory sync pull my-project 1234567890abcdef
+engram sync pull my-project 1234567890abcdef
 ```
 
 ## Git Repository Sync
@@ -130,27 +130,27 @@ git remote add origin git@github.com:yourteam/shared-memory.git
 
 ```bash
 # Push knowledge to git repo
-claude-memory sync push-repo my-project ~/shared-memory
+engram sync push-repo my-project ~/shared-memory
 
 # With custom commit message
-claude-memory sync push-repo my-project ~/shared-memory \
+engram sync push-repo my-project ~/shared-memory \
   --message "Updated patterns from session abc123"
 
 # Push and sync to remote
-claude-memory sync push-repo my-project ~/shared-memory --push-remote
+engram sync push-repo my-project ~/shared-memory --push-remote
 ```
 
 #### Pull from Repository
 
 ```bash
 # Pull knowledge from git repo
-claude-memory sync pull-repo my-project ~/shared-memory
+engram sync pull-repo my-project ~/shared-memory
 
 # Pull from specific branch
-claude-memory sync pull-repo my-project ~/shared-memory --branch develop
+engram sync pull-repo my-project ~/shared-memory --branch develop
 
 # Pull from remote first
-claude-memory sync pull-repo my-project ~/shared-memory --fetch-remote
+engram sync pull-repo my-project ~/shared-memory --fetch-remote
 ```
 
 #### Sync Workflow
@@ -159,14 +159,14 @@ For continuous collaboration:
 
 ```bash
 # Agent 1: Make changes and push
-claude-memory ingest --project my-project
-claude-memory sync push-repo my-project ~/shared-memory --push-remote
+engram ingest --project my-project
+engram sync push-repo my-project ~/shared-memory --push-remote
 
 # Agent 2: Pull changes before working
-claude-memory sync pull-repo my-project ~/shared-memory --fetch-remote
-claude-memory recall my-project
+engram sync pull-repo my-project ~/shared-memory --fetch-remote
+engram recall my-project
 # ... work on project ...
-claude-memory sync push-repo my-project ~/shared-memory --push-remote
+engram sync push-repo my-project ~/shared-memory --push-remote
 ```
 
 ## Use Cases
@@ -177,8 +177,8 @@ Use gists for simple backup:
 
 ```bash
 # Push all projects to gists
-for project in $(claude-memory projects | grep -o '^\s*[^ ]*'); do
-  claude-memory sync push "$project" --description "$project knowledge backup"
+for project in $(engram projects | grep -o '^\s*[^ ]*'); do
+  engram sync push "$project" --description "$project knowledge backup"
 done
 ```
 
@@ -191,9 +191,9 @@ Use git repo for team collaboration:
 git clone git@github.com:yourteam/knowledge.git ~/team-knowledge
 
 # Each team member syncs
-claude-memory sync pull-repo project-x ~/team-knowledge --fetch-remote
+engram sync pull-repo project-x ~/team-knowledge --fetch-remote
 # ... work ...
-claude-memory sync push-repo project-x ~/team-knowledge --push-remote
+engram sync push-repo project-x ~/team-knowledge --push-remote
 ```
 
 ### 3. Multi-Machine Development
@@ -202,11 +202,11 @@ Sync between work and home:
 
 ```bash
 # On work machine
-claude-memory sync push my-project
+engram sync push my-project
 # Note the gist ID: abc123
 
 # On home machine
-claude-memory sync pull my-project abc123
+engram sync pull my-project abc123
 ```
 
 ### 4. Knowledge Versioning
@@ -215,13 +215,13 @@ Track knowledge evolution:
 
 ```bash
 # Push regularly to create version history
-claude-memory sync push my-project --gist-id abc123
+engram sync push my-project --gist-id abc123
 
 # Later, view what changed
-claude-memory sync history abc123
+engram sync history abc123
 
 # Restore old version if needed
-claude-memory sync pull my-project <old-version-id>
+engram sync pull my-project <old-version-id>
 ```
 
 ### 5. Multi-Agent System
@@ -233,17 +233,17 @@ Multiple AI agents collaborating:
 git clone git@github.com:ai-team/memory.git ~/ai-memory
 
 # Agent A (planning agent)
-claude-memory sync pull-repo project-x ~/ai-memory
+engram sync pull-repo project-x ~/ai-memory
 # ... extract planning decisions ...
-claude-memory sync push-repo project-x ~/ai-memory
+engram sync push-repo project-x ~/ai-memory
 
 # Agent B (implementation agent)
-claude-memory sync pull-repo project-x ~/ai-memory --fetch-remote
+engram sync pull-repo project-x ~/ai-memory --fetch-remote
 # ... implement based on plans ...
-claude-memory sync push-repo project-x ~/ai-memory --push-remote
+engram sync push-repo project-x ~/ai-memory --push-remote
 
 # Agent C (review agent)
-claude-memory sync pull-repo project-x ~/ai-memory --fetch-remote
+engram sync pull-repo project-x ~/ai-memory --fetch-remote
 # ... review and add patterns ...
 ```
 
@@ -266,9 +266,9 @@ claude-memory sync pull-repo project-x ~/ai-memory --fetch-remote
 
 ```bash
 # Use gists for simplicity
-claude-memory sync push my-project
+engram sync push my-project
 # Work continues...
-claude-memory sync push my-project --gist-id abc123
+engram sync push my-project --gist-id abc123
 ```
 
 ### Small Team (2-5 people)
@@ -278,9 +278,9 @@ claude-memory sync push my-project --gist-id abc123
 git clone git@github.com:team/knowledge.git ~/team-knowledge
 
 # Daily workflow
-claude-memory sync pull-repo projects ~/team-knowledge --fetch-remote
+engram sync pull-repo projects ~/team-knowledge --fetch-remote
 # Work...
-claude-memory sync push-repo projects ~/team-knowledge --push-remote
+engram sync push-repo projects ~/team-knowledge --push-remote
 ```
 
 ### Multi-Agent System
@@ -290,9 +290,9 @@ claude-memory sync push-repo projects ~/team-knowledge --push-remote
 git clone git@github.com:org/ai-memory.git ~/ai-memory
 
 # Each agent has a role
-claude-memory sync pull-repo project ~/ai-memory --branch agent-a
+engram sync pull-repo project ~/ai-memory --branch agent-a
 # Work...
-claude-memory sync push-repo project ~/ai-memory --branch agent-a
+engram sync push-repo project ~/ai-memory --branch agent-a
 
 # Merge knowledge
 cd ~/ai-memory
@@ -321,7 +321,7 @@ For sensitive projects, encrypt before syncing:
 
 ```bash
 # Export and encrypt
-claude-memory export my-project json | \
+engram export my-project json | \
   gpg -e -r team@example.com | \
   base64 > knowledge.enc
 
@@ -369,12 +369,12 @@ Add to cron or git hooks:
 
 ```bash
 # crontab: sync every hour
-0 * * * * claude-memory sync push my-project --gist-id abc123
+0 * * * * engram sync push my-project --gist-id abc123
 
 # git post-commit hook
 #!/bin/bash
-claude-memory ingest
-claude-memory sync push my-project --gist-id abc123
+engram ingest
+engram sync push my-project --gist-id abc123
 ```
 
 ### CI/CD Integration
@@ -385,8 +385,8 @@ claude-memory sync push my-project --gist-id abc123
   env:
     GITHUB_TOKEN: ${{ secrets.GIST_TOKEN }}
   run: |
-    claude-memory ingest
-    claude-memory sync push my-project
+    engram ingest
+    engram sync push my-project
 ```
 
 ### Custom Sync Script
@@ -395,9 +395,9 @@ claude-memory sync push my-project --gist-id abc123
 #!/bin/bash
 # sync-all.sh - Sync all projects
 
-for project in $(claude-memory projects | grep -o '^\s*[^ ]*'); do
+for project in $(engram projects | grep -o '^\s*[^ ]*'); do
   echo "Syncing $project..."
-  claude-memory sync push "$project" || true
+  engram sync push "$project" || true
 done
 ```
 
@@ -413,4 +413,4 @@ Planned enhancements:
 
 ## Feedback
 
-Questions or suggestions? [Open an issue](https://github.com/Algiras/claude-memory/issues)!
+Questions or suggestions? [Open an issue](https://github.com/Algiras/engram/issues)!

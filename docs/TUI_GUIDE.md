@@ -1,11 +1,11 @@
 # TUI User Guide
 
-The `claude-memory` TUI provides an interactive interface for browsing and managing your conversation memory.
+The `engram` TUI provides an interactive interface for browsing and managing your conversation memory.
 
 ## Quick Start
 
 ```bash
-claude-memory tui
+engram tui
 ```
 
 ## What's New in v0.3.0 ⭐
@@ -31,7 +31,7 @@ The TUI now includes intelligent fuzzy matching for searches:
 
 **Examples:**
 - `nmcp` matches "nile-cag" and "MCP"
-- `clmem` matches "claude-memory"
+- `clmem` matches "engram"
 - `tuifix` matches "TUI fixes"
 
 ### 📊 Three-Screen Layout
@@ -148,7 +148,7 @@ The TUI uses the **Skim fuzzy matcher** (same as `fzf`), which:
 ## Troubleshooting
 
 ### "No memory directory found"
-Run `claude-memory ingest` first to populate memory.
+Run `engram ingest` first to populate memory.
 
 ### Search not finding expected results
 - Check spelling (fuzzy matching helps but has limits)
@@ -163,20 +163,20 @@ Run `claude-memory ingest` first to populate memory.
 If the TUI is slow with many projects:
 - Use fuzzy search instead of scrolling
 - Consider archiving old projects
-- Run `claude-memory forget` to clean up old sessions
+- Run `engram forget` to clean up old sessions
 
 ## Integration with Other Features
 
 ### After Deleting
 Deleted sessions are moved to system trash. To permanently remove:
 ```bash
-claude-memory forget <project> --purge
+engram forget <project> --purge
 ```
 
 ### Viewing Fresh Content
 The viewer shows the markdown as-is. For regenerated context:
 ```bash
-claude-memory regen <project>
+engram regen <project>
 ```
 
 Then refresh the TUI with `r`.
@@ -185,13 +185,13 @@ Then refresh the TUI with `r`.
 Use CLI for bulk operations, TUI for browsing:
 ```bash
 # Extract knowledge
-claude-memory ingest --provider gemini
+engram ingest --provider gemini
 
 # Browse results
-claude-memory tui
+engram tui
 
 # Search from CLI if needed
-claude-memory search "query"
+engram search "query"
 ```
 
 ## Advanced Usage
@@ -216,4 +216,4 @@ Planned features:
 
 ## Feedback
 
-Found a bug or have a suggestion? [Open an issue](https://github.com/Algiras/claude-memory/issues)
+Found a bug or have a suggestion? [Open an issue](https://github.com/Algiras/engram/issues)

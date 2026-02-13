@@ -1,6 +1,6 @@
 use chrono::{DateTime, Utc};
 use regex::Regex;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use crate::config::Config;
 use crate::error::Result;
@@ -576,4 +576,127 @@ fn clean_extraction(text: &str) -> Option<String> {
     } else {
         Some(trimmed.to_string())
     }
+}
+
+/// Result of auto-cleanup operation
+#[derive(Debug, Default)]
+pub struct CleanupResult {
+    pub removed_count: usize,
+    pub removed_session_ids: Vec<String>,
+    pub files_modified: Vec<PathBuf>,
+}
+
+/// Auto-cleanup expired entries from project knowledge files, inbox.md, and global preferences.
+/// Persists changes to disk using atomic writes.
+pub fn auto_cleanup_expired(
+    memory_dir: &Path,
+    project: &str,
+    verbose: bool,
+) -> crate::Result<CleanupResult> {
+    let mut result = CleanupResult::default();
+
+    let knowledge_dir = memory_dir.join("knowledge").join(project);
+    let global_prefs = memory_dir
+        .join("knowledge")
+        .join("_global")
+        .join("preferences.md");
+
+    // Files to clean
+    let files_to_clean = [
+        knowledge_dir.join("decisions.md"),
+        knowledge_dir.join("solutions.md"),
+        knowledge_dir.join("patterns.md"),
+        knowledge_dir.join("inbox.md"),
+        global_prefs,
+    ];
+
+    for file_path in files_to_clean.iter().filter(|p| p.exists()) {
+        let cleanup_info = cleanup_file_expired(file_path, verbose)?;
+        if cleanup_info.removed_count > 0 {
+            result.removed_count += cleanup_info.removed_count;
+            result
+                .removed_session_ids
+                .extend(cleanup_info.removed_session_ids);
+            result.files_modified.push(file_path.clone());
+        }
+    }
+
+    // Delete stale context.md if any entries removed
+    if result.removed_count > 0 {
+        let context_path = knowledge_dir.join("context.md");
+        if context_path.exists() {
+            std::fs::remove_file(&context_path)?;
+            if verbose {
+                println!("  Deleted stale context.md");
+            }
+        }
+    }
+
+    Ok(result)
+}
+
+/// Cleanup expired entries from a single file atomically.
+fn cleanup_file_expired(file_path: &Path, verbose: bool) -> crate::Result<CleanupResult> {
+    let content = std::fs::read_to_string(file_path)?;
+    let (preamble, blocks) = parse_session_blocks(&content);
+    let (active, expired_blocks) = partition_by_expiry(blocks);
+
+    if expired_blocks.is_empty() {
+        return Ok(CleanupResult::default());
+    }
+
+    let removed_session_ids: Vec<String> = expired_blocks
+        .iter()
+        .map(|b| b.session_id.clone())
+        .collect();
+
+    if verbose {
+        println!(
+            "  {} - removing {} expired entries",
+            file_path.file_name().unwrap().to_string_lossy(),
+            expired_blocks.len()
+        );
+        for id in &removed_session_ids {
+            println!("    - {}", id);
+        }
+    }
+
+    let rebuilt = reconstruct_blocks(&preamble, &active);
+
+    // Atomic write
+    atomic_write(file_path, &rebuilt)?;
+
+    Ok(CleanupResult {
+        removed_count: expired_blocks.len(),
+        removed_session_ids,
+        files_modified: vec![file_path.to_path_buf()],
+    })
+}
+
+/// Atomic file write to prevent corruption (write to .tmp, then rename).
+fn atomic_write(target: &Path, content: &str) -> crate::Result<()> {
+    use std::io::Write;
+
+    let temp_path = target.with_extension("tmp");
+
+    // Write to temp file
+    let mut temp_file = std::fs::File::create(&temp_path)?;
+    temp_file.write_all(content.as_bytes())?;
+    temp_file.sync_all()?; // Ensure data is written to disk
+    drop(temp_file);
+
+    // Atomic rename
+    #[cfg(unix)]
+    std::fs::rename(&temp_path, target)?;
+
+    #[cfg(not(unix))]
+    {
+        // Windows: remove target first, then rename
+        if target.exists() {
+            std::fs::remove_file(target)?;
+        }
+        std::fs::rename(&temp_path, target)?;
+    }
+
+    Ok(())
 }

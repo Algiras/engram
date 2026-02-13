@@ -1,5 +1,5 @@
 {
-  "name": "claude-memory",
+  "name": "engram",
   "version": "0.1.0",
   "description": "Conversation memory system for Claude Code. Archive JSONL sessions, extract knowledge via LLMs (Anthropic/OpenAI/Ollama), and search across all conversations.",
   "author": {
@@ -7,5 +7,5 @@
   },
   "license": "MIT",
   "keywords": ["memory", "conversations", "knowledge-extraction", "analytics", "archive"],
-  "homepage": "https://github.com/Algiras/claude-memory"
+  "homepage": "https://github.com/Algiras/engram"
 }

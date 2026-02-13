@@ -44,9 +44,9 @@ git push origin v0.3.0
 
 The workflow builds and uploads these assets:
 
-- `claude-memory-x86_64-unknown-linux-gnu.tar.gz`
-- `claude-memory-aarch64-apple-darwin.tar.gz`
-- `claude-memory-x86_64-pc-windows-msvc.zip`
+- `engram-x86_64-unknown-linux-gnu.tar.gz`
+- `engram-aarch64-apple-darwin.tar.gz`
+- `engram-x86_64-pc-windows-msvc.zip`
 - `checksums.txt` (SHA-256 checksums for all release archives)
 
 ## 4) Verify installer compatibility
@@ -56,8 +56,8 @@ The workflow builds and uploads these assets:
 Quick check after release:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/Algiras/claude-memory/master/install.sh | sh
-claude-memory --version
+curl -fsSL https://raw.githubusercontent.com/Algiras/engram/master/install.sh | sh
+engram --version
 ```
 
 ## 5) Optional: publish to crates.io
@@ -71,9 +71,9 @@ cargo publish
 
 ## 6) Post-release smoke checks
 
-- Run `claude-memory ingest --skip-knowledge`
-- Run `claude-memory projects`
-- Run `claude-memory tui`
-- If using MCP: `claude-memory mcp`
+- Run `engram ingest --skip-knowledge`
+- Run `engram projects`
+- Run `engram tui`
+- If using MCP: `engram mcp`
 
 If any smoke check fails, cut a patch release (`vX.Y.Z+1`) with the fix and changelog entry.

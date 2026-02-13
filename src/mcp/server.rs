@@ -16,7 +16,7 @@ impl McpServer {
 
     /// Run the MCP server on stdio
     pub fn run(&self) -> Result<()> {
-        eprintln!("{}", "claude-memory MCP server starting...".green());
+        eprintln!("{}", "engram MCP server starting...".green());
         eprintln!("{}", "Listening on stdio".dimmed());
 
         let stdin = std::io::stdin();
@@ -79,7 +79,7 @@ impl McpServer {
                     }
                 },
                 "serverInfo": {
-                    "name": "claude-memory",
+                    "name": "engram",
                     "version": env!("CARGO_PKG_VERSION")
                 }
             }),
@@ -435,7 +435,7 @@ impl McpServer {
             match self.build_raw_context(project, &knowledge_dir) {
                 Some(raw) => Ok(raw),
                 None => Ok(format!(
-                    "No context found for project '{}'. Run 'claude-memory ingest' first.",
+                    "No context found for project '{}'. Run 'engram ingest' first.",
                     project
                 )),
             }

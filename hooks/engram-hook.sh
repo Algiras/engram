@@ -1,17 +1,17 @@
 #!/bin/bash
-# claude-memory PostToolUse hook
+# engram PostToolUse hook
 # Spawns a background ingest of recent conversations (debounced)
 #
 # To install, add to ~/.claude/settings.json:
 # {
 #   "hooks": {
 #     "PostToolUse": [
-#       { "matcher": "", "hooks": [{ "type": "command", "command": "/path/to/claude-memory-hook.sh" }] }
+#       { "matcher": "", "hooks": [{ "type": "command", "command": "/path/to/engram-hook.sh" }] }
 #     ]
 #   }
 # }
 
-LOCKFILE="/tmp/claude-memory-hook.lock"
+LOCKFILE="/tmp/engram-hook.lock"
 DEBOUNCE_SECONDS=300  # 5 minutes
 
 # Quick exit if lock exists and is recent (debounce)
@@ -26,6 +26,6 @@ fi
 touch "$LOCKFILE"
 
 # Run ingest in background (archive only, no LLM — fast and silent)
-claude-memory ingest --skip-knowledge --since 5m >/dev/null 2>&1 &
+engram ingest --skip-knowledge --since 5m >/dev/null 2>&1 &
 
 exit 0

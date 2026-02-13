@@ -6,13 +6,13 @@ Export your project knowledge to various formats for sharing, documentation, or 
 
 ```bash
 # Export to markdown (stdout)
-claude-memory export my-project markdown
+engram export my-project markdown
 
 # Export to JSON file
-claude-memory export my-project json -o knowledge.json
+engram export my-project json -o knowledge.json
 
 # Export to standalone HTML
-claude-memory export my-project html -o knowledge.html
+engram export my-project html -o knowledge.html
 ```
 
 ## Supported Formats
@@ -29,7 +29,7 @@ claude-memory export my-project html -o knowledge.html
 
 **Example:**
 ```bash
-claude-memory export my-project markdown -o PROJECT_KNOWLEDGE.md
+engram export my-project markdown -o PROJECT_KNOWLEDGE.md
 ```
 
 **Output structure:**
@@ -65,7 +65,7 @@ claude-memory export my-project markdown -o PROJECT_KNOWLEDGE.md
 
 **Example:**
 ```bash
-claude-memory export my-project json -o knowledge.json
+engram export my-project json -o knowledge.json
 ```
 
 **Output structure:**
@@ -73,8 +73,8 @@ claude-memory export my-project json -o knowledge.json
 {
   "project": "my-project",
   "exported_at": "2026-02-12T14:37:05Z",
-  "tool": "claude-memory",
-  "tool_url": "https://github.com/Algiras/claude-memory",
+  "tool": "engram",
+  "tool_url": "https://github.com/Algiras/engram",
   "knowledge": {
     "context": "...",
     "decisions": "...",
@@ -98,7 +98,7 @@ claude-memory export my-project json -o knowledge.json
 
 **Example:**
 ```bash
-claude-memory export my-project html -o knowledge.html
+engram export my-project html -o knowledge.html
 ```
 
 **Features:**
@@ -115,7 +115,7 @@ claude-memory export my-project html -o knowledge.html
 By default, exports only include synthesized knowledge (decisions, solutions, patterns). To include full conversation archives:
 
 ```bash
-claude-memory export my-project markdown --include-conversations > full_export.md
+engram export my-project markdown --include-conversations > full_export.md
 ```
 
 **Warning:** This can produce very large files (100MB+) for projects with many sessions.
@@ -125,13 +125,13 @@ claude-memory export my-project markdown --include-conversations > full_export.m
 Use `-o` or `--output` to write to a file instead of stdout:
 
 ```bash
-claude-memory export my-project json -o knowledge.json
+engram export my-project json -o knowledge.json
 ```
 
 Without `-o`, output goes to stdout for piping:
 
 ```bash
-claude-memory export my-project markdown | pandoc -o knowledge.pdf
+engram export my-project markdown | pandoc -o knowledge.pdf
 ```
 
 ## Common Use Cases
@@ -141,7 +141,7 @@ claude-memory export my-project markdown | pandoc -o knowledge.pdf
 Export to markdown and include in your repository:
 
 ```bash
-claude-memory export my-project markdown -o docs/KNOWLEDGE.md
+engram export my-project markdown -o docs/KNOWLEDGE.md
 git add docs/KNOWLEDGE.md
 git commit -m "docs: Add project knowledge base"
 ```
@@ -151,7 +151,7 @@ git commit -m "docs: Add project knowledge base"
 Export to HTML and share the file:
 
 ```bash
-claude-memory export my-project html -o knowledge.html
+engram export my-project html -o knowledge.html
 # Share knowledge.html via email, Slack, or file server
 ```
 
@@ -160,7 +160,7 @@ claude-memory export my-project html -o knowledge.html
 Export to JSON for archival:
 
 ```bash
-claude-memory export my-project json -o backup/$(date +%Y%m%d)-knowledge.json
+engram export my-project json -o backup/$(date +%Y%m%d)-knowledge.json
 ```
 
 ### 4. Data Analysis
@@ -182,7 +182,7 @@ print(f"Decisions: {len(data['knowledge']['decisions'])}")
 Export to markdown and convert:
 
 ```bash
-claude-memory export my-project markdown | \
+engram export my-project markdown | \
   pandoc -o knowledge.pdf \
   --pdf-engine=xelatex \
   --toc \
@@ -194,7 +194,7 @@ claude-memory export my-project markdown | \
 Export to HTML and deploy:
 
 ```bash
-claude-memory export my-project html -o public/knowledge.html
+engram export my-project html -o public/knowledge.html
 # Deploy public/ to GitHub Pages, Netlify, etc.
 ```
 
@@ -203,8 +203,8 @@ claude-memory export my-project html -o public/knowledge.html
 ### Export Multiple Projects
 
 ```bash
-for project in $(claude-memory projects | grep -o '^\s*[^ ]*'); do
-  claude-memory export "$project" html -o "exports/${project}.html"
+for project in $(engram projects | grep -o '^\s*[^ ]*'); do
+  engram export "$project" html -o "exports/${project}.html"
 done
 ```
 
@@ -214,10 +214,10 @@ Add to cron or CI/CD:
 
 ```bash
 # crontab
-0 2 * * * claude-memory export my-project json -o /backup/knowledge.json
+0 2 * * * engram export my-project json -o /backup/knowledge.json
 
 # GitHub Actions
-- run: claude-memory export my-project markdown -o docs/KNOWLEDGE.md
+- run: engram export my-project markdown -o docs/KNOWLEDGE.md
 ```
 
 ### Custom Processing
@@ -225,7 +225,7 @@ Add to cron or CI/CD:
 Pipe through jq for JSON:
 
 ```bash
-claude-memory export my-project json | \
+engram export my-project json | \
   jq '.knowledge.decisions' | \
   grep -o '"decision": "[^"]*"'
 ```
@@ -235,10 +235,10 @@ claude-memory export my-project json | \
 Track knowledge evolution:
 
 ```bash
-claude-memory export my-project markdown -o knowledge-old.md
+engram export my-project markdown -o knowledge-old.md
 # ... make changes ...
-claude-memory ingest --project my-project
-claude-memory export my-project markdown -o knowledge-new.md
+engram ingest --project my-project
+engram export my-project markdown -o knowledge-new.md
 diff -u knowledge-old.md knowledge-new.md
 ```
 
@@ -257,10 +257,10 @@ diff -u knowledge-old.md knowledge-new.md
 For large projects:
 ```bash
 # Export only knowledge (no conversations)
-claude-memory export my-project markdown -o knowledge.md
+engram export my-project markdown -o knowledge.md
 
 # Clean up old sessions first
-claude-memory forget my-project --expired
+engram forget my-project --expired
 ```
 
 ### Better Markdown
@@ -268,7 +268,7 @@ claude-memory forget my-project --expired
 Use pandoc for enhanced markdown:
 
 ```bash
-claude-memory export my-project markdown | \
+engram export my-project markdown | \
   pandoc -f markdown -t gfm \
   -o README.md
 ```
@@ -278,7 +278,7 @@ claude-memory export my-project markdown | \
 Convert HTML to PDF (preserves search):
 
 ```bash
-claude-memory export my-project html -o knowledge.html
+engram export my-project html -o knowledge.html
 wkhtmltopdf knowledge.html knowledge.pdf
 ```
 
@@ -287,7 +287,7 @@ wkhtmltopdf knowledge.html knowledge.pdf
 For sensitive projects, encrypt exports:
 
 ```bash
-claude-memory export my-project json -o - | \
+engram export my-project json -o - | \
   gpg -e -r recipient@example.com \
   > knowledge.json.gpg
 ```
@@ -300,8 +300,8 @@ claude-memory export my-project json -o - | \
 
 **Solution:** Run ingest first:
 ```bash
-claude-memory ingest --project my-project
-claude-memory export my-project markdown
+engram ingest --project my-project
+engram export my-project markdown
 ```
 
 ### Large File Size
@@ -310,7 +310,7 @@ claude-memory export my-project markdown
 
 **Solution:** Don't include conversations:
 ```bash
-claude-memory export my-project html  # without --include-conversations
+engram export my-project html  # without --include-conversations
 ```
 
 ### Missing Sessions
@@ -319,7 +319,7 @@ claude-memory export my-project html  # without --include-conversations
 
 **Solution:** TTL may have expired them. Check:
 ```bash
-claude-memory lookup my-project "" --all
+engram lookup my-project "" --all
 ```
 
 ### Formatting Issues
@@ -335,7 +335,7 @@ claude-memory lookup my-project "" --all
 Export to markdown vault:
 
 ```bash
-claude-memory export my-project markdown -o ~/Obsidian/Projects/my-project.md
+engram export my-project markdown -o ~/Obsidian/Projects/my-project.md
 ```
 
 ### Notion
@@ -360,7 +360,7 @@ nav:
   - Knowledge: knowledge.md
 
 # In CI
-- run: claude-memory export my-project markdown -o docs/knowledge.md
+- run: engram export my-project markdown -o docs/knowledge.md
 ```
 
 ## Future Enhancements
@@ -375,4 +375,4 @@ Planned export features:
 
 ## Feedback
 
-Have a use case we didn't cover? [Open an issue](https://github.com/Algiras/claude-memory/issues)!
+Have a use case we didn't cover? [Open an issue](https://github.com/Algiras/engram/issues)!

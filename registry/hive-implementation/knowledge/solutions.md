@@ -24,7 +24,7 @@ Here's a breakdown of the problems solved and their solutions, extracted from th
 **Problem 1:** The Claude Code assistant wasn't responding to user commands.
 * **Solution:** The user explicitly set the model to `claude-sonnet-4-5-20250929` using the `local-command-stdout` command.
 
-**Problem 2:** The user needed to review the `claude-memory` project, install it as a plugin, and use it to improve itself.
+**Problem 2:** The user needed to review the `engram` project, install it as a plugin, and use it to improve itself.
 * **Solution:** The assistant guided the user through the entire process:
     * Exploring the project structure (reading README, Cargo.toml, source code, hooks).
     * Building the project using `cargo build --release`.
@@ -59,7 +59,7 @@ Here's a breakdown of the problems solved and their solutions, extracted from th
 **Problem 9:** The system lacked collaborative features.
 * **Solution:** The user identified this as a key improvement and proposed adding collaborative features. (This was not fully implemented in this conversation, but identified as a priority).
 
-**Key Insight:** The core insight was the realization that the `claude-memory` project could be effectively integrated into Claude Code sessions by providing a mechanism for injecting and accessing conversation history and context, enabling improved performance and knowledge retention.
+**Key Insight:** The core insight was the realization that the `engram` project could be effectively integrated into Claude Code sessions by providing a mechanism for injecting and accessing conversation history and context, enabling improved performance and knowledge retention.
 
 
 ## Session: c4fc40e7-b66c-4535-955c-1ca68a687a53 (2026-02-12T16:59:42.588Z)

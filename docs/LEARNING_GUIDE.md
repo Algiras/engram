@@ -10,7 +10,7 @@ The learning system operates through three main mechanisms:
 
 ### 1. **Temporal Difference (TD) Learning** for Knowledge Importance
 
-As you use `claude-memory recall`, `search`, and `lookup`, the system tracks which knowledge gets accessed most frequently. It uses TD learning to continuously update importance scores:
+As you use `engram recall`, `search`, and `lookup`, the system tracks which knowledge gets accessed most frequently. It uses TD learning to continuously update importance scores:
 
 ```
 importance(new) = importance(current) + α × [reward - importance(current)]
@@ -44,10 +44,10 @@ See the current learning state, metrics, and top improvements:
 
 ```bash
 # For a specific project
-claude-memory learn dashboard claude-memory
+engram learn dashboard engram
 
 # For all projects
-claude-memory learn dashboard
+engram learn dashboard
 ```
 
 **Dashboard shows:**
@@ -63,13 +63,13 @@ Preview or apply the learned parameter adjustments:
 
 ```bash
 # Dry run - see what would change
-claude-memory learn optimize myproject --dry-run
+engram learn optimize myproject --dry-run
 
 # Apply with confirmation
-claude-memory learn optimize myproject
+engram learn optimize myproject
 
 # Apply automatically without confirmation
-claude-memory learn optimize myproject --auto
+engram learn optimize myproject --auto
 ```
 
 **Optimizations applied:**
@@ -83,7 +83,7 @@ claude-memory learn optimize myproject --auto
 Reset learned parameters while preserving history:
 
 ```bash
-claude-memory learn reset myproject
+engram learn reset myproject
 ```
 
 This is useful if:
@@ -241,7 +241,7 @@ You can manually adjust hyperparameters by editing:
 **After manual edits:**
 ```bash
 # Restart learning with new parameters
-claude-memory learn reset myproject
+engram learn reset myproject
 ```
 
 ### Integrating with Workflows

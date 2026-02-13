@@ -1,21 +1,21 @@
 # Hive Knowledge Skill
 
-Distributed knowledge sharing for claude-memory via the Hive Mind system.
+Distributed knowledge sharing for engram via the Hive Mind system.
 
 ## Installation
 
 ### Via skills.sh (when published)
 
 ```bash
-npx skills add claude-memory/hive-knowledge
+npx skills add engram/hive-knowledge
 ```
 
 ### Manual Installation
 
 ```bash
 # Clone
-git clone https://github.com/Algiras/claude-memory
-cd claude-memory
+git clone https://github.com/Algiras/engram
+cd engram
 
 # Copy to Claude skills directory
 cp -r skills/hive-knowledge ~/.claude/skills/
@@ -31,36 +31,36 @@ This skill teaches Claude Code how to:
 
 ## Prerequisites
 
-**Required:** claude-memory CLI tool
+**Required:** engram CLI tool
 
 ```bash
-# Install claude-memory (auto-detects OS/arch)
-curl -fsSL https://raw.githubusercontent.com/Algiras/claude-memory/master/install.sh | sh
+# Install engram (auto-detects OS/arch)
+curl -fsSL https://raw.githubusercontent.com/Algiras/engram/master/install.sh | sh
 
 # Optional: pin a version
-curl -fsSL https://raw.githubusercontent.com/Algiras/claude-memory/master/install.sh | VERSION=v0.3.0 sh
+curl -fsSL https://raw.githubusercontent.com/Algiras/engram/master/install.sh | VERSION=v0.3.0 sh
 
 # Fallback: source install
-# cargo install --git https://github.com/Algiras/claude-memory
+# cargo install --git https://github.com/Algiras/engram
 
 # Verify
-claude-memory --version
+engram --version
 ```
 
 ## Quick Start
 
 ```bash
 # Add the core registry
-claude-memory hive registry add Algiras/claude-memory
+engram hive registry add Algiras/engram
 
 # Browse available packs
-claude-memory hive browse
+engram hive browse
 
 # Install the meta-knowledge pack
-claude-memory hive install claude-memory-core
+engram hive install engram-core
 
 # Use the knowledge
-claude-memory recall <your-project>
+engram recall <your-project>
 ```
 
 ## Features
@@ -87,6 +87,6 @@ MIT
 
 ## Learn More
 
-- Main Repository: https://github.com/Algiras/claude-memory
-- Core Registry: https://github.com/Algiras/claude-memory/tree/master/registry
-- Example Pack: claude-memory-core (meta-knowledge)
+- Main Repository: https://github.com/Algiras/engram
+- Core Registry: https://github.com/Algiras/engram/tree/master/registry
+- Example Pack: engram-core (meta-knowledge)

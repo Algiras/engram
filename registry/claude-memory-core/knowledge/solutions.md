@@ -7,7 +7,7 @@
 **Solution:** Run regeneration to force context synthesis
 
 ```bash
-claude-memory regen <project>
+engram regen <project>
 ```
 
 This re-synthesizes `context.md` from existing knowledge files without re-extracting from conversations.
@@ -24,7 +24,7 @@ This re-synthesizes `context.md` from existing knowledge files without re-extrac
 **Solution:** Use the forget command with --expired flag
 
 ```bash
-claude-memory forget <project> --expired
+engram forget <project> --expired
 ```
 
 This removes all entries where TTL has elapsed, keeping knowledge files clean.
@@ -38,9 +38,9 @@ This removes all entries where TTL has elapsed, keeping knowledge files clean.
 **Solution:** Project names are derived from Claude Code project directories
 
 Check:
-1. List available projects: `claude-memory projects`
+1. List available projects: `engram projects`
 2. Verify conversation archives exist: `ls ~/.claude/projects/`
-3. Run ingest: `claude-memory ingest`
+3. Run ingest: `engram ingest`
 
 **Note:** Project names are the basename of the directory path in Claude Code's projects folder.
 
@@ -52,10 +52,10 @@ Check:
 
 ```bash
 # Check hook status
-claude-memory hooks status
+engram hooks status
 
 # Reinstall if needed
-claude-memory hooks install
+engram hooks install
 
 # Verify in Claude Code settings
 cat ~/.claude/settings.json | grep session-end-script
@@ -79,7 +79,7 @@ cat ~/.claude/settings.json | grep session-end-script
 
 ```bash
 # Inject for current directory
-claude-memory inject
+engram inject
 
 # Verify file created
 ls -la .claude/memory/MEMORY.md
@@ -103,14 +103,14 @@ cat .claude/memory/MEMORY.md
 
 ```bash
 # Interactive login
-claude-memory auth login
+engram auth login
 
 # Or set environment variables
 export ANTHROPIC_API_KEY=sk-...
 export OPENAI_API_KEY=sk-...
 
 # Check status
-claude-memory auth status
+engram auth status
 ```
 
 **Supported Providers:**
@@ -129,10 +129,10 @@ claude-memory auth status
 git ls-remote <registry-url>
 
 # Use GitHub shorthand
-claude-memory hive registry add owner/repo
+engram hive registry add owner/repo
 
 # Or full HTTPS URL
-claude-memory hive registry add https://github.com/owner/repo.git
+engram hive registry add https://github.com/owner/repo.git
 
 # Check for SSH vs HTTPS issues
 ```
@@ -151,13 +151,13 @@ claude-memory hive registry add https://github.com/owner/repo.git
 
 ```bash
 # List installed packs
-claude-memory hive list
+engram hive list
 
 # Check pack directory
 ls ~/memory/packs/installed/<pack-name>/knowledge/
 
 # Force re-read by rerunning recall
-claude-memory recall <project>
+engram recall <project>
 ```
 
 **Requirements:**

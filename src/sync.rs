@@ -116,7 +116,7 @@ impl GistClient {
             .client
             .post("https://api.github.com/gists")
             .header("Authorization", format!("Bearer {}", self.token))
-            .header("User-Agent", "claude-memory")
+            .header("User-Agent", "engram")
             .header("Accept", "application/vnd.github+json")
             .header("X-GitHub-Api-Version", "2022-11-28")
             .json(&request)
@@ -159,7 +159,7 @@ impl GistClient {
             .client
             .patch(format!("https://api.github.com/gists/{}", gist_id))
             .header("Authorization", format!("Bearer {}", self.token))
-            .header("User-Agent", "claude-memory")
+            .header("User-Agent", "engram")
             .header("Accept", "application/vnd.github+json")
             .header("X-GitHub-Api-Version", "2022-11-28")
             .json(&request_body)
@@ -184,7 +184,7 @@ impl GistClient {
             .client
             .get(format!("https://api.github.com/gists/{}", gist_id))
             .header("Authorization", format!("Bearer {}", self.token))
-            .header("User-Agent", "claude-memory")
+            .header("User-Agent", "engram")
             .header("Accept", "application/vnd.github+json")
             .header("X-GitHub-Api-Version", "2022-11-28")
             .send()
@@ -208,7 +208,7 @@ impl GistClient {
             .client
             .get("https://api.github.com/gists")
             .header("Authorization", format!("Bearer {}", self.token))
-            .header("User-Agent", "claude-memory")
+            .header("User-Agent", "engram")
             .header("Accept", "application/vnd.github+json")
             .header("X-GitHub-Api-Version", "2022-11-28")
             .send()
@@ -233,7 +233,7 @@ impl GistClient {
             .client
             .get(format!("https://api.github.com/gists/{}", gist_id))
             .header("Authorization", format!("Bearer {}", self.token))
-            .header("User-Agent", "claude-memory")
+            .header("User-Agent", "engram")
             .header("Accept", "application/vnd.github+json")
             .header("X-GitHub-Api-Version", "2022-11-28")
             .send()
@@ -261,7 +261,7 @@ impl GistClient {
                 gist_id, version
             ))
             .header("Authorization", format!("Bearer {}", self.token))
-            .header("User-Agent", "claude-memory")
+            .header("User-Agent", "engram")
             .header("Accept", "application/vnd.github+json")
             .header("X-GitHub-Api-Version", "2022-11-28")
             .send()
@@ -280,22 +280,29 @@ impl GistClient {
     }
 }
 
-/// Read knowledge files for a project
+/// Read knowledge files for a project with automatic secret redaction
 pub fn read_knowledge_files(
     memory_dir: &std::path::Path,
     project: &str,
 ) -> Result<HashMap<String, String>> {
+    use crate::hive::SecretDetector;
+
     let knowledge_dir = memory_dir.join("knowledge").join(project);
     let mut files = HashMap::new();
 
     let file_names = ["decisions.md", "solutions.md", "patterns.md", "context.md"];
+
+    // Detect and redact secrets
+    let detector = SecretDetector::new()?;
 
     for file_name in &file_names {
         let path = knowledge_dir.join(file_name);
         if path.exists() {
             let content = std::fs::read_to_string(&path)?;
             if !content.trim().is_empty() {
-                files.insert(file_name.to_string(), content);
+                // Redact secrets before uploading
+                let redacted = detector.redact_secrets(&content);
+                files.insert(file_name.to_string(), redacted);
             }
         }
     }
@@ -304,7 +311,7 @@ pub fn read_knowledge_files(
     let metadata = serde_json::json!({
         "project": project,
         "synced_at": chrono::Utc::now().to_rfc3339(),
-        "tool": "claude-memory",
+        "tool": "engram",
         "version": env!("CARGO_PKG_VERSION"),
     });
     files.insert(
@@ -340,7 +347,7 @@ pub fn init_git_repo(repo_path: &std::path::Path) -> Result<()> {
     let readme = repo_path.join("README.md");
     std::fs::write(
         &readme,
-        "# Claude Memory Knowledge Repository\n\nShared knowledge base synced by claude-memory.\n",
+        "# Claude Memory Knowledge Repository\n\nShared knowledge base synced by engram.\n",
     )?;
 
     // Initial commit
@@ -353,7 +360,7 @@ pub fn init_git_repo(repo_path: &std::path::Path) -> Result<()> {
         .args([
             "commit",
             "-m",
-            "Initial commit: claude-memory knowledge repository",
+            "Initial commit: engram knowledge repository",
         ])
         .current_dir(repo_path)
         .status()?;
@@ -371,7 +378,7 @@ pub fn push_to_git_repo(
 ) -> Result<()> {
     if !repo_path.join(".git").exists() {
         return Err(MemoryError::Config(format!(
-            "Not a git repository: {}. Run 'claude-memory sync init-repo' first.",
+            "Not a git repository: {}. Run 'engram sync init-repo' first.",
             repo_path.display()
         )));
     }

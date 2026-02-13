@@ -24,16 +24,16 @@ This enables **associative retrieval** - finding related concepts even when not 
 
 ```bash
 # 1. Build graph from existing knowledge
-claude-memory graph build my-project
+engram graph build my-project
 
 # 2. Query related concepts
-claude-memory graph query my-project "authentication"
+engram graph query my-project "authentication"
 
 # 3. Visualize
-claude-memory graph viz my-project ascii
+engram graph viz my-project ascii
 
 # 4. Find hubs (central concepts)
-claude-memory graph hubs my-project
+engram graph hubs my-project
 ```
 
 ## Commands
@@ -44,10 +44,10 @@ Extract concepts and relationships using LLM:
 
 ```bash
 # Build with default provider
-claude-memory graph build my-project
+engram graph build my-project
 
 # Use specific provider for better quality
-claude-memory graph build my-project --provider anthropic
+engram graph build my-project --provider anthropic
 ```
 
 **What it does:**
@@ -62,7 +62,7 @@ Find concepts connected to a given concept:
 
 ```bash
 # Find concepts within 2 hops
-claude-memory graph query my-project "authentication" --depth 2
+engram graph query my-project "authentication" --depth 2
 
 # Output:
 #   [1] OAuth (importance: 0.9)
@@ -81,7 +81,7 @@ claude-memory graph query my-project "authentication" --depth 2
 Discover conceptual connections:
 
 ```bash
-claude-memory graph path my-project "database" "performance"
+engram graph path my-project "database" "performance"
 
 # Output:
 #   [0] Database
@@ -100,7 +100,7 @@ claude-memory graph path my-project "database" "performance"
 Identify most connected concepts (like neuron hubs in the brain):
 
 ```bash
-claude-memory graph hubs my-project --top 10
+engram graph hubs my-project --top 10
 
 # Output:
 #   1. Authentication (5 incoming, 3 outgoing, importance: 0.9)
@@ -119,16 +119,16 @@ Create visual representations:
 
 ```bash
 # ASCII tree (terminal-friendly)
-claude-memory graph viz my-project ascii
+engram graph viz my-project ascii
 
 # ASCII from specific concept
-claude-memory graph viz my-project ascii --root "authentication"
+engram graph viz my-project ascii --root "authentication"
 
 # DOT format (for graphviz)
-claude-memory graph viz my-project dot -o graph.dot
+engram graph viz my-project dot -o graph.dot
 
 # SVG (requires graphviz installed)
-claude-memory graph viz my-project svg -o graph.svg
+engram graph viz my-project svg -o graph.svg
 ```
 
 ## Graph Structure
@@ -212,31 +212,31 @@ Degree Counting → Find hubs
 
 ```bash
 # Find all architectural decisions
-claude-memory graph hubs my-project --top 20
+engram graph hubs my-project --top 20
 
 # See how they connect
-claude-memory graph viz my-project ascii
+engram graph viz my-project ascii
 ```
 
 ### 2. Discover Hidden Connections
 
 ```bash
 # You mentioned "caching" and "performance" - are they linked?
-claude-memory graph path my-project "caching" "performance"
+engram graph path my-project "caching" "performance"
 ```
 
 ### 3. Find Related Work
 
 ```bash
 # Working on authentication? See related concepts
-claude-memory graph query my-project "authentication" --depth 2
+engram graph query my-project "authentication" --depth 2
 ```
 
 ### 4. Knowledge Gaps
 
 ```bash
 # Find isolated concepts (not well connected)
-claude-memory graph viz my-project dot -o graph.dot
+engram graph viz my-project dot -o graph.dot
 # Look for orphan nodes
 ```
 
@@ -244,8 +244,8 @@ claude-memory graph viz my-project dot -o graph.dot
 
 ```bash
 # Build graphs for all projects
-for proj in $(claude-memory projects | grep -o '^\s*[^ ]*'); do
-  claude-memory graph build "$proj"
+for proj in $(engram projects | grep -o '^\s*[^ ]*'); do
+  engram graph build "$proj"
 done
 
 # Find cross-project patterns
@@ -296,7 +296,7 @@ When multiple agents build graphs:
 
 ```bash
 # Agent A builds graph
-claude-memory graph build my-project --provider anthropic
+engram graph build my-project --provider anthropic
 
 # Agent B adds to graph
 # (currently creates new graph - future: merge)
@@ -309,12 +309,12 @@ Track how concepts evolve:
 ```bash
 # Version 1 (old graph)
 git checkout v1.0
-claude-memory graph build my-project
+engram graph build my-project
 cp graph.json graph-v1.json
 
 # Version 2 (new graph)
 git checkout v2.0
-claude-memory graph build my-project
+engram graph build my-project
 cp graph.json graph-v2.json
 
 # Compare (future: automated diff)
@@ -326,10 +326,10 @@ Focus on specific areas:
 
 ```bash
 # Build graph
-claude-memory graph build my-project
+engram graph build my-project
 
 # Extract authentication subgraph
-claude-memory graph query my-project "authentication" --depth 3 > auth-subgraph.txt
+engram graph query my-project "authentication" --depth 3 > auth-subgraph.txt
 ```
 
 ## Visualization
@@ -337,7 +337,7 @@ claude-memory graph query my-project "authentication" --depth 3 > auth-subgraph.
 ### ASCII (Terminal)
 
 ```
-📊 Knowledge Graph: claude-memory
+📊 Knowledge Graph: engram
 
 🔵 Claude Memory (importance: 0.9)
 ├── ▶ Model Context Protocol (implements)
@@ -348,7 +348,7 @@ claude-memory graph query my-project "authentication" --depth 3 > auth-subgraph.
 ### DOT (Graphviz)
 
 ```bash
-claude-memory graph viz my-project dot -o graph.dot
+engram graph viz my-project dot -o graph.dot
 dot -Tsvg graph.dot -o graph.svg
 open graph.svg
 ```
@@ -363,7 +363,7 @@ Creates professional graph visualizations with:
 
 ```bash
 # Future: web-based interactive explorer
-claude-memory graph serve my-project --port 8080
+engram graph serve my-project --port 8080
 # Opens browser with D3.js force-directed graph
 ```
 
@@ -385,7 +385,7 @@ await mcp.call("graph_query", {
 ### TUI Integration (Future)
 
 ```bash
-claude-memory tui
+engram tui
 # Press 'g' to view graph mode
 # Navigate relationships interactively
 ```
@@ -396,19 +396,19 @@ claude-memory tui
 
 1. **Use better models**: Anthropic > Gemini > Ollama
    ```bash
-   claude-memory graph build myapp --provider anthropic
+   engram graph build myapp --provider anthropic
    ```
 
 2. **More knowledge = Better graph**:
    ```bash
-   claude-memory ingest --project myapp
-   claude-memory graph build myapp
+   engram ingest --project myapp
+   engram graph build myapp
    ```
 
 3. **Rebuild after major changes**:
    ```bash
-   claude-memory ingest --project myapp
-   claude-memory graph build myapp  # Regenerate
+   engram ingest --project myapp
+   engram graph build myapp  # Regenerate
    ```
 
 ### Performance
@@ -432,7 +432,7 @@ Graph quality depends on:
 
 **Solution**: Use a better model:
 ```bash
-claude-memory graph build myapp --provider anthropic
+engram graph build myapp --provider anthropic
 ```
 
 ### Empty or Small Graph
@@ -442,11 +442,11 @@ claude-memory graph build myapp --provider anthropic
 **Solution**:
 ```bash
 # Ensure knowledge exists
-claude-memory recall myapp
+engram recall myapp
 
 # If empty, ingest first
-claude-memory ingest --project myapp
-claude-memory graph build myapp
+engram ingest --project myapp
+engram graph build myapp
 ```
 
 ### Graphviz Not Found
@@ -462,7 +462,7 @@ brew install graphviz
 sudo apt install graphviz
 
 # Or use DOT/ASCII instead
-claude-memory graph viz myapp ascii
+engram graph viz myapp ascii
 ```
 
 ## Future Enhancements
@@ -482,7 +482,7 @@ Planned features:
 ### Text Search
 
 ```bash
-claude-memory search "authentication"
+engram search "authentication"
 # Finds: documents containing word "authentication"
 ```
 
@@ -492,7 +492,7 @@ claude-memory search "authentication"
 ### Graph Query
 
 ```bash
-claude-memory graph query my-project "authentication" --depth 2
+engram graph query my-project "authentication" --depth 2
 # Finds: OAuth, JWT, security, sessions, tokens...
 # Even if they don't mention "authentication"!
 ```
@@ -508,11 +508,11 @@ Use both:
 
 ```bash
 # 1. Find what's related
-claude-memory graph query myapp "auth" --depth 2
+engram graph query myapp "auth" --depth 2
 # → Shows: OAuth, JWT, sessions
 
 # 2. Search for details
-claude-memory search "OAuth implementation" --project myapp
+engram search "OAuth implementation" --project myapp
 ```
 
 ## Example Workflows
@@ -521,13 +521,13 @@ claude-memory search "OAuth implementation" --project myapp
 
 ```bash
 # Build graph
-claude-memory graph build myapp
+engram graph build myapp
 
 # Find central concepts
-claude-memory graph hubs myapp --top 20
+engram graph hubs myapp --top 20
 
 # Generate architecture diagram
-claude-memory graph viz myapp svg -o architecture.svg
+engram graph viz myapp svg -o architecture.svg
 
 # Add to docs
 cp architecture.svg docs/architecture/knowledge-graph.svg
@@ -537,7 +537,7 @@ cp architecture.svg docs/architecture/knowledge-graph.svg
 
 ```bash
 # Reviewer: What security concepts exist?
-claude-memory graph query myapp "security" --depth 2
+engram graph query myapp "security" --depth 2
 
 # Shows all security-related decisions
 # Helps ensure nothing is missed
@@ -547,7 +547,7 @@ claude-memory graph query myapp "security" --depth 2
 
 ```bash
 # New team member: Understand the system
-claude-memory graph viz myapp ascii
+engram graph viz myapp ascii
 
 # Shows key concepts and how they relate
 # Better than reading linear docs!

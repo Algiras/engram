@@ -5,9 +5,9 @@
 //!
 //! Critical Test: If we boost importance, does recall quality improve?
 
-use claude_memory::auth::providers::{Provider, ResolvedProvider};
-use claude_memory::config::Config;
-use claude_memory::learning::{self, progress};
+use engram::auth::providers::{Provider, ResolvedProvider};
+use engram::config::Config;
+use engram::learning::{self, progress};
 use tempfile::TempDir;
 
 fn create_test_config(temp: &TempDir) -> Config {

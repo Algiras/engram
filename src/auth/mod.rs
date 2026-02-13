@@ -31,7 +31,7 @@ impl AuthStore {
     pub fn path() -> Result<PathBuf> {
         let config_dir = dirs::config_dir()
             .ok_or_else(|| MemoryError::Auth("Could not determine config directory".into()))?;
-        Ok(config_dir.join("claude-memory").join("auth.json"))
+        Ok(config_dir.join("engram").join("auth.json"))
     }
 
     /// Load from disk, returning default if file doesn't exist
@@ -152,7 +152,7 @@ fn resolve_for_provider(
     // Validate: cloud providers need an API key
     if provider.requires_auth() && api_key.is_none() {
         return Err(MemoryError::Auth(format!(
-            "No API key found for {}. Set {} or run: claude-memory auth login --provider {}",
+            "No API key found for {}. Set {} or run: engram auth login --provider {}",
             provider.display_name(),
             provider.env_var_name(),
             provider

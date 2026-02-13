@@ -1,11 +1,11 @@
 ---
 name: hive-knowledge
-description: Distributed knowledge sharing for claude-memory via Git-based registries. Discover, install, and share knowledge packs containing patterns, solutions, and workflows. Use when managing knowledge bases, sharing team knowledge, or working with claude-memory's Hive Mind system.
+description: Distributed knowledge sharing for engram via Git-based registries. Discover, install, and share knowledge packs containing patterns, solutions, and workflows. Use when managing knowledge bases, sharing team knowledge, or working with engram's Hive Mind system.
 license: MIT
 metadata:
-  author: claude-memory
+  author: engram
   version: "1.0.0"
-  repository: https://github.com/Algiras/claude-memory
+  repository: https://github.com/Algiras/engram
   triggers:
     - install knowledge pack
     - browse packs
@@ -17,12 +17,12 @@ metadata:
 
 # Hive Knowledge - Distributed Memory Sharing
 
-Manage and share knowledge packs via claude-memory's Hive Mind system - a Git-based distributed knowledge sharing platform.
+Manage and share knowledge packs via engram's Hive Mind system - a Git-based distributed knowledge sharing platform.
 
 ## When to Use This Skill
 
 Use this skill when:
-- Managing knowledge bases with claude-memory
+- Managing knowledge bases with engram
 - Sharing patterns, solutions, and workflows across teams
 - Installing community knowledge packs
 - Creating distributable knowledge collections
@@ -38,22 +38,22 @@ Trigger phrases:
 
 ## Prerequisites
 
-**Required**: claude-memory CLI tool
+**Required**: engram CLI tool
 
 ```bash
 # Install via curl (auto-detects OS/arch)
-curl -fsSL https://raw.githubusercontent.com/Algiras/claude-memory/master/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/Algiras/engram/master/install.sh | sh
 
 # Or pin a version
-curl -fsSL https://raw.githubusercontent.com/Algiras/claude-memory/master/install.sh | VERSION=v0.3.0 sh
+curl -fsSL https://raw.githubusercontent.com/Algiras/engram/master/install.sh | VERSION=v0.3.0 sh
 
 # Fallback: install from source
-# git clone https://github.com/Algiras/claude-memory
-# cd claude-memory
+# git clone https://github.com/Algiras/engram
+# cd engram
 # cargo install --path .
 
 # Verify installation
-claude-memory --version
+engram --version
 ```
 
 ## Core Concepts
@@ -63,13 +63,13 @@ A Git repository containing one or more knowledge packs. Similar to npm/cargo re
 
 ```bash
 # Add a registry (GitHub shorthand)
-claude-memory hive registry add owner/repo
+engram hive registry add owner/repo
 
 # Or full URL
-claude-memory hive registry add https://github.com/owner/repo.git
+engram hive registry add https://github.com/owner/repo.git
 
 # For local registries
-claude-memory hive registry add file:///absolute/path/to/registry
+engram hive registry add file:///absolute/path/to/registry
 ```
 
 ### Knowledge Pack
@@ -100,54 +100,54 @@ pack-name/
 
 ```bash
 # Add a registry
-claude-memory hive registry add owner/repo
+engram hive registry add owner/repo
 
 # List all registries
-claude-memory hive registry list
+engram hive registry list
 
 # Update registry (git pull)
-claude-memory hive registry update [name]
+engram hive registry update [name]
 
 # Remove a registry
-claude-memory hive registry remove <name>
+engram hive registry remove <name>
 ```
 
 ### Pack Discovery
 
 ```bash
 # Browse all available packs
-claude-memory hive browse
+engram hive browse
 
 # Filter by category
-claude-memory hive browse --category patterns
+engram hive browse --category patterns
 
 # Filter by keyword
-claude-memory hive browse --keyword rust
+engram hive browse --keyword rust
 
 # Search across all packs
-claude-memory hive search "async patterns"
+engram hive search "async patterns"
 ```
 
 ### Pack Management
 
 ```bash
 # Install a pack
-claude-memory hive install <pack-name>
+engram hive install <pack-name>
 
 # Install from specific registry
-claude-memory hive install <pack-name> --registry <registry-name>
+engram hive install <pack-name> --registry <registry-name>
 
 # List installed packs
-claude-memory hive list
+engram hive list
 
 # Update all packs
-claude-memory hive update
+engram hive update
 
 # Update specific pack
-claude-memory hive update <pack-name>
+engram hive update <pack-name>
 
 # Uninstall a pack
-claude-memory hive uninstall <pack-name>
+engram hive uninstall <pack-name>
 ```
 
 ### Integration with Existing Commands
@@ -156,16 +156,16 @@ Once packs are installed, their knowledge automatically appears in:
 
 ```bash
 # Recall includes local + pack knowledge
-claude-memory recall <project>
+engram recall <project>
 
 # Search across local and packs
-claude-memory search "pattern"
+engram search "pattern"
 
 # Lookup in combined knowledge
-claude-memory lookup <project> "topic"
+engram lookup <project> "topic"
 
 # TUI: Press 'p' to browse packs
-claude-memory tui
+engram tui
 ```
 
 ## Creating a Knowledge Pack
@@ -247,8 +247,8 @@ git push -u origin main
 
 Users can now install:
 ```bash
-claude-memory hive registry add user/my-pack
-claude-memory hive install my-pack
+engram hive registry add user/my-pack
+engram hive install my-pack
 ```
 
 ## Pack Categories
@@ -263,18 +263,18 @@ Available categories for organizing knowledge:
 
 ## Example: Core Pack
 
-The claude-memory repository includes a meta-knowledge pack:
+The engram repository includes a meta-knowledge pack:
 
 ```bash
 # Clone the repository
-git clone https://github.com/Algiras/claude-memory
-cd claude-memory
+git clone https://github.com/Algiras/engram
+cd engram
 
 # Add the core registry
-claude-memory hive registry add file://$(pwd)/registry
+engram hive registry add file://$(pwd)/registry
 
 # Install the core pack
-claude-memory hive install claude-memory-core
+engram hive install engram-core
 
 # This pack contains:
 # - 15 patterns about knowledge extraction
@@ -289,7 +289,7 @@ The TUI includes a Packs browser:
 
 ```bash
 # Launch TUI
-claude-memory tui
+engram tui
 
 # Keyboard shortcuts:
 # - 'p' : Switch to Packs screen
@@ -305,19 +305,19 @@ claude-memory tui
 
 ```bash
 # 1. Add a registry
-claude-memory hive registry add community/knowledge-packs
+engram hive registry add community/knowledge-packs
 
 # 2. Browse what's available
-claude-memory hive browse
+engram hive browse
 
 # 3. Search for specific topics
-claude-memory hive search "rust patterns"
+engram hive search "rust patterns"
 
 # 4. Install what you need
-claude-memory hive install rust-best-practices
+engram hive install rust-best-practices
 
 # 5. Use immediately
-claude-memory recall my-rust-project
+engram recall my-rust-project
 # Knowledge from pack is now included!
 ```
 
@@ -325,10 +325,10 @@ claude-memory recall my-rust-project
 
 ```bash
 # 1. Extract knowledge from conversations
-claude-memory ingest --project my-project
+engram ingest --project my-project
 
 # 2. Review extracted knowledge
-claude-memory recall my-project
+engram recall my-project
 
 # 3. Create pack structure
 mkdir -p my-knowledge/{.pack,knowledge}
@@ -360,17 +360,17 @@ git init && git add . && git commit -m "Initial" && git push
 
 ```bash
 # Update registries to get latest packs
-claude-memory hive registry update
+engram hive registry update
 
 # Verify pack exists
-claude-memory hive browse | grep <pack-name>
+engram hive browse | grep <pack-name>
 ```
 
 ### Knowledge Not Appearing
 
 ```bash
 # Verify pack is installed
-claude-memory hive list
+engram hive list
 
 # Check pack directory
 ls ~/memory/packs/installed/<pack-name>/knowledge/
@@ -383,10 +383,10 @@ cat ~/memory/packs/installed/<pack-name>/knowledge/patterns.md
 
 ```bash
 # Use full HTTPS URL
-claude-memory hive registry add https://github.com/owner/repo.git
+engram hive registry add https://github.com/owner/repo.git
 
 # For local development
-claude-memory hive registry add file:///absolute/path
+engram hive registry add file:///absolute/path
 
 # Check Git access
 git ls-remote <registry-url>
@@ -446,28 +446,28 @@ The Hive Mind integrates with:
 
 ```bash
 # Knowledge extraction
-claude-memory ingest [--project <name>]
+engram ingest [--project <name>]
 
 # View knowledge
-claude-memory recall <project>
-claude-memory search <query>
-claude-memory lookup <project> <topic>
+engram recall <project>
+engram search <query>
+engram lookup <project> <topic>
 
 # Manage knowledge
-claude-memory add <project> <category> <content>
-claude-memory forget <project> [--expired]
+engram add <project> <category> <content>
+engram forget <project> [--expired]
 
 # Analytics
-claude-memory analytics [project]
-claude-memory learn dashboard
+engram analytics [project]
+engram learn dashboard
 
 # Health checks
-claude-memory doctor [project]
+engram doctor [project]
 ```
 
 ## Examples
 
-See the claude-memory-core pack in the repository for a complete example of:
+See the engram-core pack in the repository for a complete example of:
 - Proper manifest structure
 - Well-formatted knowledge files
 - Comprehensive documentation
@@ -475,6 +475,6 @@ See the claude-memory-core pack in the repository for a complete example of:
 
 ## Learn More
 
-- Repository: https://github.com/Algiras/claude-memory
-- Core Registry: https://github.com/Algiras/claude-memory/tree/master/registry
-- Issues: https://github.com/Algiras/claude-memory/issues
+- Repository: https://github.com/Algiras/engram
+- Core Registry: https://github.com/Algiras/engram/tree/master/registry
+- Issues: https://github.com/Algiras/engram/issues

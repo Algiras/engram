@@ -1,10 +1,10 @@
 # Claude Memory Core Knowledge Pack
 
-A meta-knowledge pack containing comprehensive information about how claude-memory's knowledge system works.
+A meta-knowledge pack containing comprehensive information about how engram's knowledge system works.
 
 ## What's Inside
 
-This pack teaches you about claude-memory itself:
+This pack teaches you about engram itself:
 
 ### Patterns
 - Knowledge extraction workflow (ingest → extract → synthesize)
@@ -37,17 +37,17 @@ This pack teaches you about claude-memory itself:
 
 ```bash
 # Add this registry
-cd /path/to/claude-memory
-claude-memory hive registry add ./registry
+cd /path/to/engram
+engram hive registry add ./registry
 
 # Or from GitHub (once published)
-claude-memory hive registry add Algiras/claude-memory
+engram hive registry add Algiras/engram
 
 # Install the pack
-claude-memory hive install claude-memory-core
+engram hive install engram-core
 
 # Use the knowledge
-claude-memory recall <your-project>
+engram recall <your-project>
 ```
 
 ## Purpose
@@ -76,14 +76,14 @@ This pack evolves with the project. To contribute:
 1. Identify gaps in the documentation
 2. Add new patterns, solutions, or workflows
 3. Update existing entries with new insights
-4. Submit PR to the claude-memory repository
+4. Submit PR to the engram repository
 
 ## License
 
-MIT - Same as claude-memory
+MIT - Same as engram
 
 ## Learn More
 
-- Main Repository: https://github.com/Algiras/claude-memory
+- Main Repository: https://github.com/Algiras/engram
 - Documentation: See knowledge files in this pack
-- Issues: https://github.com/Algiras/claude-memory/issues
+- Issues: https://github.com/Algiras/engram/issues

@@ -36,6 +36,7 @@ pub enum IssueCategory {
     Contradictions,
     UnusedKnowledge,
     LargeFiles,
+    ExpiredEntries,
 }
 
 impl HealthReport {
@@ -94,7 +95,7 @@ pub fn check_project_health(memory_dir: &Path, project: &str) -> Result<HealthRe
             category: IssueCategory::LowCoverage,
             description: "No knowledge directory found".into(),
             auto_fixable: true,
-            fix_command: Some(format!("claude-memory ingest --project {}", project)),
+            fix_command: Some(format!("engram ingest --project {}", project)),
         });
         return Ok(report);
     }
@@ -107,7 +108,7 @@ pub fn check_project_health(memory_dir: &Path, project: &str) -> Result<HealthRe
             category: IssueCategory::StaleContext,
             description: "No context.md (knowledge not synthesized)".into(),
             auto_fixable: true,
-            fix_command: Some(format!("claude-memory regen {}", project)),
+            fix_command: Some(format!("engram regen {}", project)),
         });
     } else {
         // Check if context is stale (older than knowledge files)
@@ -117,7 +118,7 @@ pub fn check_project_health(memory_dir: &Path, project: &str) -> Result<HealthRe
                 category: IssueCategory::StaleContext,
                 description: "context.md is older than knowledge files".into(),
                 auto_fixable: true,
-                fix_command: Some(format!("claude-memory regen {}", project)),
+                fix_command: Some(format!("engram regen {}", project)),
             });
         }
     }
@@ -130,7 +131,7 @@ pub fn check_project_health(memory_dir: &Path, project: &str) -> Result<HealthRe
             category: IssueCategory::MissingEmbeddings,
             description: "No embeddings index (semantic search unavailable)".into(),
             auto_fixable: true,
-            fix_command: Some(format!("claude-memory embed {}", project)),
+            fix_command: Some(format!("engram embed {}", project)),
         });
         report.add_recommendation("Generate embeddings for semantic search".into());
     }
@@ -143,7 +144,7 @@ pub fn check_project_health(memory_dir: &Path, project: &str) -> Result<HealthRe
             category: IssueCategory::MissingGraph,
             description: "No knowledge graph (associative search unavailable)".into(),
             auto_fixable: true,
-            fix_command: Some(format!("claude-memory graph build {}", project)),
+            fix_command: Some(format!("engram graph build {}", project)),
         });
         report.add_recommendation("Build knowledge graph for associative queries".into());
     }
@@ -163,7 +164,7 @@ pub fn check_project_health(memory_dir: &Path, project: &str) -> Result<HealthRe
                     ),
                     auto_fixable: false,
                     fix_command: Some(format!(
-                        "claude-memory consolidate {} --threshold 0.9",
+                        "engram consolidate {} --threshold 0.9",
                         project
                     )),
                 });
@@ -182,11 +183,27 @@ pub fn check_project_health(memory_dir: &Path, project: &str) -> Result<HealthRe
                     category: IssueCategory::UnusedKnowledge,
                     description: format!("{} inbox entries pending review", entry_count),
                     auto_fixable: false,
-                    fix_command: Some(format!("claude-memory review {}", project)),
+                    fix_command: Some(format!("engram review {}", project)),
                 });
                 report.add_recommendation("Review and promote inbox entries".into());
             }
         }
+    }
+
+    // Check for expired entries accumulating
+    let expired_count = count_expired_entries(memory_dir, project)?;
+    if expired_count > 0 {
+        report.add_issue(Issue {
+            severity: Severity::Info,
+            category: IssueCategory::ExpiredEntries,
+            description: format!("{} expired entries accumulating cruft", expired_count),
+            auto_fixable: true,
+            fix_command: Some(format!("engram forget {} --expired", project)),
+        });
+        report.add_recommendation(format!(
+            "Run 'engram forget {} --expired' to clean up {} expired entries, or use 'engram inject' (auto-cleans by default)",
+            project, expired_count
+        ));
     }
 
     // Overall health recommendations
@@ -307,4 +324,34 @@ async fn generate_embeddings(_config: &crate::config::Config, _project: &str) ->
 async fn build_graph(_config: &crate::config::Config, _project: &str) -> Result<()> {
     // Placeholder - would call graph build
     Ok(())
+}
+
+/// Count total expired entries across all knowledge files for a project.
+fn count_expired_entries(memory_dir: &Path, project: &str) -> Result<usize> {
+    use crate::extractor::knowledge::{parse_session_blocks, partition_by_expiry};
+
+    let knowledge_dir = memory_dir.join("knowledge").join(project);
+    let global_prefs = memory_dir
+        .join("knowledge")
+        .join("_global")
+        .join("preferences.md");
+
+    let files = [
+        knowledge_dir.join("decisions.md"),
+        knowledge_dir.join("solutions.md"),
+        knowledge_dir.join("patterns.md"),
+        knowledge_dir.join("inbox.md"),
+        global_prefs,
+    ];
+
+    let mut total_expired = 0;
+
+    for file_path in files.iter().filter(|p| p.exists()) {
+        let content = std::fs::read_to_string(file_path)?;
+        let (_preamble, blocks) = parse_session_blocks(&content);
+        let (_active, expired) = partition_by_expiry(blocks);
+        total_expired += expired.len();
+    }
+
+    Ok(total_expired)
 }

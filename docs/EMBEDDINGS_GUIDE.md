@@ -21,31 +21,31 @@ Vectors that are **close together** = similar meaning!
 ```bash
 # Option 1: Use OpenAI (best quality)
 export OPENAI_API_KEY='sk-...'
-claude-memory embed my-project --provider openai
+engram embed my-project --provider openai
 
 # Option 2: Use Gemini (free tier!)
 export GEMINI_API_KEY='...'
-claude-memory embed my-project --provider gemini
+engram embed my-project --provider gemini
 
 # Option 3: Use Ollama (local, private)
 ollama pull nomic-embed-text
-claude-memory embed my-project --provider ollama
+engram embed my-project --provider ollama
 ```
 
 ### Search
 
 ```bash
 # Semantic search across all projects
-claude-memory search-semantic "improve performance"
+engram search-semantic "improve performance"
 
 # Search specific project
-claude-memory search-semantic "authentication flow" --project myapp
+engram search-semantic "authentication flow" --project myapp
 
 # Get more results
-claude-memory search-semantic "caching strategy" --top 20
+engram search-semantic "caching strategy" --top 20
 
 # Filter by similarity threshold
-claude-memory search-semantic "database" --threshold 0.7
+engram search-semantic "database" --threshold 0.7
 ```
 
 ## How It Works
@@ -91,7 +91,7 @@ Query → Generate embedding → Compare with stored embeddings → Return top K
 
 ```bash
 export OPENAI_API_KEY='sk-...'
-claude-memory embed myapp --provider openai
+engram embed myapp --provider openai
 ```
 
 ### Google Gemini
@@ -104,7 +104,7 @@ claude-memory embed myapp --provider openai
 
 ```bash
 export GEMINI_API_KEY='...'
-claude-memory embed myapp --provider gemini
+engram embed myapp --provider gemini
 ```
 
 ### Ollama (Local)
@@ -120,7 +120,7 @@ claude-memory embed myapp --provider gemini
 ollama pull nomic-embed-text
 
 # Generate embeddings
-claude-memory embed myapp --provider ollama
+engram embed myapp --provider ollama
 ```
 
 ## Use Cases
@@ -130,7 +130,7 @@ claude-memory embed myapp --provider ollama
 ```bash
 # Problem: "Users complaining about slow page load"
 
-claude-memory search-semantic "improve page performance"
+engram search-semantic "improve page performance"
 
 # Finds (semantically similar):
 # ✅ "Implement lazy loading for images"
@@ -144,7 +144,7 @@ claude-memory search-semantic "improve page performance"
 ```bash
 # You learned: "Use Redis for session storage"
 
-claude-memory search-semantic "session management"
+engram search-semantic "session management"
 
 # Finds related patterns you forgot about:
 # ✅ "JWT token validation"
@@ -157,7 +157,7 @@ claude-memory search-semantic "session management"
 ```bash
 # Find all caching strategies across ALL projects
 
-claude-memory search-semantic "caching approach"
+engram search-semantic "caching approach"
 
 # Results from multiple projects:
 # [projectA:patterns] Redis with 1h TTL (92%)
@@ -170,7 +170,7 @@ claude-memory search-semantic "caching approach"
 ```bash
 # Vague memory: "There was something about making it faster..."
 
-claude-memory search-semantic "performance optimization"
+engram search-semantic "performance optimization"
 
 # Finds everything performance-related!
 ```
@@ -180,7 +180,7 @@ claude-memory search-semantic "performance optimization"
 ### Keyword Search
 
 ```bash
-claude-memory search "database optimization"
+engram search "database optimization"
 
 # Finds ONLY: Exact phrase "database optimization"
 # Misses: "SQL tuning", "index strategy", "query performance"
@@ -189,7 +189,7 @@ claude-memory search "database optimization"
 ### Semantic Search
 
 ```bash
-claude-memory search-semantic "database optimization"
+engram search-semantic "database optimization"
 
 # Finds ALL related concepts:
 # ✅ SQL query optimization (91%)
@@ -207,23 +207,23 @@ Control how strict the matching is:
 
 ```bash
 # Strict (only very similar concepts)
-claude-memory search-semantic "auth" --threshold 0.8
+engram search-semantic "auth" --threshold 0.8
 
 # Loose (include loosely related)
-claude-memory search-semantic "auth" --threshold 0.5
+engram search-semantic "auth" --threshold 0.5
 
 # Very loose (cast a wide net)
-claude-memory search-semantic "auth" --threshold 0.3
+engram search-semantic "auth" --threshold 0.3
 ```
 
 ### Top-K Results
 
 ```bash
 # Get top 5 results
-claude-memory search-semantic "testing" --top 5
+engram search-semantic "testing" --top 5
 
 # Get top 50 for comprehensive search
-claude-memory search-semantic "testing" --top 50
+engram search-semantic "testing" --top 50
 ```
 
 ### Combined Search
@@ -232,11 +232,11 @@ Use both semantic and keyword:
 
 ```bash
 # 1. Semantic search to discover concepts
-claude-memory search-semantic "authentication"
+engram search-semantic "authentication"
 # → Finds: OAuth, JWT, sessions, tokens
 
 # 2. Keyword search for specifics
-claude-memory search "JWT implementation" --project myapp
+engram search "JWT implementation" --project myapp
 ```
 
 ## Integration
@@ -245,16 +245,16 @@ claude-memory search "JWT implementation" --project myapp
 
 ```bash
 # 1. Build graph
-claude-memory graph build myapp
+engram graph build myapp
 
 # 2. Build embeddings
-claude-memory embed myapp
+engram embed myapp
 
 # 3. Semantic search to find concepts
-claude-memory search-semantic "security"
+engram search-semantic "security"
 
 # 4. Graph query to explore connections
-claude-memory graph query myapp "oauth" --depth 2
+engram graph query myapp "oauth" --depth 2
 ```
 
 **Result:** Most powerful retrieval possible!
@@ -279,8 +279,8 @@ Add to session-end hook:
 
 ```bash
 # ~/.claude/hooks/session-end-hook.sh
-claude-memory ingest --project "$PROJECT_NAME"
-claude-memory embed "$PROJECT_NAME" --provider gemini &
+engram ingest --project "$PROJECT_NAME"
+engram embed "$PROJECT_NAME" --provider gemini &
 ```
 
 ## Performance
@@ -316,8 +316,8 @@ claude-memory embed "$PROJECT_NAME" --provider gemini &
 
 ```bash
 # After significant knowledge addition
-claude-memory ingest --project myapp
-claude-memory embed myapp  # Rebuild embeddings
+engram ingest --project myapp
+engram embed myapp  # Rebuild embeddings
 
 # Check if embeddings are stale
 ls -lh ~/memory/knowledge/myapp/embeddings.json
@@ -327,11 +327,11 @@ ls -lh ~/memory/knowledge/myapp/embeddings.json
 
 ```bash
 # Use Gemini (free tier)
-claude-memory embed myapp --provider gemini
+engram embed myapp --provider gemini
 
 # Or Ollama (completely free, local)
 ollama pull nomic-embed-text
-claude-memory embed myapp --provider ollama
+engram embed myapp --provider ollama
 ```
 
 ## Troubleshooting
@@ -340,7 +340,7 @@ claude-memory embed myapp --provider ollama
 
 **Solution:** Build embeddings first:
 ```bash
-claude-memory embed myapp
+engram embed myapp
 ```
 
 ### "OPENAI_API_KEY not set"
@@ -349,7 +349,7 @@ claude-memory embed myapp
 ```bash
 export OPENAI_API_KEY='sk-...'
 # or
-claude-memory embed myapp --provider gemini
+engram embed myapp --provider gemini
 ```
 
 ### "Model not found" (Ollama)
@@ -362,7 +362,7 @@ ollama pull nomic-embed-text
 ### Poor Search Results
 
 **Causes:**
-1. Not enough knowledge → Run `claude-memory ingest`
+1. Not enough knowledge → Run `engram ingest`
 2. Wrong provider → Try `--provider openai` for best quality
 3. Threshold too high → Lower with `--threshold 0.5`
 
@@ -380,7 +380,7 @@ ollama pull nomic-embed-text
 
 **Human brain:** Concepts are represented as distributed activation patterns across neurons
 
-**claude-memory:** Concepts are represented as vectors in 384-dimensional space
+**engram:** Concepts are represented as vectors in 384-dimensional space
 
 **Both:** Similar concepts cluster together in space!
 

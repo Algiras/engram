@@ -82,7 +82,7 @@ impl SemanticSearch {
 
         if !index_path.exists() {
             return Err(crate::error::MemoryError::Config(
-                "No embedding index found. Run 'claude-memory embed' first.".into(),
+                "No embedding index found. Run 'engram embed' first.".into(),
             ));
         }
 

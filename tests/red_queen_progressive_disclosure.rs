@@ -5,23 +5,24 @@
 //!
 //! Philosophy: If it doesn't break under adversarial input, it's robust.
 
-use claude_memory::inject::*;
+use engram::inject::*;
+use std::path::Path;
 use tempfile::TempDir;
 
 // ── compact_preferences ────────────────────────────────────────────────
 
 #[test]
 fn red_queen_prefs_empty_input() {
-    assert_eq!(compact_preferences(""), "");
-    assert_eq!(compact_preferences("   "), "");
-    assert_eq!(compact_preferences("\n\n\n"), "");
+    assert_eq!(compact_preferences("", Path::new("."), "test"), "");
+    assert_eq!(compact_preferences("   ", Path::new("."), "test"), "");
+    assert_eq!(compact_preferences("\n\n\n", Path::new("."), "test"), "");
 }
 
 #[test]
 fn red_queen_prefs_no_session_blocks() {
     // Content without any ## Session: headers
     let input = "# Preferences\n\nSome random text without structure.\n";
-    assert_eq!(compact_preferences(input), "");
+    assert_eq!(compact_preferences(input, Path::new("."), "test"), "");
 }
 
 #[test]
@@ -34,7 +35,7 @@ fn red_queen_prefs_all_expired() {
 *   **Preferred Tools:** Rust, Cargo
 *   **Workflow Preferences:** Iterative development
 "#;
-    assert_eq!(compact_preferences(input), "");
+    assert_eq!(compact_preferences(input, Path::new("."), "test"), "");
 }
 
 #[test]
@@ -46,7 +47,7 @@ fn red_queen_prefs_single_block_extracts_correctly() {
 *   **Preferred Tools:** Rust, Python, TypeScript
 *   **Coding Style Preferences:** Modular design, clean code
 "#;
-    let result = compact_preferences(input);
+    let result = compact_preferences(input, Path::new("."), "test");
     assert!(
         result.contains("**Tools:**"),
         "Should normalize 'Preferred Tools' to 'Tools'"
@@ -76,7 +77,7 @@ fn red_queen_prefs_deduplication_across_sessions() {
 
 *   **Preferred Tools:** TypeScript, Cargo
 "#;
-    let result = compact_preferences(input);
+    let result = compact_preferences(input, Path::new("."), "test");
     // Rust appears in sess-1 and sess-2 but should be deduplicated
     let rust_count = result.matches("Rust").count();
     assert_eq!(
@@ -109,7 +110,7 @@ fn red_queen_prefs_case_insensitive_dedup() {
 
 *   **Preferred Tools:** RUST
 "#;
-    let result = compact_preferences(input);
+    let result = compact_preferences(input, Path::new("."), "test");
     // Should keep first occurrence's casing, but only one
     let lines: Vec<&str> = result.lines().collect();
     let tools_line = lines.iter().find(|l| l.contains("**Tools:**")).unwrap();
@@ -135,7 +136,7 @@ Here's a breakdown of preferences:
 *   **Workflow Preferences:** The user prefers iterative development
 *   **Testing Preferences:** Jest for unit tests
 "#;
-    let result = compact_preferences(input);
+    let result = compact_preferences(input, Path::new("."), "test");
     assert!(
         !result.contains("Here's a breakdown"),
         "Should skip generic intro values"
@@ -155,7 +156,7 @@ fn red_queen_prefs_overflow_cap_at_six_items() {
 
 *   **Preferred Tools:** A, B, C, D, E, F, G, H, I, J
 "#;
-    let result = compact_preferences(input);
+    let result = compact_preferences(input, Path::new("."), "test");
     assert!(
         result.contains("(+4 more)"),
         "Should show overflow count: {}",
@@ -191,7 +192,7 @@ fn red_queen_prefs_key_normalization() {
 *   **Testing Preferences:** Jest
 *   **Test Preference:** Playwright
 "#;
-    let result = compact_preferences(input);
+    let result = compact_preferences(input, Path::new("."), "test");
     // All tools should merge under "Tools"
     assert!(result.contains("**Tools:**"), "Should have Tools key");
     assert!(
@@ -226,7 +227,7 @@ fn red_queen_prefs_malformed_bold_syntax() {
 *   **Key with **nested** bold:** value
 "#;
     // Should not panic
-    let result = compact_preferences(input);
+    let result = compact_preferences(input, Path::new("."), "test");
     // May or may not extract anything — the point is no crash
     assert!(result.len() < 10000, "Should produce bounded output");
 }
@@ -241,7 +242,7 @@ fn red_queen_prefs_massive_input() {
             i
         ));
     }
-    let result = compact_preferences(&input);
+    let result = compact_preferences(&input, Path::new("."), "test");
     // Should still be compact, not 1000x repeated
     let lines: Vec<&str> = result.lines().collect();
     assert!(
@@ -260,7 +261,7 @@ fn red_queen_prefs_unicode_and_special_chars() {
 *   **Preferred Tools:** 日本語ツール, Ñoño framework, Ü̈ber-crate
 *   **Coding Style Preferences:** Uses `backticks` and "quotes" and 'single quotes'
 "#;
-    let result = compact_preferences(input);
+    let result = compact_preferences(input, Path::new("."), "test");
     assert!(result.contains("日本語ツール"), "Should preserve Unicode");
     assert!(
         result.contains("Ñoño framework"),
@@ -341,14 +342,14 @@ fn red_queen_dedup_whitespace_only_items() {
 
 #[test]
 fn red_queen_shared_empty() {
-    assert_eq!(compact_shared("", 40), "");
-    assert_eq!(compact_shared("  \n\n  ", 40), "");
+    assert_eq!(compact_shared("", 40, Path::new("."), "test"), "");
+    assert_eq!(compact_shared("  \n\n  ", 40, Path::new("."), "test"), "");
 }
 
 #[test]
 fn red_queen_shared_no_blocks() {
     let input = "# Shared\n\nSome text without session blocks\n";
-    assert_eq!(compact_shared(input, 40), "");
+    assert_eq!(compact_shared(input, 40, Path::new("."), "test"), "");
 }
 
 #[test]
@@ -361,7 +362,7 @@ fn red_queen_shared_respects_budget() {
             i, i + 1
         ));
     }
-    let result = compact_shared(&input, 10);
+    let result = compact_shared(&input, 10, Path::new("."), "test");
     let line_count = result.lines().count();
     // Should be trimmed — the first block alone is ~7 lines, second would exceed 10
     assert!(
@@ -383,7 +384,7 @@ Old content
 
 New content
 "#;
-    let result = compact_shared(input, 10);
+    let result = compact_shared(input, 10, Path::new("."), "test");
     assert!(
         result.contains("New content"),
         "Should include most recent block"
@@ -399,7 +400,7 @@ fn red_queen_shared_all_expired() {
 
 Expired content
 "#;
-    assert_eq!(compact_shared(input, 40), "");
+    assert_eq!(compact_shared(input, 40, Path::new("."), "test"), "");
 }
 
 #[test]
@@ -411,7 +412,7 @@ fn red_queen_shared_zero_budget() {
 Content
 "#;
     // max_lines=0 should still include the first block (greedy: first block always included)
-    let result = compact_shared(input, 0);
+    let result = compact_shared(input, 0, Path::new("."), "test");
     assert!(
         result.contains("Content"),
         "First block should always be included even with zero budget"
@@ -428,7 +429,7 @@ fn red_queen_shared_shows_truncation_note() {
             "Line 1", "Line 2", "Line 3", "Line 4", "Line 5"
         ));
     }
-    let result = compact_shared(&input, 10);
+    let result = compact_shared(&input, 10, Path::new("."), "test");
     if result.matches("## Session:").count() < 5 {
         assert!(
             result.contains("Showing") && result.contains("of"),
@@ -448,7 +449,7 @@ Some intro text
 
 Content here
 "#;
-    let result = compact_shared(input, 40);
+    let result = compact_shared(input, 40, Path::new("."), "test");
     assert!(
         result.contains("# Shared Memory Title"),
         "Should preserve preamble"
@@ -518,10 +519,10 @@ fn red_queen_trim_budget_zero() {
 fn red_queen_retrieval_guide_structure() {
     let guide = retrieval_guide();
     assert!(guide.contains("## Retrieving More Context"));
-    assert!(guide.contains("claude-memory lookup"));
-    assert!(guide.contains("claude-memory search"));
-    assert!(guide.contains("claude-memory recall"));
-    assert!(guide.contains("claude-memory search-semantic"));
+    assert!(guide.contains("engram lookup"));
+    assert!(guide.contains("engram search"));
+    assert!(guide.contains("engram recall"));
+    assert!(guide.contains("engram search-semantic"));
     // Should be reasonably short
     let lines = guide.lines().count();
     assert!(
@@ -731,7 +732,7 @@ fn red_queen_prompt_injection_in_prefs() {
 *   **Workflow Preferences:** <script>alert('xss')</script>
 *   **Coding Style Preferences:** "); DROP TABLE knowledge; --
 "#;
-    let result = compact_preferences(input);
+    let result = compact_preferences(input, Path::new("."), "test");
     // Should treat these as normal values, not execute them
     assert!(
         result.contains("IGNORE ALL PREVIOUS INSTRUCTIONS") || !result.contains("IGNORE"),
@@ -760,7 +761,7 @@ fn red_queen_markdown_injection_in_shared() {
 ## Session: code-block-escape (2099-01-01T00:00:00Z)
 ```
 "#;
-    let result = compact_shared(input, 40);
+    let result = compact_shared(input, 40, Path::new("."), "test");
     // Should handle nested session-like headers in content gracefully
     // The parser should find the real session headers, not fake ones
     assert!(!result.is_empty(), "Should produce output");
@@ -779,7 +780,7 @@ fn red_queen_prefs_very_long_value() {
         "# Prefs\n\n## Session: s1 (2099-01-01T00:00:00Z) [ttl:never]\n\n*   **Preferred Tools:** {}\n",
         long_value
     );
-    let result = compact_preferences(&input);
+    let result = compact_preferences(&input, Path::new("."), "test");
     // Should cap at 6 display items + overflow count
     assert!(
         result.contains("(+"),
@@ -822,7 +823,7 @@ Content B
 Content C
 "#;
     // All same timestamp — should not panic, should return some content
-    let result = compact_shared(input, 20);
+    let result = compact_shared(input, 20, Path::new("."), "test");
     assert!(!result.is_empty());
 }
 
@@ -839,7 +840,7 @@ Content 1
 Content 2
 "#;
     // Malformed timestamps shouldn't crash — sort by string comparison
-    let result = compact_shared(input, 40);
+    let result = compact_shared(input, 40, Path::new("."), "test");
     assert!(
         !result.is_empty(),
         "Should handle bad timestamps gracefully"

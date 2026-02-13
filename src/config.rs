@@ -23,8 +23,8 @@ impl Config {
         let memory_dir = home.join("memory");
 
         // Legacy env var overrides still work
-        let env_endpoint = std::env::var("CLAUDE_MEMORY_LLM_ENDPOINT").ok();
-        let env_model = std::env::var("CLAUDE_MEMORY_LLM_MODEL").ok();
+        let env_endpoint = std::env::var("ENGRAM_LLM_ENDPOINT").ok();
+        let env_model = std::env::var("ENGRAM_LLM_MODEL").ok();
 
         let llm = auth::resolve_provider(provider_override, env_endpoint, env_model)?;
 

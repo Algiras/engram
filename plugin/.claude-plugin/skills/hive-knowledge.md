@@ -4,7 +4,7 @@ Manage and share knowledge packs via the Hive Mind system.
 
 ## What is Hive Mind?
 
-The Hive Mind is a Git-based distributed knowledge sharing system for claude-memory. It allows users to:
+The Hive Mind is a Git-based distributed knowledge sharing system for engram. It allows users to:
 
 - **Discover** knowledge packs from registries
 - **Install** packs to access shared knowledge
@@ -34,53 +34,53 @@ A structured directory containing:
 
 ```bash
 # Add a registry (supports GitHub shorthand)
-claude-memory hive registry add owner/repo
-claude-memory hive registry add https://github.com/owner/repo
+engram hive registry add owner/repo
+engram hive registry add https://github.com/owner/repo
 
 # List registries
-claude-memory hive registry list
+engram hive registry list
 
 # Update registry (git pull)
-claude-memory hive registry update [name]
+engram hive registry update [name]
 
 # Remove registry
-claude-memory hive registry remove <name>
+engram hive registry remove <name>
 ```
 
 ### Pack Discovery
 
 ```bash
 # Browse all available packs
-claude-memory hive browse
+engram hive browse
 
 # Filter by category
-claude-memory hive browse --category patterns
+engram hive browse --category patterns
 
 # Filter by keyword
-claude-memory hive browse --keyword rust
+engram hive browse --keyword rust
 
 # Search packs
-claude-memory hive search "async patterns"
+engram hive search "async patterns"
 ```
 
 ### Pack Management
 
 ```bash
 # Install a pack
-claude-memory hive install <pack-name>
+engram hive install <pack-name>
 
 # Install from specific registry
-claude-memory hive install <pack-name> --registry <registry-name>
+engram hive install <pack-name> --registry <registry-name>
 
 # List installed packs
-claude-memory hive list
+engram hive list
 
 # Update packs
-claude-memory hive update              # Update all
-claude-memory hive update <pack-name>  # Update specific
+engram hive update              # Update all
+engram hive update <pack-name>  # Update specific
 
 # Uninstall pack
-claude-memory hive uninstall <pack-name>
+engram hive uninstall <pack-name>
 ```
 
 ### Integration with Existing Commands
@@ -89,16 +89,16 @@ Once packs are installed, their knowledge is automatically included:
 
 ```bash
 # Recall includes both local and pack knowledge
-claude-memory recall <project>
+engram recall <project>
 
 # Search across local and packs
-claude-memory search "pattern"
+engram search "pattern"
 
 # Lookup in local and packs
-claude-memory lookup <project> "topic"
+engram lookup <project> "topic"
 
 # TUI: Press 'p' to browse packs
-claude-memory tui
+engram tui
 ```
 
 ## Creating a Knowledge Pack
@@ -154,30 +154,30 @@ git push -u origin main
 ```
 
 5. **Share the registry URL:**
-Others can now install: `claude-memory hive registry add user/my-pack`
+Others can now install: `engram hive registry add user/my-pack`
 
 ## Example: Installing Core Pack
 
-The claude-memory repository includes a core registry with meta-knowledge:
+The engram repository includes a core registry with meta-knowledge:
 
 ```bash
 # Add the core registry (from local repo)
-cd /path/to/claude-memory
-claude-memory hive registry add file://$(pwd)/registry
+cd /path/to/engram
+engram hive registry add file://$(pwd)/registry
 
 # Or from GitHub (once published)
-claude-memory hive registry add Algiras/claude-memory
+engram hive registry add Algiras/engram
 
 # Browse available packs
-claude-memory hive browse
-# Shows: claude-memory-core
+engram hive browse
+# Shows: engram-core
 
 # Install it
-claude-memory hive install claude-memory-core
+engram hive install engram-core
 
 # Use the knowledge
-claude-memory recall <your-project>
-# Now includes patterns, solutions, and workflows about claude-memory itself!
+engram recall <your-project>
+# Now includes patterns, solutions, and workflows about engram itself!
 ```
 
 ## TUI Integration
@@ -185,7 +185,7 @@ claude-memory recall <your-project>
 The TUI includes a Packs screen:
 
 ```bash
-claude-memory tui
+engram tui
 
 # In the TUI:
 # - Press 'p' to switch to Packs screen
@@ -211,7 +211,7 @@ claude-memory tui
 - You're working on similar projects across teams
 
 **Core registry use case:**
-- Learning how claude-memory itself works
+- Learning how engram itself works
 - Understanding knowledge management patterns
 - Getting troubleshooting solutions
 - Following best practices and workflows
@@ -236,16 +236,16 @@ claude-memory tui
 **Pack not found:**
 ```bash
 # Update registries first
-claude-memory hive registry update
+engram hive registry update
 
 # Check if pack exists
-claude-memory hive browse | grep <pack-name>
+engram hive browse | grep <pack-name>
 ```
 
 **Knowledge not appearing:**
 ```bash
 # Verify pack is installed
-claude-memory hive list
+engram hive list
 
 # Check pack contents
 ls ~/memory/packs/installed/<pack-name>/knowledge/
@@ -254,8 +254,8 @@ ls ~/memory/packs/installed/<pack-name>/knowledge/
 **Registry clone failed:**
 ```bash
 # Use full HTTPS URL if shorthand fails
-claude-memory hive registry add https://github.com/owner/repo.git
+engram hive registry add https://github.com/owner/repo.git
 
 # For local registries, use file:// protocol
-claude-memory hive registry add file:///absolute/path/to/registry
+engram hive registry add file:///absolute/path/to/registry
 ```

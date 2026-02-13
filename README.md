@@ -1,4 +1,4 @@
-# claude-memory
+# engram
 
 Conversation memory system for Claude Code. Archives conversation sessions, extracts structured knowledge using LLMs, and enables full-text search and recall of project context.
 
@@ -7,7 +7,7 @@ Conversation memory system for Claude Code. Archives conversation sessions, extr
 **Quick install** (Linux, macOS):
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/Algiras/claude-memory/master/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/Algiras/engram/master/install.sh | sh
 ```
 
 The installer auto-detects your OS/architecture and downloads the matching release asset.
@@ -16,10 +16,10 @@ The installer auto-detects your OS/architecture and downloads the matching relea
 
 ```bash
 VERSION=v0.3.0
-ASSET=claude-memory-aarch64-apple-darwin.tar.gz   # choose your platform asset
+ASSET=engram-aarch64-apple-darwin.tar.gz   # choose your platform asset
 
-curl -fsSLO https://github.com/Algiras/claude-memory/releases/download/${VERSION}/${ASSET}
-curl -fsSLO https://github.com/Algiras/claude-memory/releases/download/${VERSION}/checksums.txt
+curl -fsSLO https://github.com/Algiras/engram/releases/download/${VERSION}/${ASSET}
+curl -fsSLO https://github.com/Algiras/engram/releases/download/${VERSION}/checksums.txt
 
 # macOS
 shasum -a 256 ${ASSET}
@@ -34,41 +34,41 @@ grep " ${ASSET}$" checksums.txt
 **From source:**
 
 ```bash
-git clone https://github.com/Algiras/claude-memory.git
-cd claude-memory
+git clone https://github.com/Algiras/engram.git
+cd engram
 cargo install --path .
 ```
 
-**Prebuilt binaries**: download from [Releases](https://github.com/Algiras/claude-memory/releases) for Linux x86_64, macOS ARM, and Windows x86_64.
+**Prebuilt binaries**: download from [Releases](https://github.com/Algiras/engram/releases) for Linux x86_64, macOS ARM, and Windows x86_64.
 
 ## Quick Start
 
 ```bash
 # Archive all conversations (skip LLM extraction for speed)
-claude-memory ingest --skip-knowledge
+engram ingest --skip-knowledge
 
 # Full pipeline with knowledge extraction (requires LLM)
-claude-memory ingest
+engram ingest
 
 # Search across all memory
-claude-memory search "authentication"
+engram search "authentication"
 
 # Show project context
-claude-memory recall my-project
+engram recall my-project
 
 # List projects
-claude-memory projects
+engram projects
 
 # Interactive TUI with fuzzy search
-claude-memory tui
+engram tui
 
 # View reinforcement learning progress
-claude-memory learn dashboard
+engram learn dashboard
 ```
 
 ## MCP Server (Claude Desktop Integration)
 
-`claude-memory` includes MCP (Model Context Protocol) server support for direct integration with Claude Desktop.
+`engram` includes MCP (Model Context Protocol) server support for direct integration with Claude Desktop.
 
 **Quick setup:**
 
@@ -77,8 +77,8 @@ claude-memory learn dashboard
 ```json
 {
   "mcpServers": {
-    "claude-memory": {
-      "command": "claude-memory",
+    "engram": {
+      "command": "engram",
       "args": ["mcp"]
     }
   }
@@ -99,26 +99,26 @@ Supports Anthropic, OpenAI, and Ollama for knowledge extraction. Defaults to Oll
 
 ```bash
 # Interactive login
-claude-memory auth login
+engram auth login
 
 # Direct login
-claude-memory auth login --provider anthropic
+engram auth login --provider anthropic
 
 # Check status
-claude-memory auth status
+engram auth status
 
 # List configured providers
-claude-memory auth list
+engram auth list
 
 # Override per-command
-claude-memory ingest --provider ollama
+engram ingest --provider ollama
 
 # Or use environment variables
-ANTHROPIC_API_KEY=sk-ant-... claude-memory ingest
-OPENAI_API_KEY=sk-... claude-memory ingest --provider openai
+ANTHROPIC_API_KEY=sk-ant-... engram ingest
+OPENAI_API_KEY=sk-... engram ingest --provider openai
 ```
 
-Credentials are stored in `~/.config/claude-memory/auth.json` with `0600` permissions.
+Credentials are stored in `~/.config/engram/auth.json` with `0600` permissions.
 
 ## Commands
 
@@ -197,7 +197,7 @@ Auto-archive conversations in the background using a PostToolUse hook:
     "PostToolUse": [
       {
         "matcher": "",
-        "hooks": [{ "type": "command", "command": "/path/to/hooks/claude-memory-hook.sh" }]
+        "hooks": [{ "type": "command", "command": "/path/to/hooks/engram-hook.sh" }]
       }
     ]
   }
@@ -210,8 +210,8 @@ Auto-archive conversations in the background using a PostToolUse hook:
 |----------|---------|-------------|
 | `ANTHROPIC_API_KEY` | - | Anthropic API key (auto-selects Anthropic provider) |
 | `OPENAI_API_KEY` | - | OpenAI API key (auto-selects OpenAI provider) |
-| `CLAUDE_MEMORY_LLM_ENDPOINT` | per provider | Override LLM endpoint |
-| `CLAUDE_MEMORY_LLM_MODEL` | per provider | Override LLM model |
+| `ENGRAM_LLM_ENDPOINT` | per provider | Override LLM endpoint |
+| `ENGRAM_LLM_MODEL` | per provider | Override LLM model |
 
 ## License
 
@@ -236,16 +236,16 @@ The Hive Mind system enables you to:
 
 ```bash
 # Add a registry
-claude-memory hive registry add Algiras/claude-memory
+engram hive registry add Algiras/engram
 
 # Browse available packs
-claude-memory hive browse
+engram hive browse
 
 # Install a pack
-claude-memory hive install claude-memory-core
+engram hive install engram-core
 
 # Use the knowledge (automatic!)
-claude-memory recall <project>
+engram recall <project>
 # Now includes knowledge from installed packs
 ```
 
@@ -253,10 +253,10 @@ claude-memory recall <project>
 
 ```bash
 # Extract knowledge from your conversations first
-claude-memory ingest --project my-project
+engram ingest --project my-project
 
 # Create a pack
-claude-memory hive pack create my-pack \
+engram hive pack create my-pack \
   --project my-project \
   --description "My awesome patterns" \
   --keywords "rust,async,patterns" \
@@ -273,10 +273,10 @@ claude-memory hive pack create my-pack \
 
 ```bash
 # Validate before publishing
-claude-memory hive pack validate ./packs/my-pack
+engram hive pack validate ./packs/my-pack
 
 # Publish to Git
-claude-memory hive pack publish ./packs/my-pack \
+engram hive pack publish ./packs/my-pack \
   --repo https://github.com/user/my-pack \
   --push
 
@@ -293,61 +293,61 @@ claude-memory hive pack publish ./packs/my-pack \
 
 ```bash
 # Add a registry (GitHub shorthand)
-claude-memory hive registry add owner/repo
+engram hive registry add owner/repo
 
 # Or full URL
-claude-memory hive registry add https://github.com/owner/repo.git
+engram hive registry add https://github.com/owner/repo.git
 
 # For local development
-claude-memory hive registry add file:///absolute/path/to/registry
+engram hive registry add file:///absolute/path/to/registry
 
 # List registries
-claude-memory hive registry list
+engram hive registry list
 
 # Update registries (git pull)
-claude-memory hive registry update [name]
+engram hive registry update [name]
 
 # Remove a registry
-claude-memory hive registry remove <name>
+engram hive registry remove <name>
 ```
 
 ### Pack Discovery
 
 ```bash
 # Browse all packs
-claude-memory hive browse
+engram hive browse
 
 # Filter by category
-claude-memory hive browse --category patterns
+engram hive browse --category patterns
 
 # Filter by keyword  
-claude-memory hive browse --keyword rust
+engram hive browse --keyword rust
 
 # Search packs
-claude-memory hive search "async patterns"
+engram hive search "async patterns"
 ```
 
 ### Pack Management
 
 ```bash
 # Install a pack
-claude-memory hive install <pack-name>
+engram hive install <pack-name>
 
 # From specific registry
-claude-memory hive install <pack-name> --registry <registry-name>
+engram hive install <pack-name> --registry <registry-name>
 
 # List installed packs
-claude-memory hive list
+engram hive list
 
 # View pack statistics
-claude-memory hive pack stats <pack-name>
+engram hive pack stats <pack-name>
 
 # Update packs
-claude-memory hive update                # All packs
-claude-memory hive update <pack-name>    # Specific pack
+engram hive update                # All packs
+engram hive update <pack-name>    # Specific pack
 
 # Uninstall
-claude-memory hive uninstall <pack-name>
+engram hive uninstall <pack-name>
 ```
 
 ### Pack Structure
@@ -399,19 +399,19 @@ Once packs are installed, their knowledge automatically appears:
 
 ```bash
 # Recall includes local + pack knowledge
-claude-memory recall <project>
+engram recall <project>
 
 # Search across local and packs
-claude-memory search "pattern"
+engram search "pattern"
 
 # Lookup searches both sources
-claude-memory lookup <project> "topic"
+engram lookup <project> "topic"
 ```
 
 ### TUI: Interactive Pack Browser
 
 ```bash
-claude-memory tui
+engram tui
 
 # Keyboard shortcuts:
 # 'p' - Switch to Packs screen
@@ -443,7 +443,7 @@ The system scans for 12 types of secrets before pack creation/publishing:
 
 **Skip security check** (NOT RECOMMENDED):
 ```bash
-claude-memory hive pack publish ./pack --skip-security
+engram hive pack publish ./pack --skip-security
 ```
 
 ### Health Checks
@@ -451,7 +451,7 @@ claude-memory hive pack publish ./pack --skip-security
 The `doctor` command now checks pack health:
 
 ```bash
-claude-memory doctor
+engram doctor
 
 # Checks:
 # - Manifest validity
@@ -460,7 +460,7 @@ claude-memory doctor
 # - Registry still exists (detects orphans)
 
 # Auto-fix:
-claude-memory doctor --fix
+engram doctor --fix
 # - Re-downloads corrupted packs
 # - Removes orphaned packs
 ```
@@ -471,17 +471,17 @@ This repository includes a meta-knowledge pack:
 
 ```bash
 # Add the core registry (from local clone)
-cd /path/to/claude-memory
-claude-memory hive registry add file://$(pwd)/registry
+cd /path/to/engram
+engram hive registry add file://$(pwd)/registry
 
 # Install the core pack
-claude-memory hive install claude-memory-core
+engram hive install engram-core
 
 # This pack contains:
 # - 15 patterns about knowledge management
 # - 10 solutions for common problems
 # - 7 complete workflows
-# - Documentation about claude-memory itself!
+# - Documentation about engram itself!
 ```
 
 ### Privacy Model
@@ -521,27 +521,27 @@ claude-memory hive install claude-memory-core
 
 ```bash
 # 1. Extract knowledge from your work
-claude-memory ingest --project my-rust-project
+engram ingest --project my-rust-project
 
 # 2. Create a pack
-claude-memory hive pack create rust-patterns \
+engram hive pack create rust-patterns \
   --project my-rust-project \
   --description "Rust async patterns and best practices" \
   --keywords "rust,async,patterns,tokio" \
   --categories "patterns,solutions"
 
 # 3. Validate
-claude-memory hive pack validate ./packs/rust-patterns
+engram hive pack validate ./packs/rust-patterns
 
 # 4. Publish
-claude-memory hive pack publish ./packs/rust-patterns \
+engram hive pack publish ./packs/rust-patterns \
   --repo https://github.com/user/rust-patterns \
   --push
 
 # 5. Share with team
 # Team members can now:
-# claude-memory hive registry add user/rust-patterns
-# claude-memory hive install rust-patterns
+# engram hive registry add user/rust-patterns
+# engram hive install rust-patterns
 ```
 
 ### Storage Locations
@@ -557,28 +557,28 @@ claude-memory hive pack publish ./packs/rust-patterns \
 **Pack not found:**
 ```bash
 # Update registries
-claude-memory hive registry update
+engram hive registry update
 
 # Verify pack exists
-claude-memory hive browse | grep <pack-name>
+engram hive browse | grep <pack-name>
 ```
 
 **Knowledge not appearing:**
 ```bash
 # Verify pack is installed
-claude-memory hive list
+engram hive list
 
 # Check pack contents
 ls ~/memory/packs/installed/<pack-name>/knowledge/
 
 # Check pack health
-claude-memory doctor
+engram doctor
 ```
 
 **Registry clone failed:**
 ```bash
 # Use full HTTPS URL
-claude-memory hive registry add https://github.com/owner/repo.git
+engram hive registry add https://github.com/owner/repo.git
 
 # Test git access
 git ls-remote <url>

@@ -388,7 +388,7 @@ pub fn load_learning_dashboard(memory_dir: &Path, project: &str) -> String {
 
     if !learning_dir.join(project).join("state.json").exists() {
         return format!(
-            "No learning data for project '{}'\n\nRun learning simulation to generate data:\n  claude-memory learn simulate --project {}",
+            "No learning data for project '{}'\n\nRun learning simulation to generate data:\n  engram learn simulate --project {}",
             project, project
         );
     }

@@ -1,10 +1,10 @@
 # MCP Server Setup for Claude Desktop
 
-`claude-memory` now includes MCP (Model Context Protocol) server support, allowing Claude Desktop to directly access your conversation memory without shell hooks.
+`engram` now includes MCP (Model Context Protocol) server support, allowing Claude Desktop to directly access your conversation memory without shell hooks.
 
 ## What is MCP?
 
-MCP allows Claude Desktop to call external tools and read external resources during conversations. With the `claude-memory` MCP server, Claude can:
+MCP allows Claude Desktop to call external tools and read external resources during conversations. With the `engram` MCP server, Claude can:
 
 - **Recall** project context and knowledge
 - **Search** across all your memory
@@ -14,12 +14,12 @@ MCP allows Claude Desktop to call external tools and read external resources dur
 
 ## Installation
 
-### 1. Install claude-memory
+### 1. Install engram
 
 ```bash
 cargo install --path .
 # or use the install script
-curl -fsSL https://raw.githubusercontent.com/Algiras/claude-memory/master/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/Algiras/engram/master/install.sh | sh
 ```
 
 ### 2. Configure Claude Desktop
@@ -33,8 +33,8 @@ Add the MCP server to your Claude Desktop configuration file:
 ```json
 {
   "mcpServers": {
-    "claude-memory": {
-      "command": "claude-memory",
+    "engram": {
+      "command": "engram",
       "args": ["mcp"]
     }
   }
@@ -46,8 +46,8 @@ If you want to use a specific LLM provider for knowledge extraction, add the pro
 ```json
 {
   "mcpServers": {
-    "claude-memory": {
-      "command": "claude-memory",
+    "engram": {
+      "command": "engram",
       "args": ["mcp", "--provider", "anthropic"],
       "env": {
         "ANTHROPIC_API_KEY": "your-api-key-here"
@@ -72,7 +72,7 @@ Retrieve project context and knowledge summary.
 - `project` (string, required): Project name
 
 **Example usage:**
-> Claude, recall the claude-memory project
+> Claude, recall the engram project
 
 ### `search`
 Search across all memory using regex patterns.
@@ -128,11 +128,11 @@ Check the Claude Desktop logs:
 
 ### Command not found
 
-Ensure `claude-memory` is in your PATH:
+Ensure `engram` is in your PATH:
 
 ```bash
-which claude-memory
-# Should output: /Users/<username>/.cargo/bin/claude-memory (or similar)
+which engram
+# Should output: /Users/<username>/.cargo/bin/engram (or similar)
 ```
 
 If not, add `~/.cargo/bin` to your PATH in your shell profile.
@@ -142,7 +142,7 @@ If not, add `~/.cargo/bin` to your PATH in your shell profile.
 Run an initial ingestion to populate the memory:
 
 ```bash
-claude-memory ingest
+engram ingest
 ```
 
 ### LLM provider authentication
@@ -150,8 +150,8 @@ claude-memory ingest
 If knowledge extraction is not working, configure authentication:
 
 ```bash
-claude-memory auth login --provider anthropic
-claude-memory auth status
+engram auth login --provider anthropic
+engram auth status
 ```
 
 ## Testing the MCP Server
@@ -159,7 +159,7 @@ claude-memory auth status
 You can test the MCP server manually using stdio:
 
 ```bash
-echo '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}' | claude-memory mcp
+echo '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}' | engram mcp
 ```
 
 This should return a JSON response with server capabilities.
@@ -167,7 +167,7 @@ This should return a JSON response with server capabilities.
 To test the tools:
 
 ```bash
-echo '{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}' | claude-memory mcp
+echo '{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}' | engram mcp
 ```
 
 ## Next Steps

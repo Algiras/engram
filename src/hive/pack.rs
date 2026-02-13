@@ -23,7 +23,7 @@ pub struct KnowledgePack {
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
     pub privacy: PrivacyPolicy,
-    pub min_claude_memory_version: String,
+    pub min_engram_version: String,
 
     /// Directory where this pack was loaded from (not serialized)
     #[serde(skip)]
@@ -84,7 +84,7 @@ impl KnowledgePack {
             created_at: Utc::now(),
             updated_at: Utc::now(),
             privacy: PrivacyPolicy::default(),
-            min_claude_memory_version: env!("CARGO_PKG_VERSION").to_string(),
+            min_engram_version: env!("CARGO_PKG_VERSION").to_string(),
             source_path: None,
         }
     }

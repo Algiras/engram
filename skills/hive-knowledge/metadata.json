@@ -1,17 +1,17 @@
 {
   "name": "hive-knowledge",
-  "description": "Distributed knowledge sharing for claude-memory via Git-based registries",
-  "author": "claude-memory",
+  "description": "Distributed knowledge sharing for engram via Git-based registries",
+  "author": "engram",
   "version": "1.0.0",
   "license": "MIT",
-  "repository": "https://github.com/Algiras/claude-memory",
+  "repository": "https://github.com/Algiras/engram",
   "keywords": [
     "knowledge-management",
     "distributed-memory",
     "knowledge-packs",
     "git-based-sharing",
     "hive-mind",
-    "claude-memory"
+    "engram"
   ],
   "categories": [
     "knowledge-management",

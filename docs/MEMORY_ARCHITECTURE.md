@@ -1,13 +1,13 @@
 # Memory Architecture: Brain-Inspired Design
 
-How `claude-memory` mirrors human memory systems and where it can improve.
+How `engram` mirrors human memory systems and where it can improve.
 
 ## Current Architecture
 
 ### 1. Multi-Layered Storage (Like Human Memory)
 
 ```
-claude-memory
+engram
 ├── Episodic Memory (Conversations)
 │   ├── Full conversation archives
 │   ├── Temporal sequencing
@@ -32,7 +32,7 @@ claude-memory
 
 ### 2. Brain-Inspired Features ✅
 
-| Human Memory System | claude-memory Equivalent | Status |
+| Human Memory System | engram Equivalent | Status |
 |---------------------|-------------------------|--------|
 | **Episodic Memory** | Conversation archives | ✅ Implemented |
 | **Semantic Memory** | Knowledge extraction (decisions, solutions) | ✅ Implemented |
@@ -81,7 +81,7 @@ claude-memory
 └─────────────────────────────────────────────┘
 ```
 
-### claude-memory Current Implementation
+### engram Current Implementation
 
 ```
 ┌─────────────────────────────────────────────┐
@@ -154,7 +154,7 @@ Similar to brain's hierarchical organization:
 
 Like the brain has multiple retrieval pathways:
 
-| Pathway | Human Brain | claude-memory |
+| Pathway | Human Brain | engram |
 |---------|-------------|---------------|
 | **Direct recall** | "What's the capital of France?" | `recall project` |
 | **Associative** | "That reminds me of..." | Search with context |
@@ -357,7 +357,7 @@ enum MemoryContent {
 
 #### 1. **Episodic Memory** (Hippocampus-like)
 **Brain:** Remembers specific events - "Yesterday I learned about OAuth"
-**claude-memory:** Conversation archives with full context
+**engram:** Conversation archives with full context
 
 ```bash
 ~/memory/conversations/myapp/session-123/
@@ -367,7 +367,7 @@ enum MemoryContent {
 
 #### 2. **Semantic Memory** (Temporal lobe-like)
 **Brain:** Facts without context - "OAuth uses tokens"
-**claude-memory:** Extracted decisions/solutions/patterns
+**engram:** Extracted decisions/solutions/patterns
 
 ```bash
 ~/memory/knowledge/myapp/
@@ -378,7 +378,7 @@ enum MemoryContent {
 
 #### 3. **Memory Consolidation** (Sleep-like)
 **Brain:** Transfers memories from short-term to long-term during sleep
-**claude-memory:** LLM extracts knowledge from sessions
+**engram:** LLM extracts knowledge from sessions
 
 ```
 Session End → LLM extraction → Knowledge files → Context synthesis
@@ -386,7 +386,7 @@ Session End → LLM extraction → Knowledge files → Context synthesis
 
 #### 4. **Forgetting Curve** (Natural decay)
 **Brain:** Unused memories fade over time
-**claude-memory:** TTL expiration
+**engram:** TTL expiration
 
 ```bash
 --ttl 7d    # Decays after 7 days (like human memory)
@@ -395,7 +395,7 @@ Session End → LLM extraction → Knowledge files → Context synthesis
 
 #### 5. **Retrieval Practice Effect**
 **Brain:** Recalling strengthens memories
-**claude-memory:** Could track access frequency (not yet implemented)
+**engram:** Could track access frequency (not yet implemented)
 
 ### What We're Missing ❌
 
@@ -531,11 +531,11 @@ Decision: Use OAuth 2.0 for authentication
 
 ```bash
 # High importance (never expires)
-claude-memory add myapp decisions "Critical: Database sharding strategy" \
+engram add myapp decisions "Critical: Database sharding strategy" \
   --importance high
 
 # Low importance (expires quickly)
-claude-memory add myapp patterns "Minor: Prefer const over let" \
+engram add myapp patterns "Minor: Prefer const over let" \
   --importance low --ttl 7d
 ```
 
@@ -545,24 +545,24 @@ claude-memory add myapp patterns "Minor: Prefer const over let" \
 
 ```bash
 # Build graph from existing knowledge
-claude-memory graph build myapp
+engram graph build myapp
 
 # Query graph
-claude-memory graph query myapp "authentication" --depth 2
+engram graph query myapp "authentication" --depth 2
 # Shows: authentication → OAuth → JWT → tokens → expiry
 
 # Visualize
-claude-memory graph viz myapp -o graph.svg
+engram graph viz myapp -o graph.svg
 ```
 
 #### Phase 2: Add Semantic Embeddings (Task #2)
 
 ```bash
 # Generate embeddings
-claude-memory embed myapp
+engram embed myapp
 
 # Semantic search
-claude-memory search myapp "secure user data" --semantic
+engram search myapp "secure user data" --semantic
 # Finds: "encryption", "HTTPS", "password hashing"
 # Even though different words!
 ```
@@ -571,7 +571,7 @@ claude-memory search myapp "secure user data" --semantic
 
 ```bash
 # Detect duplicates and conflicts
-claude-memory consolidate myapp
+engram consolidate myapp
 
 # Output:
 # Found 3 similar entries:
@@ -604,7 +604,7 @@ claude-memory consolidate myapp
 6. Associative     → "Similar to this session..."
 ```
 
-## Information Flow: Brain vs. claude-memory
+## Information Flow: Brain vs. engram
 
 ### Human Brain
 
@@ -615,7 +615,7 @@ Sensory Input → Working Memory → Consolidation → Long-term
    Filter      (7±2 items)      (LLM-like)      (Cues)
 ```
 
-### claude-memory
+### engram
 
 ```
 JSONL Input → Session Parse → LLM Extract → Knowledge Store
@@ -629,7 +629,7 @@ JSONL Input → Session Parse → LLM Extract → Knowledge Store
 
 ## Cognitive Functions Mapped
 
-| Cognitive Function | Human Implementation | claude-memory Implementation |
+| Cognitive Function | Human Implementation | engram Implementation |
 |-------------------|---------------------|----------------------------|
 | **Encoding** | Attention, semantic processing | LLM extraction, categorization |
 | **Storage** | Neural networks, synapses | Markdown files, git commits |
@@ -670,7 +670,7 @@ JSONL Input → Session Parse → LLM Extract → Knowledge Store
 ### The Vision: True Artificial Memory
 
 ```
-claude-memory (future)
+engram (future)
 ├── Multi-modal storage (text, code, diagrams, audio)
 ├── Graph-structured (concepts connected like neurons)
 ├── Embedding-indexed (semantic similarity)

@@ -6,16 +6,69 @@ use ratatui::{
     Frame,
 };
 
-use super::App;
+use super::{App, TuiAction};
 use crate::tui::data::MemoryItem;
+
+/// Render the screen tab bar at the top, highlighting the active screen.
+fn render_screen_tabs(f: &mut Frame, active: &str, area: Rect) {
+    let tabs = [
+        ("Browser", "B"),
+        ("Packs", "p"),
+        ("Learning", "L"),
+        ("Analytics", "A"),
+        ("Health", "H"),
+        ("Help", "?"),
+    ];
+
+    let mut spans = Vec::new();
+    spans.push(Span::raw(" "));
+
+    for (i, (name, key)) in tabs.iter().enumerate() {
+        if i > 0 {
+            spans.push(Span::styled(" │ ", Style::default().fg(Color::DarkGray)));
+        }
+        if *name == active {
+            spans.push(Span::styled(
+                format!(" {} ", name),
+                Style::default()
+                    .fg(Color::Black)
+                    .bg(Color::Cyan)
+                    .add_modifier(Modifier::BOLD),
+            ));
+        } else {
+            spans.push(Span::styled(
+                format!("[{}]", key),
+                Style::default().fg(Color::Cyan),
+            ));
+            spans.push(Span::styled(
+                format!(" {} ", name),
+                Style::default().fg(Color::Gray),
+            ));
+        }
+    }
+
+    let bar = Paragraph::new(Line::from(spans)).style(Style::default().bg(Color::DarkGray));
+    f.render_widget(bar, area);
+}
 
 /// Render the two-panel browser screen.
 pub fn render_browser(f: &mut Frame, app: &App) {
-    let chunks = Layout::horizontal([Constraint::Percentage(30), Constraint::Percentage(70)])
-        .split(f.area());
+    let layout = Layout::vertical([
+        Constraint::Length(1),
+        Constraint::Min(3),
+        Constraint::Length(1),
+    ])
+    .split(f.area());
 
-    render_project_list(f, app, chunks[0]);
-    render_item_list(f, app, chunks[1]);
+    // Top: screen tabs
+    render_screen_tabs(f, "Browser", layout[0]);
+
+    // Middle: two-panel browser
+    let panels = Layout::horizontal([Constraint::Percentage(30), Constraint::Percentage(70)])
+        .split(layout[1]);
+
+    render_project_list(f, app, panels[0]);
+    render_item_list(f, app, panels[1]);
 
     // Overlay delete dialog if active
     if app.show_delete {
@@ -23,16 +76,13 @@ pub fn render_browser(f: &mut Frame, app: &App) {
     }
 
     // Status bar at bottom
-    render_status_bar(f, app);
+    render_status_bar(f, app, layout[2]);
+
+    // Global overlays (action confirm / action message)
+    render_action_overlays(f, app);
 }
 
 fn render_project_list(f: &mut Frame, app: &App, area: Rect) {
-    // Reserve 1 row at bottom for status bar
-    let area = Rect {
-        height: area.height.saturating_sub(1),
-        ..area
-    };
-
     let items: Vec<ListItem> = app
         .tree
         .projects
@@ -87,11 +137,6 @@ fn render_project_list(f: &mut Frame, app: &App, area: Rect) {
 }
 
 fn render_item_list(f: &mut Frame, app: &App, area: Rect) {
-    let area = Rect {
-        height: area.height.saturating_sub(1),
-        ..area
-    };
-
     let project = app.tree.projects.get(app.project_index);
     let items: Vec<ListItem> = if let Some(proj) = project {
         proj.items
@@ -147,15 +192,7 @@ fn render_item_list(f: &mut Frame, app: &App, area: Rect) {
     f.render_stateful_widget(list, area, &mut state);
 }
 
-fn render_status_bar(f: &mut Frame, app: &App) {
-    let area = f.area();
-    let bar_area = Rect {
-        x: area.x,
-        y: area.y + area.height.saturating_sub(1),
-        width: area.width,
-        height: 1,
-    };
-
+fn render_status_bar(f: &mut Frame, app: &App, bar_area: Rect) {
     if app.search_mode {
         let match_count = app.search_matches.len();
         let text = format!(" Search: {}_ ({} matches)", app.search_query, match_count);
@@ -168,19 +205,41 @@ fn render_status_bar(f: &mut Frame, app: &App) {
         return;
     }
 
-    let help = if app.show_delete {
-        " y: confirm delete | n/Esc: cancel "
+    let status = if app.show_delete {
+        Line::from(Span::styled(
+            " y: confirm delete | n/Esc: cancel ",
+            Style::default().fg(Color::Black),
+        ))
     } else if !app.search_matches.is_empty() {
-        " j/k: navigate | /: search | n/N: next/prev match | Enter: view | d: delete | q: quit "
+        Line::from(Span::styled(
+            " j/k: nav | /: search | n/N: match | Enter: view | d: del | q: quit ",
+            Style::default().fg(Color::Black),
+        ))
     } else {
-        " j/k: navigate | /: search | Tab/h/l: switch panel | Enter: view | d: delete | q: quit "
+        Line::from(vec![
+            Span::raw(" "),
+            Span::styled("j/k", Style::default().fg(Color::Cyan)),
+            Span::raw(": nav  "),
+            Span::styled("/", Style::default().fg(Color::Cyan)),
+            Span::raw(": search  "),
+            Span::styled("Enter", Style::default().fg(Color::Cyan)),
+            Span::raw(": view  "),
+            Span::styled("d", Style::default().fg(Color::Cyan)),
+            Span::raw(": del  │  "),
+            Span::styled("i", Style::default().fg(Color::Yellow)),
+            Span::raw(": ingest  "),
+            Span::styled("R", Style::default().fg(Color::Yellow)),
+            Span::raw(": regen  "),
+            Span::styled("I", Style::default().fg(Color::Yellow)),
+            Span::raw(": inject  │  "),
+            Span::styled("?", Style::default().fg(Color::Cyan)),
+            Span::raw(": help  "),
+            Span::styled("q", Style::default().fg(Color::Cyan)),
+            Span::raw(": quit"),
+        ])
     };
 
-    let bar = Paragraph::new(Line::from(vec![Span::styled(
-        help,
-        Style::default().fg(Color::Black).bg(Color::DarkGray),
-    )]))
-    .style(Style::default().bg(Color::DarkGray));
+    let bar = Paragraph::new(status).style(Style::default().bg(Color::DarkGray));
 
     f.render_widget(bar, bar_area);
 }
@@ -189,11 +248,14 @@ fn render_status_bar(f: &mut Frame, app: &App) {
 pub fn render_viewer(f: &mut Frame, app: &App) {
     let area = f.area();
 
-    // Main content area (reserve 1 row for status)
-    let content_area = Rect {
-        height: area.height.saturating_sub(1),
-        ..area
-    };
+    let layout = Layout::vertical([
+        Constraint::Length(1),
+        Constraint::Min(3),
+        Constraint::Length(1),
+    ])
+    .split(area);
+
+    render_screen_tabs(f, "Browser", layout[0]);
 
     let block = Block::default()
         .title(" Viewer (Esc: back, PgUp/PgDn: scroll) ")
@@ -205,21 +267,15 @@ pub fn render_viewer(f: &mut Frame, app: &App) {
         .wrap(Wrap { trim: false })
         .scroll((app.scroll_offset, 0));
 
-    f.render_widget(paragraph, content_area);
+    f.render_widget(paragraph, layout[1]);
 
     // Status bar
-    let bar_area = Rect {
-        x: area.x,
-        y: area.y + area.height.saturating_sub(1),
-        width: area.width,
-        height: 1,
-    };
     let help = format!(
         " Esc/q: back | PgUp/PgDn/j/k: scroll | Line {} ",
         app.scroll_offset + 1
     );
     let bar = Paragraph::new(help).style(Style::default().fg(Color::Black).bg(Color::DarkGray));
-    f.render_widget(bar, bar_area);
+    f.render_widget(bar, layout[2]);
 }
 
 /// Render a centered delete confirmation dialog over the browser.
@@ -274,8 +330,16 @@ fn render_delete_dialog(f: &mut Frame, app: &App) {
 pub fn render_packs(f: &mut Frame, app: &App) {
     let area = f.area();
 
-    // Split into main area and status bar
-    let chunks = Layout::vertical([Constraint::Min(3), Constraint::Length(1)]).split(area);
+    // Split into tab bar, main area, and status bar
+    let chunks = Layout::vertical([
+        Constraint::Length(1),
+        Constraint::Min(3),
+        Constraint::Length(1),
+    ])
+    .split(area);
+
+    render_screen_tabs(f, "Packs", chunks[0]);
+    let chunks = [chunks[1], chunks[2]];
 
     // Title
     let title_block = Block::default()
@@ -293,10 +357,10 @@ pub fn render_packs(f: &mut Frame, app: &App) {
             Line::from(""),
             Line::from("Browse and install packs with:"),
             Line::from(Span::styled(
-                "  claude-memory hive browse",
+                "  engram hive browse",
                 Style::default().fg(Color::Green),
             )),
-            Line::from("  claude-memory hive install <pack-name>"),
+            Line::from("  engram hive install <pack-name>"),
         ];
 
         let paragraph = Paragraph::new(empty_text)
@@ -371,26 +435,43 @@ pub fn render_packs(f: &mut Frame, app: &App) {
     }
 
     // Status bar
-    let status_text = if app.pack_search_mode {
-        format!(
+    let status_line = if app.pack_search_mode {
+        Line::from(format!(
             "SEARCH: {}  (Enter: jump, ESC: cancel)",
             app.pack_search_query
-        )
+        ))
     } else if !app.pack_search_matches.is_empty() {
-        format!(
+        Line::from(format!(
             "j/k: nav  |  Enter: details  |  u: update  |  d: del  |  /: search  |  n/N: match {}/{}  |  ESC: back  |  q: quit",
             app.pack_search_index + 1,
             app.pack_search_matches.len()
-        )
+        ))
     } else if app.packs.is_empty() {
-        "ESC: back to browser  |  q: quit".to_string()
+        Line::from("ESC: back to browser  |  q: quit")
     } else {
-        "j/k: nav  |  Enter: details  |  u: update  |  d: del  |  /: search  |  r: reload  |  ESC: back  |  q: quit".to_string()
+        Line::from(vec![
+            Span::raw(" "),
+            Span::styled("j/k", Style::default().fg(Color::Cyan)),
+            Span::raw(": nav  "),
+            Span::styled("Enter", Style::default().fg(Color::Cyan)),
+            Span::raw(": details  "),
+            Span::styled("u", Style::default().fg(Color::Cyan)),
+            Span::raw(": update  "),
+            Span::styled("d", Style::default().fg(Color::Cyan)),
+            Span::raw(": del  │  "),
+            Span::styled("g", Style::default().fg(Color::Yellow)),
+            Span::raw(": graph  │  "),
+            Span::styled("/", Style::default().fg(Color::Cyan)),
+            Span::raw(": search  "),
+            Span::styled("r", Style::default().fg(Color::Cyan)),
+            Span::raw(": reload  "),
+            Span::styled("q", Style::default().fg(Color::Cyan)),
+            Span::raw(": quit"),
+        ])
     };
 
-    let status_bar = Paragraph::new(status_text)
-        .style(Style::default().bg(Color::DarkGray).fg(Color::White))
-        .alignment(Alignment::Center);
+    let status_bar =
+        Paragraph::new(status_line).style(Style::default().bg(Color::DarkGray).fg(Color::White));
 
     f.render_widget(status_bar, chunks[1]);
 
@@ -402,14 +483,24 @@ pub fn render_packs(f: &mut Frame, app: &App) {
     if app.pack_action_message.is_some() {
         render_pack_action_message(f, app);
     }
+
+    render_action_overlays(f, app);
 }
 
 /// Render pack detail screen
 pub fn render_pack_detail(f: &mut Frame, app: &App) {
     let area = f.area();
 
-    // Split into content area and status bar
-    let chunks = Layout::vertical([Constraint::Min(3), Constraint::Length(1)]).split(area);
+    // Split into tab bar, content area, and status bar
+    let chunks = Layout::vertical([
+        Constraint::Length(1),
+        Constraint::Min(3),
+        Constraint::Length(1),
+    ])
+    .split(area);
+
+    render_screen_tabs(f, "Packs", chunks[0]);
+    let chunks = [chunks[1], chunks[2]];
 
     let block = Block::default()
         .title(" Pack Details ")
@@ -540,11 +631,15 @@ fn render_pack_action_message(f: &mut Frame, app: &App) {
 pub fn render_learning(f: &mut Frame, app: &App) {
     let area = f.area();
 
-    // Reserve 1 row at bottom for status bar
-    let main_area = Rect {
-        height: area.height.saturating_sub(1),
-        ..area
-    };
+    let layout = Layout::vertical([
+        Constraint::Length(1),
+        Constraint::Min(3),
+        Constraint::Length(1),
+    ])
+    .split(area);
+
+    render_screen_tabs(f, "Learning", layout[0]);
+    let main_area = layout[1];
 
     // Scroll the content
     let lines: Vec<Line> = app
@@ -573,37 +668,41 @@ pub fn render_learning(f: &mut Frame, app: &App) {
     f.render_widget(paragraph, main_area);
 
     // Status bar
-    let status_area = Rect {
-        y: area.height.saturating_sub(1),
-        height: 1,
-        ..area
-    };
-
     let status = Line::from(vec![
         Span::raw(" ["),
         Span::styled("q/Esc", Style::default().fg(Color::Cyan)),
         Span::raw("] Back  ["),
         Span::styled("r", Style::default().fg(Color::Cyan)),
         Span::raw("] Reload  ["),
+        Span::styled("s", Style::default().fg(Color::Yellow)),
+        Span::raw("] Simulate  ["),
+        Span::styled("o", Style::default().fg(Color::Yellow)),
+        Span::raw("] Optimize  ["),
         Span::styled("j/k", Style::default().fg(Color::Cyan)),
         Span::raw("] Scroll"),
     ]);
 
     f.render_widget(
         Paragraph::new(status).style(Style::default().bg(Color::DarkGray)),
-        status_area,
+        layout[2],
     );
+
+    render_action_overlays(f, app);
 }
 
 /// Render Analytics Viewer screen
 pub fn render_analytics(f: &mut Frame, app: &App) {
     let area = f.area();
 
-    // Reserve 1 row at bottom for status bar
-    let main_area = Rect {
-        height: area.height.saturating_sub(1),
-        ..area
-    };
+    let layout = Layout::vertical([
+        Constraint::Length(1),
+        Constraint::Min(3),
+        Constraint::Length(1),
+    ])
+    .split(area);
+
+    render_screen_tabs(f, "Analytics", layout[0]);
+    let main_area = layout[1];
 
     // Scroll the content
     let lines: Vec<Line> = app
@@ -635,12 +734,6 @@ pub fn render_analytics(f: &mut Frame, app: &App) {
     f.render_widget(paragraph, main_area);
 
     // Status bar
-    let status_area = Rect {
-        y: area.height.saturating_sub(1),
-        height: 1,
-        ..area
-    };
-
     let status = Line::from(vec![
         Span::raw(" ["),
         Span::styled("q/Esc", Style::default().fg(Color::Cyan)),
@@ -655,7 +748,7 @@ pub fn render_analytics(f: &mut Frame, app: &App) {
 
     f.render_widget(
         Paragraph::new(status).style(Style::default().bg(Color::DarkGray)),
-        status_area,
+        layout[2],
     );
 }
 
@@ -663,11 +756,15 @@ pub fn render_analytics(f: &mut Frame, app: &App) {
 pub fn render_health(f: &mut Frame, app: &App) {
     let area = f.area();
 
-    // Reserve 1 row at bottom for status bar
-    let main_area = Rect {
-        height: area.height.saturating_sub(1),
-        ..area
-    };
+    let layout = Layout::vertical([
+        Constraint::Length(1),
+        Constraint::Min(3),
+        Constraint::Length(1),
+    ])
+    .split(area);
+
+    render_screen_tabs(f, "Health", layout[0]);
+    let main_area = layout[1];
 
     // Scroll the content
     let lines: Vec<Line> = app
@@ -696,37 +793,41 @@ pub fn render_health(f: &mut Frame, app: &App) {
     f.render_widget(paragraph, main_area);
 
     // Status bar
-    let status_area = Rect {
-        y: area.height.saturating_sub(1),
-        height: 1,
-        ..area
-    };
-
     let status = Line::from(vec![
         Span::raw(" ["),
         Span::styled("q/Esc", Style::default().fg(Color::Cyan)),
         Span::raw("] Back  ["),
         Span::styled("r", Style::default().fg(Color::Cyan)),
         Span::raw("] Reload  ["),
+        Span::styled("x", Style::default().fg(Color::Yellow)),
+        Span::raw("] Doctor  ["),
+        Span::styled("c", Style::default().fg(Color::Yellow)),
+        Span::raw("] Cleanup  ["),
         Span::styled("j/k", Style::default().fg(Color::Cyan)),
         Span::raw("] Scroll"),
     ]);
 
     f.render_widget(
         Paragraph::new(status).style(Style::default().bg(Color::DarkGray)),
-        status_area,
+        layout[2],
     );
+
+    render_action_overlays(f, app);
 }
 
 /// Render Help screen
 pub fn render_help(f: &mut Frame, _app: &App) {
     let area = f.area();
 
-    // Reserve 1 row at bottom for status bar
-    let main_area = Rect {
-        height: area.height.saturating_sub(1),
-        ..area
-    };
+    let layout = Layout::vertical([
+        Constraint::Length(1),
+        Constraint::Min(3),
+        Constraint::Length(1),
+    ])
+    .split(area);
+
+    render_screen_tabs(f, "Help", layout[0]);
+    let main_area = layout[1];
 
     let help_text = vec![
         Line::from(""),
@@ -748,18 +849,27 @@ pub fn render_help(f: &mut Frame, _app: &App) {
         Line::from("  /             - Search"),
         Line::from("  n/N           - Next/previous search match"),
         Line::from("  d             - Delete item"),
-        Line::from("  p             - View packs"),
-        Line::from("  L             - Learning dashboard"),
-        Line::from("  A             - Analytics viewer"),
-        Line::from("  H             - Health check"),
-        Line::from("  ?             - Show this help"),
+        Line::from("  i             - Ingest knowledge from conversations"),
+        Line::from("  R             - Regenerate context for project"),
+        Line::from("  I             - Inject memory into Claude Code"),
         Line::from(""),
         Line::from("Packs Screen:"),
         Line::from("  Enter         - View pack details"),
         Line::from("  u             - Update pack"),
         Line::from("  d             - Uninstall pack"),
+        Line::from("  g             - Build knowledge graph"),
         Line::from("  r             - Reload packs"),
         Line::from("  /             - Search packs"),
+        Line::from(""),
+        Line::from("Learning Screen:"),
+        Line::from("  s             - Run learning simulation"),
+        Line::from("  o             - Apply learned optimizations"),
+        Line::from("  r             - Reload data"),
+        Line::from(""),
+        Line::from("Health Screen:"),
+        Line::from("  x             - Run doctor (health check + auto-fix)"),
+        Line::from("  c             - Cleanup expired entries"),
+        Line::from("  r             - Reload data"),
         Line::from(""),
         Line::from("Viewer/Detail Screens:"),
         Line::from("  j/k           - Scroll line by line"),
@@ -772,7 +882,7 @@ pub fn render_help(f: &mut Frame, _app: &App) {
         Line::from("  +/-           - Increase/decrease days"),
         Line::from(""),
         Line::from(Span::styled(
-            format!("claude-memory v{}", env!("CARGO_PKG_VERSION")),
+            format!("engram v{}", env!("CARGO_PKG_VERSION")),
             Style::default().fg(Color::Gray),
         )),
     ];
@@ -789,12 +899,6 @@ pub fn render_help(f: &mut Frame, _app: &App) {
     f.render_widget(paragraph, main_area);
 
     // Status bar
-    let status_area = Rect {
-        y: area.height.saturating_sub(1),
-        height: 1,
-        ..area
-    };
-
     let status = Line::from(vec![
         Span::raw(" ["),
         Span::styled("q/Esc/?", Style::default().fg(Color::Cyan)),
@@ -803,6 +907,147 @@ pub fn render_help(f: &mut Frame, _app: &App) {
 
     f.render_widget(
         Paragraph::new(status).style(Style::default().bg(Color::DarkGray)),
-        status_area,
+        layout[2],
     );
+}
+
+/// Render action confirmation dialog and action result message overlays.
+fn render_action_overlays(f: &mut Frame, app: &App) {
+    if let Some(action) = &app.show_action_confirm {
+        render_action_confirm_dialog(f, app, action);
+    }
+    if let Some((message, is_error)) = &app.action_message {
+        render_action_message(f, message, *is_error);
+    }
+}
+
+/// Render a confirmation dialog before running an action.
+fn render_action_confirm_dialog(f: &mut Frame, app: &App, action: &TuiAction) {
+    let area = f.area();
+    let popup_width = 60u16.min(area.width.saturating_sub(4));
+    let popup_height = 10u16.min(area.height.saturating_sub(2));
+    let x = (area.width.saturating_sub(popup_width)) / 2;
+    let y = (area.height.saturating_sub(popup_height)) / 2;
+    let popup_area = Rect::new(x, y, popup_width, popup_height);
+
+    let project_name = app
+        .tree
+        .projects
+        .get(app.project_index)
+        .map(|p| p.name.as_str())
+        .unwrap_or("(all)");
+
+    let (title, description, note) = match action {
+        TuiAction::Ingest => (
+            "Ingest Knowledge",
+            format!(
+                "Extract knowledge from conversations for '{}'?",
+                project_name
+            ),
+            "This will parse recent conversations and extract knowledge.",
+        ),
+        TuiAction::Regen => (
+            "Regenerate Context",
+            format!("Regenerate context.md for '{}'?", project_name),
+            "This will re-synthesize the project context from knowledge files.",
+        ),
+        TuiAction::Inject => (
+            "Inject Memory",
+            format!("Inject memory into Claude Code for '{}'?", project_name),
+            "This writes MEMORY.md to the project's .claude/ directory.",
+        ),
+        TuiAction::LearnSimulate => (
+            "Learning Simulation",
+            format!("Run learning simulation for '{}'?", project_name),
+            "This simulates recall patterns to train the learning system.",
+        ),
+        TuiAction::LearnOptimize => (
+            "Apply Optimizations",
+            format!("Apply learned optimizations for '{}'?", project_name),
+            "This applies retention and importance adjustments from learning.",
+        ),
+        TuiAction::Doctor => (
+            "Doctor (Health Check)",
+            format!("Run doctor with auto-fix for '{}'?", project_name),
+            "This checks for issues and automatically fixes what it can.",
+        ),
+        TuiAction::CleanupExpired => (
+            "Cleanup Expired Entries",
+            format!("Remove expired TTL entries for '{}'?", project_name),
+            "This permanently removes entries whose TTL has elapsed.",
+        ),
+        TuiAction::GraphBuild => (
+            "Build Knowledge Graph",
+            format!("Build knowledge graph for '{}'?", project_name),
+            "This extracts concepts and relationships from knowledge files.",
+        ),
+    };
+
+    let text = vec![
+        Line::from(""),
+        Line::from(Span::styled(
+            title,
+            Style::default()
+                .fg(Color::Yellow)
+                .add_modifier(Modifier::BOLD),
+        )),
+        Line::from(""),
+        Line::from(description),
+        Line::from(""),
+        Line::from(Span::styled(note, Style::default().fg(Color::Gray))),
+        Line::from(""),
+        Line::from(Span::styled(
+            "Proceed? (y/n)",
+            Style::default().add_modifier(Modifier::BOLD),
+        )),
+    ];
+
+    let block = Block::default()
+        .borders(Borders::ALL)
+        .border_style(Style::default().fg(Color::Yellow));
+
+    let paragraph = Paragraph::new(text)
+        .block(block)
+        .alignment(Alignment::Center);
+
+    f.render_widget(Clear, popup_area);
+    f.render_widget(paragraph, popup_area);
+}
+
+/// Render an action result message popup.
+fn render_action_message(f: &mut Frame, message: &str, is_error: bool) {
+    let area = f.area();
+    let popup_width = ((message.len() as u16) + 10)
+        .min(area.width.saturating_sub(4))
+        .max(40);
+    let popup_height = 5u16;
+    let x = (area.width.saturating_sub(popup_width)) / 2;
+    let y = (area.height.saturating_sub(popup_height)) / 2;
+    let popup_area = Rect::new(x, y, popup_width, popup_height);
+
+    let color = if is_error { Color::Red } else { Color::Green };
+
+    let text = vec![
+        Line::from(""),
+        Line::from(Span::styled(
+            message,
+            Style::default().fg(color).add_modifier(Modifier::BOLD),
+        )),
+        Line::from(""),
+        Line::from(Span::styled(
+            "Press any key to continue",
+            Style::default().fg(Color::Gray),
+        )),
+    ];
+
+    let block = Block::default()
+        .borders(Borders::ALL)
+        .border_style(Style::default().fg(color));
+
+    let paragraph = Paragraph::new(text)
+        .block(block)
+        .alignment(Alignment::Center);
+
+    f.render_widget(Clear, popup_area);
+    f.render_widget(paragraph, popup_area);
 }

@@ -1,6 +1,6 @@
 # Analytics and Feedback Learning
 
-The claude-memory system includes a comprehensive analytics and feedback learning system that tracks usage patterns, learns from interactions, and adapts knowledge importance scores.
+The engram system includes a comprehensive analytics and feedback learning system that tracks usage patterns, learns from interactions, and adapts knowledge importance scores.
 
 ## Overview
 
@@ -21,19 +21,19 @@ View usage insights and patterns:
 
 ```bash
 # Show insights for all projects (last 30 days)
-claude-memory analytics
+engram analytics
 
 # Show insights for specific project
-claude-memory analytics <project>
+engram analytics <project>
 
 # Show detailed event log
-claude-memory analytics --detailed
+engram analytics --detailed
 
 # Specify time range
-claude-memory analytics --days 7
+engram analytics --days 7
 
 # Clear old analytics data
-claude-memory analytics --clear-old --days 30
+engram analytics --clear-old --days 30
 ```
 
 ## Analytics Output
@@ -46,7 +46,7 @@ claude-memory analytics --clear-old --days 30
 
 Total events: 142
 Unique projects: 8
-Most active project: claude-memory
+Most active project: engram
 Most common action: Recall
 Usage trend: increasing (+23%)
 
@@ -65,7 +65,7 @@ Usage trend: increasing (+23%)
 ### Detailed View
 
 ```bash
-claude-memory analytics --detailed
+engram analytics --detailed
 ```
 
 Shows the last 50 events with:
@@ -136,7 +136,7 @@ The analytics engine generates:
 Find which knowledge is most frequently accessed:
 
 ```bash
-claude-memory analytics my-project
+engram analytics my-project
 ```
 
 Look at the "Top Knowledge" section to see what's most valuable.
@@ -146,7 +146,7 @@ Look at the "Top Knowledge" section to see what's most valuable.
 Identify knowledge that's rarely used and may be outdated:
 
 ```bash
-claude-memory analytics my-project
+engram analytics my-project
 ```
 
 Check the "Stale Knowledge" section for cleanup candidates.
@@ -157,13 +157,13 @@ Monitor how usage changes over time:
 
 ```bash
 # Last week
-claude-memory analytics --days 7
+engram analytics --days 7
 
 # Last month
-claude-memory analytics --days 30
+engram analytics --days 30
 
 # Last quarter
-claude-memory analytics --days 90
+engram analytics --days 90
 ```
 
 ### 4. Audit Project Activity
@@ -171,7 +171,7 @@ claude-memory analytics --days 90
 See detailed logs of all interactions:
 
 ```bash
-claude-memory analytics my-project --detailed
+engram analytics my-project --detailed
 ```
 
 ### 5. Clean Up Old Data
@@ -179,7 +179,7 @@ claude-memory analytics my-project --detailed
 Remove analytics older than 30 days:
 
 ```bash
-claude-memory analytics --clear-old --days 30
+engram analytics --clear-old --days 30
 ```
 
 ## Integration with Other Features
@@ -259,7 +259,7 @@ The feedback learning system can be extended with:
 ### Example 1: Identify Hot Topics
 
 ```bash
-$ claude-memory analytics my-app --days 7
+$ engram analytics my-app --days 7
 
 📊 Usage Insights
 ============================================================
@@ -275,7 +275,7 @@ $ claude-memory analytics my-app --days 7
 ### Example 2: Find Cleanup Candidates
 
 ```bash
-$ claude-memory analytics my-app
+$ engram analytics my-app
 
 🕸️  Stale Knowledge (rarely accessed):
   1. old-payment-flow (last: 2.1%)
@@ -288,7 +288,7 @@ $ claude-memory analytics my-app
 ### Example 3: Monitor Growth
 
 ```bash
-$ claude-memory analytics my-app --days 1 --detailed
+$ engram analytics my-app --days 1 --detailed
 
 📋 Detailed Event Log
 ============================================================
@@ -309,7 +309,7 @@ $ claude-memory analytics my-app --days 1 --detailed
 2. **Clean Up Stale Data**: Use `--clear-old` monthly to manage storage
 3. **Track Trends**: Compare different time ranges to see evolution
 4. **Combine with Doctor**: Use both for comprehensive health monitoring
-5. **Export Before Cleanup**: Use `claude-memory export` before removing stale knowledge
+5. **Export Before Cleanup**: Use `engram export` before removing stale knowledge
 
 ## Technical Details
 
@@ -346,7 +346,7 @@ $ claude-memory analytics my-app --days 1 --detailed
 ### No Analytics Data
 
 ```bash
-$ claude-memory analytics
+$ engram analytics
 
 📊 No usage data found
 ```
@@ -356,7 +356,7 @@ $ claude-memory analytics
 ### Old Data Not Clearing
 
 ```bash
-$ claude-memory analytics --clear-old --days 30
+$ engram analytics --clear-old --days 30
 ```
 
 Check that you have write permissions to `~/memory/analytics/`.

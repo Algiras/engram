@@ -1,8 +1,9 @@
 pub mod data;
 mod ui;
 
-use std::io;
+use std::io::{self, Write};
 use std::path::PathBuf;
+use std::process::Command;
 
 use crossterm::event::{self, Event, KeyCode, KeyModifiers};
 use crossterm::terminal::{self, EnterAlternateScreen, LeaveAlternateScreen};
@@ -28,6 +29,18 @@ enum Screen {
 pub enum PackAction {
     Uninstall,
     Update,
+}
+
+#[derive(Clone, PartialEq)]
+pub enum TuiAction {
+    Ingest,
+    Regen,
+    Inject,
+    LearnSimulate,
+    LearnOptimize,
+    Doctor,
+    CleanupExpired,
+    GraphBuild,
 }
 
 pub struct App {
@@ -71,6 +84,11 @@ pub struct App {
     // Health state
     health_content: String,
     health_scroll: u16,
+
+    // Action state
+    pub action_message: Option<(String, bool)>, // (message, is_error)
+    pub show_action_confirm: Option<TuiAction>,
+    pending_action: Option<(String, Vec<String>)>, // (label, cli args)
 }
 
 impl App {
@@ -109,6 +127,9 @@ impl App {
             analytics_days: 30,
             health_content: String::new(),
             health_scroll: 0,
+            action_message: None,
+            show_action_confirm: None,
+            pending_action: None,
         }
     }
 
@@ -222,6 +243,27 @@ impl App {
 
     pub fn run(&mut self, terminal: &mut Terminal<CrosstermBackend<io::Stdout>>) -> io::Result<()> {
         loop {
+            // Execute pending CLI action if any (needs terminal access)
+            if let Some((label, args)) = self.pending_action.take() {
+                let arg_refs: Vec<&str> = args.iter().map(|s| s.as_str()).collect();
+                let (output, success) = self.run_cli_command(terminal, &arg_refs)?;
+                let msg = if success {
+                    format!("{} completed successfully", label)
+                } else {
+                    let first_line = output.lines().last().unwrap_or("unknown error");
+                    format!("{} failed: {}", label, first_line)
+                };
+                self.action_message = Some((msg, !success));
+                // Reload data after action
+                self.reload_tree();
+                match self.screen {
+                    Screen::Learning => self.load_learning_data(),
+                    Screen::Analytics => self.load_analytics_data(),
+                    Screen::Health => self.load_health_data(),
+                    _ => {}
+                }
+            }
+
             terminal.draw(|f| match self.screen {
                 Screen::Browser => ui::render_browser(f, self),
                 Screen::Viewer => ui::render_viewer(f, self),
@@ -234,6 +276,17 @@ impl App {
             })?;
 
             if let Event::Key(key) = event::read()? {
+                // Global: dismiss action message with any key
+                if self.action_message.is_some() {
+                    self.action_message = None;
+                    continue;
+                }
+                // Global: handle action confirmation dialog
+                if self.show_action_confirm.is_some() {
+                    self.handle_action_confirm_keys(key.code);
+                    continue;
+                }
+
                 match self.screen {
                     Screen::Browser => {
                         if self.search_mode {
@@ -417,6 +470,17 @@ impl App {
                 self.screen = Screen::Help;
             }
 
+            // Actions
+            KeyCode::Char('i') => {
+                self.show_action_confirm = Some(TuiAction::Ingest);
+            }
+            KeyCode::Char('R') => {
+                self.show_action_confirm = Some(TuiAction::Regen);
+            }
+            KeyCode::Char('I') => {
+                self.show_action_confirm = Some(TuiAction::Inject);
+            }
+
             _ => {}
         }
         false
@@ -482,7 +546,12 @@ impl App {
                     self.show_pack_confirm = Some(PackAction::Uninstall);
                 }
             }
-            _ => {}
+            KeyCode::Char('g') => {
+                self.show_action_confirm = Some(TuiAction::GraphBuild);
+            }
+            _ => {
+                self.handle_tab_switch(code);
+            }
         }
         false
     }
@@ -587,7 +656,9 @@ impl App {
             KeyCode::End | KeyCode::Char('G') => {
                 self.pack_detail_scroll = total_lines;
             }
-            _ => {}
+            _ => {
+                self.handle_tab_switch(code);
+            }
         }
         Ok(())
     }
@@ -645,7 +716,9 @@ impl App {
             KeyCode::End | KeyCode::Char('G') => {
                 self.scroll_offset = total_lines;
             }
-            _ => {}
+            _ => {
+                self.handle_tab_switch(code);
+            }
         }
         Ok(())
     }
@@ -737,6 +810,45 @@ impl App {
         self.pack_search_matches.contains(&pack_idx)
     }
 
+    /// Handle global tab switching keys. Returns true if a tab switch occurred.
+    /// Available from any screen: p=Packs, L=Learning, A=Analytics, H=Health, ?=Help, B=Browser
+    fn handle_tab_switch(&mut self, code: KeyCode) -> bool {
+        match code {
+            KeyCode::Char('B') => {
+                self.screen = Screen::Browser;
+                true
+            }
+            KeyCode::Char('p') => {
+                self.screen = Screen::Packs;
+                self.pack_index = 0;
+                true
+            }
+            KeyCode::Char('L') => {
+                self.load_learning_data();
+                self.screen = Screen::Learning;
+                self.learning_scroll = 0;
+                true
+            }
+            KeyCode::Char('A') => {
+                self.load_analytics_data();
+                self.screen = Screen::Analytics;
+                self.analytics_scroll = 0;
+                true
+            }
+            KeyCode::Char('H') => {
+                self.load_health_data();
+                self.screen = Screen::Health;
+                self.health_scroll = 0;
+                true
+            }
+            KeyCode::Char('?') => {
+                self.screen = Screen::Help;
+                true
+            }
+            _ => false,
+        }
+    }
+
     fn load_learning_data(&mut self) {
         if let Some(project) = self.tree.projects.get(self.project_index) {
             self.learning_content = data::load_learning_dashboard(&self.memory_dir, &project.name);
@@ -778,6 +890,12 @@ impl App {
                 self.load_learning_data();
                 self.learning_scroll = 0;
             }
+            KeyCode::Char('s') => {
+                self.show_action_confirm = Some(TuiAction::LearnSimulate);
+            }
+            KeyCode::Char('o') => {
+                self.show_action_confirm = Some(TuiAction::LearnOptimize);
+            }
             KeyCode::Char('j') | KeyCode::Down => {
                 if self.learning_scroll < total_lines {
                     self.learning_scroll += 1;
@@ -801,7 +919,9 @@ impl App {
             KeyCode::End | KeyCode::Char('G') => {
                 self.learning_scroll = total_lines;
             }
-            _ => {}
+            _ => {
+                self.handle_tab_switch(code);
+            }
         }
         Ok(())
     }
@@ -855,7 +975,9 @@ impl App {
             KeyCode::End | KeyCode::Char('G') => {
                 self.analytics_scroll = total_lines;
             }
-            _ => {}
+            _ => {
+                self.handle_tab_switch(code);
+            }
         }
         Ok(())
     }
@@ -875,6 +997,12 @@ impl App {
             KeyCode::Char('r') => {
                 self.load_health_data();
                 self.health_scroll = 0;
+            }
+            KeyCode::Char('x') => {
+                self.show_action_confirm = Some(TuiAction::Doctor);
+            }
+            KeyCode::Char('c') => {
+                self.show_action_confirm = Some(TuiAction::CleanupExpired);
             }
             KeyCode::Char('j') | KeyCode::Down => {
                 if self.health_scroll < total_lines {
@@ -899,19 +1027,146 @@ impl App {
             KeyCode::End | KeyCode::Char('G') => {
                 self.health_scroll = total_lines;
             }
-            _ => {}
+            _ => {
+                self.handle_tab_switch(code);
+            }
         }
         Ok(())
     }
 
     fn handle_help_keys(&mut self, code: KeyCode) -> io::Result<()> {
         match code {
-            KeyCode::Esc | KeyCode::Char('q') | KeyCode::Char('?') => {
+            KeyCode::Esc | KeyCode::Char('q') => {
                 self.screen = Screen::Browser;
+            }
+            _ => {
+                self.handle_tab_switch(code);
+            }
+        }
+        Ok(())
+    }
+
+    fn handle_action_confirm_keys(&mut self, code: KeyCode) {
+        match code {
+            KeyCode::Char('y') | KeyCode::Char('Y') => {
+                if let Some(action) = self.show_action_confirm.take() {
+                    self.execute_tui_action(action);
+                }
+            }
+            KeyCode::Char('n') | KeyCode::Char('N') | KeyCode::Esc => {
+                self.show_action_confirm = None;
             }
             _ => {}
         }
-        Ok(())
+    }
+
+    /// Get the currently selected project name, if any.
+    fn current_project_name(&self) -> Option<String> {
+        self.tree
+            .projects
+            .get(self.project_index)
+            .map(|p| p.name.clone())
+    }
+
+    /// Run a engram CLI subcommand, suspending the TUI temporarily.
+    /// Returns (stdout+stderr output, success bool).
+    fn run_cli_command(
+        &self,
+        terminal: &mut Terminal<CrosstermBackend<io::Stdout>>,
+        args: &[&str],
+    ) -> io::Result<(String, bool)> {
+        // Leave alternate screen so user sees CLI output
+        terminal::disable_raw_mode()?;
+        crossterm::execute!(terminal.backend_mut(), LeaveAlternateScreen)?;
+
+        print!("\n  Running: engram {}\n\n", args.join(" "));
+        io::stdout().flush()?;
+
+        let result = Command::new("engram").args(args).output();
+
+        let (output_text, success) = match result {
+            Ok(output) => {
+                let stdout = String::from_utf8_lossy(&output.stdout);
+                let stderr = String::from_utf8_lossy(&output.stderr);
+                // Show output to terminal
+                print!("{}", stdout);
+                if !stderr.is_empty() {
+                    eprint!("{}", stderr);
+                }
+                let combined = format!("{}{}", stdout, stderr);
+                (combined, output.status.success())
+            }
+            Err(e) => (format!("Failed to run command: {}", e), false),
+        };
+
+        print!("\n  Press Enter to return to TUI...");
+        io::stdout().flush()?;
+        // Wait for Enter
+        let mut buf = String::new();
+        io::stdin().read_line(&mut buf)?;
+
+        // Re-enter alternate screen
+        crossterm::execute!(terminal.backend_mut(), EnterAlternateScreen)?;
+        terminal::enable_raw_mode()?;
+        terminal.clear()?;
+
+        Ok((output_text, success))
+    }
+
+    /// Execute a TUI action (called after confirmation).
+    fn execute_tui_action(&mut self, action: TuiAction) {
+        let project = self.current_project_name();
+        let project_name = project.as_deref().unwrap_or("(none)");
+
+        let (label, args): (&str, Vec<String>) = match &action {
+            TuiAction::Ingest => (
+                "Ingest",
+                match &project {
+                    Some(p) => vec!["ingest".into(), "--project".into(), p.clone()],
+                    None => vec!["ingest".into()],
+                },
+            ),
+            TuiAction::Regen => ("Regen", vec!["regen".into(), project_name.into()]),
+            TuiAction::Inject => (
+                "Inject",
+                match &project {
+                    Some(p) => vec!["inject".into(), p.clone()],
+                    None => vec!["inject".into()],
+                },
+            ),
+            TuiAction::LearnSimulate => (
+                "Learn Simulate",
+                vec!["learn".into(), "simulate".into(), project_name.into()],
+            ),
+            TuiAction::LearnOptimize => (
+                "Learn Optimize",
+                vec![
+                    "learn".into(),
+                    "optimize".into(),
+                    project_name.into(),
+                    "--auto".into(),
+                ],
+            ),
+            TuiAction::Doctor => (
+                "Doctor",
+                match &project {
+                    Some(p) => vec!["doctor".into(), p.clone()],
+                    None => vec!["doctor".into()],
+                },
+            ),
+            TuiAction::CleanupExpired => (
+                "Cleanup Expired",
+                vec!["forget".into(), project_name.into(), "--expired".into()],
+            ),
+            TuiAction::GraphBuild => (
+                "Graph Build",
+                vec!["graph".into(), "build".into(), project_name.into()],
+            ),
+        };
+
+        // Store the action details temporarily - actual execution happens in run() loop
+        // where we have access to the terminal
+        self.pending_action = Some((label.to_string(), args));
     }
 }
 

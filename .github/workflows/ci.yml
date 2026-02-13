@@ -58,15 +58,15 @@ jobs:
           - name: Linux x86_64
             os: ubuntu-latest
             target: x86_64-unknown-linux-gnu
-            artifact: claude-memory
+            artifact: engram
           - name: macOS ARM
             os: macos-latest
             target: aarch64-apple-darwin
-            artifact: claude-memory
+            artifact: engram
           - name: Windows x86_64
             os: windows-latest
             target: x86_64-pc-windows-msvc
-            artifact: claude-memory.exe
+            artifact: engram.exe
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
@@ -78,7 +78,7 @@ jobs:
       - run: cargo build --release --target ${{ matrix.target }}
       - uses: actions/upload-artifact@v4
         with:
-          name: claude-memory-${{ matrix.target }}
+          name: engram-${{ matrix.target }}
           path: target/${{ matrix.target }}/release/${{ matrix.artifact }}
 
   install-validation:
@@ -94,46 +94,46 @@ jobs:
 
       - name: Create mock release assets
         run: |
-          mkdir -p /tmp/claude-memory-mock/api/releases
-          mkdir -p /tmp/claude-memory-mock/releases/download/vtest
-          cp target/x86_64-unknown-linux-gnu/release/claude-memory /tmp/claude-memory-mock/
-          cd /tmp/claude-memory-mock
-          tar czf claude-memory-x86_64-unknown-linux-gnu.tar.gz claude-memory
-          mv claude-memory-x86_64-unknown-linux-gnu.tar.gz releases/download/vtest/
+          mkdir -p /tmp/engram-mock/api/releases
+          mkdir -p /tmp/engram-mock/releases/download/vtest
+          cp target/x86_64-unknown-linux-gnu/release/engram /tmp/engram-mock/
+          cd /tmp/engram-mock
+          tar czf engram-x86_64-unknown-linux-gnu.tar.gz engram
+          mv engram-x86_64-unknown-linux-gnu.tar.gz releases/download/vtest/
           cd releases/download/vtest
-          sha256sum claude-memory-x86_64-unknown-linux-gnu.tar.gz > checksums.txt
-          printf '{"tag_name":"vtest"}\n' > /tmp/claude-memory-mock/api/releases/latest
+          sha256sum engram-x86_64-unknown-linux-gnu.tar.gz > checksums.txt
+          printf '{"tag_name":"vtest"}\n' > /tmp/engram-mock/api/releases/latest
 
       - name: Validate installer (VERSION pinned)
         run: |
-          mkdir -p /tmp/claude-memory-install/bin-pinned
+          mkdir -p /tmp/engram-install/bin-pinned
           VERSION=vtest \
-          INSTALL_DIR=/tmp/claude-memory-install/bin-pinned \
-          RELEASE_BASE_URL=file:///tmp/claude-memory-mock/releases/download \
+          INSTALL_DIR=/tmp/engram-install/bin-pinned \
+          RELEASE_BASE_URL=file:///tmp/engram-mock/releases/download \
           sh ./install.sh
-          /tmp/claude-memory-install/bin-pinned/claude-memory --version
+          /tmp/engram-install/bin-pinned/engram --version
 
       - name: Validate installer (latest API lookup)
         run: |
-          mkdir -p /tmp/claude-memory-install/bin-latest
-          INSTALL_DIR=/tmp/claude-memory-install/bin-latest \
-          RELEASES_API_URL=file:///tmp/claude-memory-mock/api/releases \
-          RELEASE_BASE_URL=file:///tmp/claude-memory-mock/releases/download \
+          mkdir -p /tmp/engram-install/bin-latest
+          INSTALL_DIR=/tmp/engram-install/bin-latest \
+          RELEASES_API_URL=file:///tmp/engram-mock/api/releases \
+          RELEASE_BASE_URL=file:///tmp/engram-mock/releases/download \
           sh ./install.sh
-          /tmp/claude-memory-install/bin-latest/claude-memory --version
+          /tmp/engram-install/bin-latest/engram --version
 
       - name: Validate checksum tamper detection
         run: |
-          mkdir -p /tmp/claude-memory-mock/releases/download/vtamper
-          cp /tmp/claude-memory-mock/releases/download/vtest/claude-memory-x86_64-unknown-linux-gnu.tar.gz \
-            /tmp/claude-memory-mock/releases/download/vtamper/
-          cp /tmp/claude-memory-mock/releases/download/vtest/checksums.txt \
-            /tmp/claude-memory-mock/releases/download/vtamper/
-          printf 'tamper' >> /tmp/claude-memory-mock/releases/download/vtamper/claude-memory-x86_64-unknown-linux-gnu.tar.gz
+          mkdir -p /tmp/engram-mock/releases/download/vtamper
+          cp /tmp/engram-mock/releases/download/vtest/engram-x86_64-unknown-linux-gnu.tar.gz \
+            /tmp/engram-mock/releases/download/vtamper/
+          cp /tmp/engram-mock/releases/download/vtest/checksums.txt \
+            /tmp/engram-mock/releases/download/vtamper/
+          printf 'tamper' >> /tmp/engram-mock/releases/download/vtamper/engram-x86_64-unknown-linux-gnu.tar.gz
 
           if VERSION=vtamper \
-            INSTALL_DIR=/tmp/claude-memory-install/bin-tamper \
-            RELEASE_BASE_URL=file:///tmp/claude-memory-mock/releases/download \
+            INSTALL_DIR=/tmp/engram-install/bin-tamper \
+            RELEASE_BASE_URL=file:///tmp/engram-mock/releases/download \
             sh ./install.sh; then
             echo "Expected checksum verification failure, but install succeeded" >&2
             exit 1

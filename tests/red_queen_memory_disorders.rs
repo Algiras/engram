@@ -10,10 +10,10 @@
 //! These are the "red pill" tests - they reveal deep system vulnerabilities.
 
 use chrono::Utc;
-use claude_memory::analytics::tracker::{EventTracker, EventType, UsageEvent};
-use claude_memory::auth::providers::{Provider, ResolvedProvider};
-use claude_memory::config::Config;
-use claude_memory::learning::{self, progress, signals};
+use engram::analytics::tracker::{EventTracker, EventType, UsageEvent};
+use engram::auth::providers::{Provider, ResolvedProvider};
+use engram::config::Config;
+use engram::learning::{self, progress, signals};
 use tempfile::TempDir;
 
 fn create_test_config(temp: &TempDir) -> Config {

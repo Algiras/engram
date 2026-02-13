@@ -1,7 +1,7 @@
 {
   "mcpServers": {
-    "claude-memory": {
-      "command": "claude-memory",
+    "engram": {
+      "command": "engram",
       "args": ["mcp"],
       "env": {
         "ANTHROPIC_API_KEY": "your-api-key-here-or-set-via-env"

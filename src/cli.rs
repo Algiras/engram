@@ -2,7 +2,7 @@ use clap::{Parser, Subcommand};
 
 #[derive(Parser)]
 #[command(
-    name = "claude-memory",
+    name = "engram",
     about = "Conversation memory system for Claude Code",
     version
 )]
@@ -90,6 +90,9 @@ pub enum Commands {
         /// Inject full (uncompacted) knowledge dump instead of compact summary
         #[arg(long)]
         full: bool,
+        /// Skip automatic cleanup of expired entries (not recommended)
+        #[arg(long)]
+        no_auto_clean: bool,
     },
 
     /// Manage Claude Code hooks for automatic memory integration
@@ -106,6 +109,10 @@ pub enum Commands {
         /// LLM provider override (anthropic, openai, ollama)
         #[arg(long)]
         provider: Option<String>,
+
+        /// Persist expired entry cleanup to disk (default: filter in-memory only)
+        #[arg(long)]
+        persist_cleanup: bool,
     },
 
     /// Add a manual knowledge entry to a project
@@ -432,7 +439,7 @@ pub enum SyncCommand {
         gist_id: Option<String>,
 
         /// Gist description
-        #[arg(long, default_value = "claude-memory knowledge")]
+        #[arg(long, default_value = "engram knowledge")]
         description: String,
     },
 

@@ -2,7 +2,7 @@
 
 ## Overview
 
-This document describes the technical architecture of claude-memory's reinforcement learning system. The system implements three complementary learning algorithms (TD learning, Q-learning, and multi-armed bandit) to continuously optimize knowledge management parameters.
+This document describes the technical architecture of engram's reinforcement learning system. The system implements three complementary learning algorithms (TD learning, Q-learning, and multi-armed bandit) to continuously optimize knowledge management parameters.
 
 ## Module Structure
 
@@ -294,7 +294,7 @@ Improved Performance
 
 ```json
 {
-  "project": "claude-memory",
+  "project": "engram",
   "created_at": "2026-02-12T10:00:00Z",
   "updated_at": "2026-02-12T14:30:00Z",
 
@@ -418,22 +418,22 @@ fn test_full_learning_cycle() {
 
 ```bash
 # Create test project
-claude-memory ingest --project test-learning
+engram ingest --project test-learning
 
 # Generate usage
 for i in {1..50}; do
-  claude-memory recall test-learning > /dev/null
+  engram recall test-learning > /dev/null
 done
 
 # Check learning
-claude-memory learn dashboard test-learning
+engram learn dashboard test-learning
 
 # Apply optimizations
-claude-memory learn optimize test-learning --dry-run
-claude-memory learn optimize test-learning --auto
+engram learn optimize test-learning --dry-run
+engram learn optimize test-learning --auto
 
 # Verify improvements
-claude-memory doctor test-learning
+engram doctor test-learning
 ```
 
 ## Future Enhancements

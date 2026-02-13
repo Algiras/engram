@@ -1,6 +1,6 @@
 # Gemini API Support
 
-`claude-memory` now supports Google's Gemini API for knowledge extraction!
+`engram` now supports Google's Gemini API for knowledge extraction!
 
 ## Setup
 
@@ -19,7 +19,7 @@ Add this to your `~/.bashrc` or `~/.zshrc` to make it permanent.
 ### 3. Verify Setup
 
 ```bash
-claude-memory auth list
+engram auth list
 ```
 
 You should see:
@@ -33,10 +33,10 @@ Google Gemini    env var
 
 ```bash
 # Use Gemini for a specific project
-claude-memory ingest --project my-project --provider gemini
+engram ingest --project my-project --provider gemini
 
 # Use Gemini for all projects
-claude-memory ingest --provider gemini
+engram ingest --provider gemini
 ```
 
 ### Custom Model
@@ -44,7 +44,7 @@ claude-memory ingest --provider gemini
 The default model is `gemini-pro`. To use a different model:
 
 ```bash
-export CLAUDE_MEMORY_LLM_MODEL='gemini-1.5-pro-latest'
+export ENGRAM_LLM_MODEL='gemini-1.5-pro-latest'
 ```
 
 Common Gemini models:
@@ -66,14 +66,14 @@ If you have access to internal authentication services (like ANTIGRAVITY), you c
 2. **Wrapper Script** (for automatic token refresh):
    ```bash
    #!/bin/bash
-   # ~/.local/bin/claude-memory-with-auth
+   # ~/.local/bin/engram-with-auth
    export GEMINI_API_KEY=$(your-auth-service get-token gemini)
-   exec claude-memory "$@"
+   exec engram "$@"
    ```
 
    Then use:
    ```bash
-   claude-memory-with-auth ingest --provider gemini
+   engram-with-auth ingest --provider gemini
    ```
 
 3. **Custom Provider** (advanced):
@@ -112,7 +112,7 @@ If you have access to internal authentication services (like ANTIGRAVITY), you c
 
 The model name might not be available. Try:
 ```bash
-export CLAUDE_MEMORY_LLM_MODEL='gemini-1.5-pro-latest'
+export ENGRAM_LLM_MODEL='gemini-1.5-pro-latest'
 ```
 
 ### "API key required"
@@ -136,8 +136,8 @@ When using the MCP server with Claude Desktop, you can specify Gemini:
 ```json
 {
   "mcpServers": {
-    "claude-memory": {
-      "command": "claude-memory",
+    "engram": {
+      "command": "engram",
       "args": ["mcp", "--provider", "gemini"],
       "env": {
         "GEMINI_API_KEY": "your-key-here"

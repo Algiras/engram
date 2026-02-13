@@ -53,8 +53,13 @@ fn main() -> Result<()> {
     }
 
     // Inject operates on disk only — no Config/LLM auth needed
-    if let Commands::Inject { project, full } = cli.command {
-        return cmd_inject(project, full);
+    if let Commands::Inject {
+        project,
+        full,
+        no_auto_clean,
+    } = cli.command
+    {
+        return cmd_inject(project, full, no_auto_clean);
     }
 
     // Lookup operates on knowledge files — no Config/LLM auth needed
@@ -357,8 +362,12 @@ fn main() -> Result<()> {
         Commands::Projects => {
             cmd_projects(&config)?;
         }
-        Commands::Regen { project, .. } => {
-            cmd_regen(&config, &project)?;
+        Commands::Regen {
+            project,
+            persist_cleanup,
+            ..
+        } => {
+            cmd_regen(&config, &project, persist_cleanup)?;
         }
         Commands::Auth { .. }
         | Commands::Tui
@@ -405,7 +414,7 @@ fn cmd_tui() -> Result<()> {
 
 // ── Inject command ──────────────────────────────────────────────────────
 
-fn cmd_inject(project: Option<String>, full: bool) -> Result<()> {
+fn cmd_inject(project: Option<String>, full: bool, no_auto_clean: bool) -> Result<()> {
     let home = dirs::home_dir()
         .ok_or_else(|| error::MemoryError::Config("Could not determine home directory".into()))?;
 
@@ -425,6 +434,19 @@ fn cmd_inject(project: Option<String>, full: bool) -> Result<()> {
     let memory_dir = home.join("memory");
     let knowledge_dir = memory_dir.join("knowledge");
 
+    // Auto-cleanup expired entries before building MEMORY.md
+    if !no_auto_clean {
+        use crate::extractor::knowledge::auto_cleanup_expired;
+        let cleanup = auto_cleanup_expired(&memory_dir, &project_name, false)?;
+        if cleanup.removed_count > 0 {
+            println!(
+                "{} Auto-cleaned {} expired entries",
+                "✓".green(),
+                cleanup.removed_count
+            );
+        }
+    }
+
     // Read project context (with fallback to raw knowledge files)
     let context_path = knowledge_dir.join(&project_name).join("context.md");
     let context_content = if context_path.exists() {
@@ -434,7 +456,7 @@ fn cmd_inject(project: Option<String>, full: bool) -> Result<()> {
             Some(raw) => raw,
             None => {
                 eprintln!(
-                    "{} No knowledge found for '{}'. Run 'claude-memory ingest' first.",
+                    "{} No knowledge found for '{}'. Run 'engram ingest' first.",
                     "Not found:".yellow(),
                     project_name
                 );
@@ -575,7 +597,7 @@ fn build_raw_context(project: &str, project_knowledge_dir: &Path) -> Option<Stri
 
 // ── Hooks commands ──────────────────────────────────────────────────────
 
-const HOOK_SCRIPT: &str = include_str!("../hooks/claude-memory-hook.sh");
+const HOOK_SCRIPT: &str = include_str!("../hooks/engram-hook.sh");
 const INJECT_SCRIPT: &str = include_str!("../hooks/inject-context.sh");
 const SESSION_END_SCRIPT: &str = include_str!("../hooks/session-end-hook.sh");
 
@@ -587,7 +609,7 @@ fn cmd_hooks_install() -> Result<()> {
     std::fs::create_dir_all(&hooks_dir)?;
 
     // Write hook scripts
-    let hook_path = hooks_dir.join("claude-memory-hook.sh");
+    let hook_path = hooks_dir.join("engram-hook.sh");
     std::fs::write(&hook_path, HOOK_SCRIPT)?;
     set_executable(&hook_path)?;
 
@@ -644,14 +666,14 @@ fn cmd_hooks_uninstall() -> Result<()> {
     let hooks_dir = home.join(".claude").join("hooks");
 
     // Delete hook scripts
-    let hook_path = hooks_dir.join("claude-memory-hook.sh");
+    let hook_path = hooks_dir.join("engram-hook.sh");
     let inject_path = hooks_dir.join("inject-context.sh");
     let session_end_path = hooks_dir.join("session-end-hook.sh");
 
     let mut removed = Vec::new();
     if hook_path.exists() {
         std::fs::remove_file(&hook_path)?;
-        removed.push("claude-memory-hook.sh");
+        removed.push("engram-hook.sh");
     }
     if inject_path.exists() {
         std::fs::remove_file(&inject_path)?;
@@ -672,9 +694,9 @@ fn cmd_hooks_uninstall() -> Result<()> {
             for (_key, entries) in hooks.iter_mut() {
                 if let Some(arr) = entries.as_array_mut() {
                     arr.retain(|entry| {
-                        // Check nested hooks array for claude-memory commands
+                        // Check nested hooks array for engram commands
                         let entry_str = serde_json::to_string(entry).unwrap_or_default();
-                        !entry_str.contains("claude-memory")
+                        !entry_str.contains("engram")
                     });
                 }
             }
@@ -701,7 +723,7 @@ fn cmd_hooks_status() -> Result<()> {
         .ok_or_else(|| error::MemoryError::Config("Could not determine home directory".into()))?;
 
     let hooks_dir = home.join(".claude").join("hooks");
-    let hook_path = hooks_dir.join("claude-memory-hook.sh");
+    let hook_path = hooks_dir.join("engram-hook.sh");
     let inject_path = hooks_dir.join("inject-context.sh");
     let session_end_path = hooks_dir.join("session-end-hook.sh");
 
@@ -722,24 +744,24 @@ fn cmd_hooks_status() -> Result<()> {
     };
 
     check(&inject_path, "inject-context.sh", "SessionStart");
-    check(&hook_path, "claude-memory-hook.sh", "PostToolUse");
+    check(&hook_path, "engram-hook.sh", "PostToolUse");
     check(&session_end_path, "session-end-hook.sh", "Stop");
 
     // Check settings.json
     let settings_path = home.join(".claude").join("settings.json");
     if settings_path.exists() {
         let content = std::fs::read_to_string(&settings_path)?;
-        let has_hooks = content.contains("claude-memory");
+        let has_hooks = content.contains("engram");
         if has_hooks {
             println!(
                 "\n  Settings: {} entries found in {}",
-                "claude-memory".cyan(),
+                "engram".cyan(),
                 settings_path.display().to_string().dimmed()
             );
         } else {
             println!(
                 "\n  Settings: {} in {}",
-                "no claude-memory entries".yellow(),
+                "no engram entries".yellow(),
                 settings_path.display().to_string().dimmed()
             );
         }
@@ -765,10 +787,10 @@ fn add_hook_entry(hooks: &mut serde_json::Value, event: &str, command: &str) -> 
         .as_array_mut()
         .ok_or_else(|| error::MemoryError::Config(format!("hooks.{} is not an array", event)))?;
 
-    // Check if already installed (look for "claude-memory" in any entry's command)
+    // Check if already installed (look for "engram" in any entry's command)
     let already_installed = arr.iter().any(|entry| {
         let entry_str = serde_json::to_string(entry).unwrap_or_default();
-        entry_str.contains("claude-memory")
+        entry_str.contains("engram")
     });
 
     if !already_installed {
@@ -951,8 +973,8 @@ fn cmd_auth_logout(provider_name: &str) -> Result<()> {
 
 fn cmd_auth_status() -> Result<()> {
     // Use the same resolution logic as Config
-    let env_endpoint = std::env::var("CLAUDE_MEMORY_LLM_ENDPOINT").ok();
-    let env_model = std::env::var("CLAUDE_MEMORY_LLM_MODEL").ok();
+    let env_endpoint = std::env::var("ENGRAM_LLM_ENDPOINT").ok();
+    let env_model = std::env::var("ENGRAM_LLM_MODEL").ok();
 
     match auth::resolve_provider(None, env_endpoint, env_model) {
         Ok(resolved) => {
@@ -985,7 +1007,7 @@ fn cmd_auth_status() -> Result<()> {
                 "Note:".yellow(),
                 "Ollama (local)".cyan()
             );
-            println!("  Run 'claude-memory auth login' to configure a provider.");
+            println!("  Run 'engram auth login' to configure a provider.");
         }
     }
 
@@ -1080,7 +1102,7 @@ fn cmd_review(project: &str, show_all: bool) -> Result<()> {
     println!(
         "  Promote with: {}",
         format!(
-            "claude-memory promote {} <session_id> <category> [--global]",
+            "engram promote {} <session_id> <category> [--global]",
             project
         )
         .cyan()
@@ -1217,7 +1239,7 @@ fn cmd_promote(
     if !global {
         println!(
             "  Run '{}' to regenerate context.",
-            format!("claude-memory regen {}", project).cyan()
+            format!("engram regen {}", project).cyan()
         );
     }
 
@@ -1512,7 +1534,7 @@ fn cmd_add(
     );
     println!(
         "  Run '{}' to update context.",
-        format!("claude-memory regen {}", project).cyan()
+        format!("engram regen {}", project).cyan()
     );
 
     Ok(())
@@ -1520,7 +1542,7 @@ fn cmd_add(
 
 // ── Regen command ───────────────────────────────────────────────────────
 
-fn cmd_regen(config: &Config, project: &str) -> Result<()> {
+fn cmd_regen(config: &Config, project: &str, persist_cleanup: bool) -> Result<()> {
     use extractor::knowledge::{parse_session_blocks, partition_by_expiry, reconstruct_blocks};
 
     let knowledge_dir = config.memory_dir.join("knowledge").join(project);
@@ -1535,20 +1557,42 @@ fn cmd_regen(config: &Config, project: &str) -> Result<()> {
         return Ok(());
     }
 
-    // Read existing knowledge files and filter out expired blocks
-    let filter_expired = |content: &str| -> String {
-        let (preamble, blocks) = parse_session_blocks(content);
-        let (active, _expired) = partition_by_expiry(blocks);
-        reconstruct_blocks(&preamble, &active)
+    let (decisions, solutions, patterns) = if persist_cleanup {
+        // Persist cleanup to disk before regenerating
+        use crate::extractor::knowledge::auto_cleanup_expired;
+        let cleanup = auto_cleanup_expired(&config.memory_dir, project, true)?;
+        if cleanup.removed_count > 0 {
+            println!(
+                "{} Cleaned {} expired entries from files",
+                "✓".green(),
+                cleanup.removed_count
+            );
+        }
+
+        // Re-read files after cleanup (already filtered)
+        let decisions_raw = read_or_empty(&knowledge_dir.join("decisions.md"));
+        let solutions_raw = read_or_empty(&knowledge_dir.join("solutions.md"));
+        let patterns_raw = read_or_empty(&knowledge_dir.join("patterns.md"));
+
+        (decisions_raw, solutions_raw, patterns_raw)
+    } else {
+        // Filter in-memory only (don't persist)
+        let filter_expired = |content: &str| -> String {
+            let (preamble, blocks) = parse_session_blocks(content);
+            let (active, _expired) = partition_by_expiry(blocks);
+            reconstruct_blocks(&preamble, &active)
+        };
+
+        let decisions_raw = read_or_empty(&knowledge_dir.join("decisions.md"));
+        let solutions_raw = read_or_empty(&knowledge_dir.join("solutions.md"));
+        let patterns_raw = read_or_empty(&knowledge_dir.join("patterns.md"));
+
+        (
+            filter_expired(&decisions_raw),
+            filter_expired(&solutions_raw),
+            filter_expired(&patterns_raw),
+        )
     };
-
-    let decisions_raw = read_or_empty(&knowledge_dir.join("decisions.md"));
-    let solutions_raw = read_or_empty(&knowledge_dir.join("solutions.md"));
-    let patterns_raw = read_or_empty(&knowledge_dir.join("patterns.md"));
-
-    let decisions = filter_expired(&decisions_raw);
-    let solutions = filter_expired(&solutions_raw);
-    let patterns = filter_expired(&patterns_raw);
     let summaries = collect_summary_dir(&summary_dir)?;
 
     if decisions.is_empty() && solutions.is_empty() && patterns.is_empty() {
@@ -1718,7 +1762,7 @@ fn cmd_forget(
             }
             println!(
                 "  Run '{}' to regenerate context.",
-                format!("claude-memory regen {}", project).cyan()
+                format!("engram regen {}", project).cyan()
             );
         }
         return Ok(());
@@ -1773,7 +1817,7 @@ fn cmd_forget(
         );
         println!(
             "  Run '{}' to regenerate context.",
-            format!("claude-memory ingest --project {}", project).cyan()
+            format!("engram ingest --project {}", project).cyan()
         );
         return Ok(());
     }
@@ -1839,7 +1883,7 @@ fn cmd_forget(
         }
         println!(
             "  Run '{}' to regenerate context.",
-            format!("claude-memory ingest --project {}", project).cyan()
+            format!("engram ingest --project {}", project).cyan()
         );
         return Ok(());
     }
@@ -1908,7 +1952,7 @@ fn cmd_forget(
         );
         println!(
             "  Run '{}' to regenerate context.",
-            format!("claude-memory ingest --project {}", project).cyan()
+            format!("engram ingest --project {}", project).cyan()
         );
         return Ok(());
     }
@@ -1972,7 +2016,7 @@ fn cmd_forget(
     }
     println!(
         "\nTo remove a session: {}",
-        format!("claude-memory forget {} <session-id>", project).cyan()
+        format!("engram forget {} <session-id>", project).cyan()
     );
 
     Ok(())
@@ -2632,7 +2676,7 @@ fn export_markdown(
         "**Exported:** {}\n\n",
         chrono::Utc::now().format("%Y-%m-%d %H:%M:%S UTC")
     ));
-    output.push_str("**Tool:** [claude-memory](https://github.com/Algiras/claude-memory)\n\n");
+    output.push_str("**Tool:** [engram](https://github.com/Algiras/engram)\n\n");
     output.push_str("---\n\n");
 
     if !context.trim().is_empty() {
@@ -2720,8 +2764,8 @@ fn export_json(
     let export = json!({
         "project": project,
         "exported_at": chrono::Utc::now().to_rfc3339(),
-        "tool": "claude-memory",
-        "tool_url": "https://github.com/Algiras/claude-memory",
+        "tool": "engram",
+        "tool_url": "https://github.com/Algiras/engram",
         "knowledge": {
             "context": context,
             "decisions": decisions,
@@ -2787,7 +2831,7 @@ fn export_html(
     html.push_str(&format!("{} - Knowledge Export</h1>\n", project));
     html.push_str(&format!(r#"        <div class="meta">
             <strong>Exported:</strong> {}<br>
-            <strong>Tool:</strong> <a href="https://github.com/Algiras/claude-memory">claude-memory</a>
+            <strong>Tool:</strong> <a href="https://github.com/Algiras/engram">engram</a>
         </div>
         <div class="search">
             <input type="text" id="searchBox" placeholder="Search knowledge..." onkeyup="filterContent()">
@@ -2849,7 +2893,7 @@ fn export_html(
     html.push_str(
         r#"        </div>
         <div class="footer">
-            Generated by <a href="https://github.com/Algiras/claude-memory">claude-memory</a>
+            Generated by <a href="https://github.com/Algiras/engram">engram</a>
         </div>
     </div>
     <script>
@@ -2913,7 +2957,7 @@ fn cmd_sync_push(
         println!("\nTo pull on another machine:");
         println!(
             "  {}",
-            format!("claude-memory sync pull {} {}", project, gist.id).cyan()
+            format!("engram sync pull {} {}", project, gist.id).cyan()
         );
 
         Ok(())
@@ -2951,7 +2995,7 @@ fn cmd_sync_pull(config: &Config, project: &str, gist_id: &str, force: bool) -> 
         );
         println!("  {} files synced", gist.files.len());
         println!("\nView with:");
-        println!("  {}", format!("claude-memory recall {}", project).cyan());
+        println!("  {}", format!("engram recall {}", project).cyan());
 
         Ok(())
     })
@@ -3075,13 +3119,13 @@ fn cmd_sync_history(gist_id: &str, version: Option<&str>) -> Result<()> {
             println!("\nTo view a specific version:");
             println!(
                 "  {}",
-                format!("claude-memory sync history {} --version <version>", gist_id).cyan()
+                format!("engram sync history {} --version <version>", gist_id).cyan()
             );
             println!("\nTo restore a version:");
             println!(
                 "  {}",
                 format!(
-                    "claude-memory sync pull <project> {}",
+                    "engram sync pull <project> {}",
                     history.first().unwrap().version
                 )
                 .cyan()
@@ -3164,7 +3208,7 @@ fn cmd_sync_pull_repo(
     );
 
     println!("\nView with:");
-    println!("  {}", format!("claude-memory recall {}", project).cyan());
+    println!("  {}", format!("engram recall {}", project).cyan());
 
     Ok(())
 }
@@ -3187,7 +3231,7 @@ fn cmd_sync_init_repo(repo: &str) -> Result<()> {
     println!("  1. {} (optional)", "git remote add origin <url>".dimmed());
     println!(
         "  2. {}",
-        format!("claude-memory sync push-repo <project> {}", repo).cyan()
+        format!("engram sync push-repo <project> {}", repo).cyan()
     );
 
     Ok(())
@@ -3263,11 +3307,11 @@ fn cmd_graph_build(config: &Config, project: &str) -> Result<()> {
     println!("\nExplore with:");
     println!(
         "  {}",
-        format!("claude-memory graph query {} <concept>", project).cyan()
+        format!("engram graph query {} <concept>", project).cyan()
     );
     println!(
         "  {}",
-        format!("claude-memory graph viz {} ascii", project).cyan()
+        format!("engram graph viz {} ascii", project).cyan()
     );
 
     Ok(())
@@ -3546,7 +3590,7 @@ fn cmd_embed(config: &Config, project: &str, provider_override: Option<&str>) ->
         println!(
             "  {}",
             format!(
-                "claude-memory search-semantic \"your query\" --project {}",
+                "engram search-semantic \"your query\" --project {}",
                 project
             )
             .cyan()
@@ -3693,7 +3737,7 @@ fn cmd_consolidate(
 
         if !index_path.exists() {
             eprintln!(
-                "{} No embeddings found. Run 'claude-memory embed {}' first.",
+                "{} No embeddings found. Run 'engram embed {}' first.",
                 "Error:".red(),
                 project
             );
@@ -4079,7 +4123,7 @@ fn cmd_diff(
         println!(
             "  {}",
             format!(
-                "claude-memory diff {} {} --version <version-id>",
+                "engram diff {} {} --version <version-id>",
                 project, category
             )
             .cyan()
@@ -4169,9 +4213,9 @@ fn cmd_analytics(project: Option<&str>, days: u32, detailed: bool, clear_old: bo
     if events.is_empty() {
         println!("{}", "📊 No usage data found".yellow());
         println!("\nUsage is tracked automatically when you use commands like:");
-        println!("  • claude-memory recall <project>");
-        println!("  • claude-memory search <query>");
-        println!("  • claude-memory add <project> ...");
+        println!("  • engram recall <project>");
+        println!("  • engram search <query>");
+        println!("  • engram add <project> ...");
         println!("\nStart using the system and check back later!");
         return Ok(());
     }
@@ -4244,7 +4288,7 @@ fn cmd_learn_dashboard(config: &Config, project: Option<&str>) -> Result<()> {
             println!("{}", "No learning data found.".yellow());
             println!(
                 "Run {} to start learning from usage patterns.",
-                "claude-memory ingest".cyan()
+                "engram ingest".cyan()
             );
             return Ok(());
         }
@@ -4421,12 +4465,12 @@ fn cmd_learn_simulate(
     println!(
         "  {} {}",
         "1.".dimmed(),
-        format!("claude-memory learn dashboard {}", project).cyan()
+        format!("engram learn dashboard {}", project).cyan()
     );
     println!(
         "  {} {}",
         "2.".dimmed(),
-        format!("claude-memory learn optimize {} --dry-run", project).cyan()
+        format!("engram learn optimize {} --dry-run", project).cyan()
     );
 
     Ok(())
@@ -4555,7 +4599,7 @@ fn cmd_hive_registry(command: RegistryCommand, memory_dir: &Path) -> Result<()> 
             if registries.is_empty() {
                 println!("No registries configured.");
                 println!("\nAdd a registry with:");
-                println!("  claude-memory hive registry add owner/repo");
+                println!("  engram hive registry add owner/repo");
                 return Ok(());
             }
 
@@ -4620,7 +4664,7 @@ fn cmd_hive_install(
     );
     println!("  Path: {}", installed.path.display());
 
-    println!("\n💡 Use 'claude-memory recall' to access this pack's knowledge");
+    println!("\n💡 Use 'engram recall' to access this pack's knowledge");
 
     Ok(())
 }
@@ -4647,9 +4691,9 @@ fn cmd_hive_list(memory_dir: &Path) -> Result<()> {
     if packs.is_empty() {
         println!("No packs installed.");
         println!("\nBrowse available packs with:");
-        println!("  claude-memory hive browse");
+        println!("  engram hive browse");
         println!("\nInstall a pack with:");
-        println!("  claude-memory hive install <pack-name>");
+        println!("  engram hive install <pack-name>");
         return Ok(());
     }
 
@@ -4712,7 +4756,7 @@ fn cmd_hive_browse(category: Option<&str>, keyword: Option<&str>, memory_dir: &P
     if registries.is_empty() {
         println!("No registries configured.");
         println!("\nAdd a registry with:");
-        println!("  claude-memory hive registry add owner/repo");
+        println!("  engram hive registry add owner/repo");
         return Ok(());
     }
 
@@ -4782,7 +4826,7 @@ fn cmd_hive_browse(category: Option<&str>, keyword: Option<&str>, memory_dir: &P
     }
 
     println!("\n💡 Install a pack with:");
-    println!("  claude-memory hive install <pack-name>");
+    println!("  engram hive install <pack-name>");
 
     Ok(())
 }
@@ -4827,7 +4871,7 @@ fn cmd_hive_search(query: &str, memory_dir: &Path) -> Result<()> {
     }
 
     println!("💡 Install a pack with:");
-    println!("  claude-memory hive install <pack-name>");
+    println!("  engram hive install <pack-name>");
 
     Ok(())
 }
@@ -5008,7 +5052,7 @@ fn cmd_hive_pack_create(
 
     // Create README
     let readme_content = format!(
-        "# {}\n\n{}\n\n## Installation\n\n```bash\nclaude-memory hive install {}\n```\n\n## Contents\n\n",
+        "# {}\n\n{}\n\n## Installation\n\n```bash\nengram hive install {}\n```\n\n## Contents\n\n",
         name, pack.description, name
     );
     std::fs::write(pack_dir.join("README.md"), readme_content)?;
@@ -5027,7 +5071,7 @@ fn cmd_hive_pack_create(
     println!("  1. Review content: cd {}", pack_dir.display());
     println!("  2. Initialize git: git init && git add . && git commit -m 'Initial pack'");
     println!("  3. Push to GitHub: git remote add origin <url> && git push");
-    println!("  4. Share: claude-memory hive registry add <owner>/<repo>");
+    println!("  4. Share: engram hive registry add <owner>/<repo>");
 
     Ok(())
 }
@@ -5316,12 +5360,12 @@ fn cmd_hive_pack_publish(
         println!("  Users can install with:");
         println!(
             "  {}",
-            format!("claude-memory hive registry add {}", url).cyan()
+            format!("engram hive registry add {}", url).cyan()
         );
     } else {
         println!("  1. Push to GitHub: git push -u origin main");
         println!("  2. Share the repository URL");
-        println!("  3. Users can add: claude-memory hive registry add <owner>/<repo>");
+        println!("  3. Users can add: engram hive registry add <owner>/<repo>");
     }
 
     Ok(())

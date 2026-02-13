@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "description": "Distributed knowledge sharing via Hive Mind - discover, install, and share knowledge packs",
   "author": "Claude Memory Project",
-  "homepage": "https://github.com/Algiras/claude-memory",
+  "homepage": "https://github.com/Algiras/engram",
   "keywords": ["knowledge", "hive", "packs", "sharing", "distributed", "memory"],
   "categories": ["productivity", "knowledge-management"],
   "commands": {

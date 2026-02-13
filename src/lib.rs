@@ -1,4 +1,4 @@
-// Library interface for claude-memory
+// Library interface for engram
 #![allow(dead_code)]
 
 pub mod analytics;

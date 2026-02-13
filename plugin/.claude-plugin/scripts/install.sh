@@ -14,17 +14,17 @@ shift
 echo "📦 Installing knowledge pack: $PACK_NAME"
 echo ""
 
-if ! command -v claude-memory &> /dev/null; then
-    echo "❌ claude-memory not found in PATH"
-    echo "   Install: cargo install --path /path/to/claude-memory"
+if ! command -v engram &> /dev/null; then
+    echo "❌ engram not found in PATH"
+    echo "   Install: cargo install --path /path/to/engram"
     exit 1
 fi
 
 # Install the pack
-if claude-memory hive install "$PACK_NAME" "$@"; then
+if engram hive install "$PACK_NAME" "$@"; then
     echo ""
     echo "✅ Pack installed successfully!"
     echo ""
     echo "💡 Access the knowledge with:"
-    echo "   claude-memory recall <project>"
+    echo "   engram recall <project>"
 fi

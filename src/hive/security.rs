@@ -141,6 +141,32 @@ impl SecretDetector {
             format!("{}***{}", &secret[..3], &secret[secret.len() - 3..])
         }
     }
+
+    /// Redact all detected secrets in content, replacing them with [REDACTED]
+    pub fn redact_secrets(&self, content: &str) -> String {
+        let mut redacted = content.to_string();
+
+        for line in content.lines() {
+            for (pattern_name, regex) in &self.patterns {
+                if let Some(caps) = regex.captures(line) {
+                    if let Some(matched) = caps.get(1).or_else(|| caps.get(0)) {
+                        let secret = matched.as_str();
+
+                        // Skip false positives
+                        if self.is_false_positive(secret, line) {
+                            continue;
+                        }
+
+                        // Replace secret with [REDACTED] placeholder
+                        redacted =
+                            redacted.replace(secret, &format!("[REDACTED:{}]", pattern_name));
+                    }
+                }
+            }
+        }
+
+        redacted
+    }
 }
 
 impl Default for SecretDetector {
