@@ -640,7 +640,7 @@ impl McpServer {
             cmd.args(["--project", proj]);
         }
 
-        cmd.args(["--limit", &limit.to_string()]);
+        cmd.args(["--top", &limit.to_string()]);
 
         let output = cmd.output()?;
         if !output.status.success() {

@@ -76,7 +76,11 @@ pub fn get_top_knowledge(
     limit: usize,
 ) -> Vec<KnowledgeScore> {
     let mut sorted: Vec<_> = scores.values().cloned().collect();
-    sorted.sort_by(|a, b| b.importance.partial_cmp(&a.importance).unwrap());
+    sorted.sort_by(|a, b| {
+        b.importance
+            .partial_cmp(&a.importance)
+            .unwrap_or(std::cmp::Ordering::Equal)
+    });
     sorted.into_iter().take(limit).collect()
 }
 

@@ -106,7 +106,11 @@ impl PackInstaller {
 
     /// Install a pack from a registry
     pub fn install(&self, pack_name: &str, registry_name: Option<&str>) -> Result<InstalledPack> {
-        let registry_manager = RegistryManager::new(self.hive_dir.parent().unwrap());
+        let registry_manager = RegistryManager::new(
+            self.hive_dir
+                .parent()
+                .ok_or_else(|| MemoryError::Config("hive_dir has no parent".into()))?,
+        );
 
         // Find the pack in registries
         let (pack, found_registry) = self.find_pack(pack_name, registry_name, &registry_manager)?;
@@ -186,7 +190,11 @@ impl PackInstaller {
             .clone();
 
         // Update the registry first
-        let registry_manager = RegistryManager::new(self.hive_dir.parent().unwrap());
+        let registry_manager = RegistryManager::new(
+            self.hive_dir
+                .parent()
+                .ok_or_else(|| MemoryError::Config("hive_dir has no parent".into()))?,
+        );
         registry_manager.update(&installed.registry)?;
 
         // Re-discover the pack to get its actual source path

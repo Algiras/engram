@@ -139,7 +139,10 @@ impl TTLQLearning {
             TTLAction::Reduce3d,
             TTLAction::Reduce7d,
         ];
-        *actions.choose(&mut rand::thread_rng()).unwrap()
+        actions
+            .choose(&mut rand::thread_rng())
+            .copied()
+            .unwrap_or(TTLAction::Extend7d)
     }
 
     /// Update Q-table based on observed reward

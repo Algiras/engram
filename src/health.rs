@@ -313,13 +313,50 @@ async fn regenerate_context(config: &crate::config::Config, project: &str) -> Re
     Ok(())
 }
 
-async fn generate_embeddings(_config: &crate::config::Config, _project: &str) -> Result<()> {
-    // Placeholder - would call embed command
+async fn generate_embeddings(config: &crate::config::Config, project: &str) -> Result<()> {
+    use crate::embeddings::search::SemanticSearch;
+    use crate::embeddings::EmbeddingProvider;
+
+    let provider = EmbeddingProvider::from_env()?;
+    SemanticSearch::build_index(&config.memory_dir, project, &provider).await?;
     Ok(())
 }
 
-async fn build_graph(_config: &crate::config::Config, _project: &str) -> Result<()> {
-    // Placeholder - would call graph build
+async fn build_graph(config: &crate::config::Config, project: &str) -> Result<()> {
+    use crate::extractor::knowledge::{
+        parse_session_blocks, partition_by_expiry, reconstruct_blocks,
+    };
+
+    let knowledge_dir = config.memory_dir.join("knowledge").join(project);
+
+    let read_and_filter = |path: &std::path::PathBuf| -> String {
+        let raw = std::fs::read_to_string(path).unwrap_or_default();
+        let (preamble, blocks) = parse_session_blocks(&raw);
+        let (active, _) = partition_by_expiry(blocks);
+        reconstruct_blocks(&preamble, &active)
+    };
+
+    let mut knowledge_content = read_and_filter(&knowledge_dir.join("context.md"));
+    knowledge_content.push_str("\n\n");
+    knowledge_content.push_str(&read_and_filter(&knowledge_dir.join("decisions.md")));
+    knowledge_content.push_str("\n\n");
+    knowledge_content.push_str(&read_and_filter(&knowledge_dir.join("solutions.md")));
+    knowledge_content.push_str("\n\n");
+    knowledge_content.push_str(&read_and_filter(&knowledge_dir.join("patterns.md")));
+
+    if knowledge_content.trim().is_empty() {
+        return Ok(());
+    }
+
+    let graph =
+        crate::graph::builder::build_graph_from_knowledge(config, project, &knowledge_content)
+            .await?;
+
+    let graph_path = knowledge_dir.join("graph.json");
+    graph
+        .save(&graph_path)
+        .map_err(|e| crate::error::MemoryError::Config(format!("Failed to save graph: {}", e)))?;
+
     Ok(())
 }
 

@@ -55,11 +55,19 @@ impl AuthStore {
         let data = serde_json::to_string_pretty(self)?;
         std::fs::write(&path, &data)?;
 
-        // Set permissions to 0600 (owner read/write only)
+        // Set permissions to owner-only access
         #[cfg(unix)]
         {
             use std::os::unix::fs::PermissionsExt;
             std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600))?;
+        }
+
+        #[cfg(windows)]
+        {
+            // On Windows, set read-only to limit exposure; full ACL requires platform crates
+            let mut perms = std::fs::metadata(&path)?.permissions();
+            perms.set_readonly(false); // ensure owner can still write
+            std::fs::set_permissions(&path, perms)?;
         }
 
         Ok(())

@@ -151,7 +151,10 @@ pub fn compact_preferences(raw_prefs: &str, memory_dir: &Path, project: &str) ->
     }
 
     // Extract **Key:** Value pairs from all blocks
-    let bold_re = regex::Regex::new(r"\*\*([^*]+):\*\*\s*(.+)").unwrap();
+    use std::sync::OnceLock;
+    static BOLD_RE: OnceLock<regex::Regex> = OnceLock::new();
+    let bold_re = BOLD_RE
+        .get_or_init(|| regex::Regex::new(r"\*\*([^*]+):\*\*\s*(.+)").expect("static regex"));
 
     let mut merged: BTreeMap<String, Vec<String>> = BTreeMap::new();
 
@@ -160,8 +163,14 @@ pub fn compact_preferences(raw_prefs: &str, memory_dir: &Path, project: &str) ->
             let line = line.trim();
             // Match top-level bullets: `* **Key:** Value` or `- **Key:** Value`
             if let Some(caps) = bold_re.captures(line) {
-                let key = normalize_pref_key(caps.get(1).unwrap().as_str().trim());
-                let value = caps.get(2).unwrap().as_str().trim().to_string();
+                let key = match caps.get(1) {
+                    Some(m) => normalize_pref_key(m.as_str().trim()),
+                    None => continue,
+                };
+                let value = match caps.get(2) {
+                    Some(m) => m.as_str().trim().to_string(),
+                    None => continue,
+                };
                 // Skip very generic intro phrases
                 if value.starts_with("Here's a breakdown")
                     || value.starts_with("The user")

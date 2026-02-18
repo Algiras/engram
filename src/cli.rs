@@ -7,6 +7,10 @@ use clap::{Parser, Subcommand};
     version
 )]
 pub struct Cli {
+    /// Enable verbose output
+    #[arg(global = true, long, short)]
+    pub verbose: bool,
+
     #[command(subcommand)]
     pub command: Commands,
 }
