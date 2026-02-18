@@ -15,6 +15,9 @@ pub enum EventType {
     Export,
     GraphQuery,
     SemanticSearch,
+    Context,
+    Inject,
+    Ingest,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -26,6 +29,8 @@ pub struct UsageEvent {
     pub category: Option<String>,
     pub results_count: Option<usize>,
     pub session_id: Option<String>,
+    #[serde(default)]
+    pub tokens_consumed: Option<u64>,
 }
 
 pub struct EventTracker {
@@ -153,6 +158,7 @@ mod tests {
             category: None,
             results_count: None,
             session_id: None,
+            tokens_consumed: None,
         };
 
         tracker.track(event.clone()).unwrap();
@@ -177,6 +183,7 @@ mod tests {
                     category: None,
                     results_count: Some(5),
                     session_id: None,
+                    tokens_consumed: None,
                 })
                 .unwrap();
         }

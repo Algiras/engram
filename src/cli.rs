@@ -136,8 +136,8 @@ pub enum Commands {
         /// Project name
         project: String,
 
-        /// Knowledge category: decisions, solutions, patterns, or preferences
-        #[arg(value_parser = ["decisions", "solutions", "patterns", "preferences"])]
+        /// Knowledge category: decisions, solutions, patterns, bugs, insights, questions, or preferences
+        #[arg(value_parser = ["decisions", "solutions", "patterns", "bugs", "insights", "questions", "preferences"])]
         category: String,
 
         /// The knowledge content to add
@@ -223,6 +223,14 @@ pub enum Commands {
         /// Remove only expired TTL entries
         #[arg(long)]
         expired: bool,
+
+        /// Remove entries older than a duration (e.g. "30d", "6w") that have no TTL
+        #[arg(long)]
+        stale: Option<String>,
+
+        /// Skip confirmation prompt when used with --stale
+        #[arg(long)]
+        auto: bool,
     },
 
     /// Manage LLM provider authentication
@@ -294,6 +302,18 @@ pub enum Commands {
         /// Minimum similarity threshold (0.0 - 1.0)
         #[arg(long, default_value = "0.5")]
         threshold: f32,
+
+        /// Only include chunks from this time window (e.g. "7d", "2h", "30m")
+        #[arg(long)]
+        since: Option<String>,
+
+        /// Only include chunks from this knowledge category (e.g. "decisions", "bugs")
+        #[arg(long)]
+        category: Option<String>,
+
+        /// Only include chunks whose session_id or text contains this string (e.g. "src/auth")
+        #[arg(long)]
+        file: Option<String>,
     },
 
     /// Detect and consolidate duplicate/similar knowledge
@@ -374,6 +394,14 @@ pub enum Commands {
     Hive {
         #[command(subcommand)]
         command: HiveCommand,
+    },
+
+    /// Record a PostToolUse observation from stdin (called by hook script)
+    #[command(hide = true)]
+    Observe {
+        /// Project name (defaults to CWD basename)
+        #[arg(long)]
+        project: Option<String>,
     },
 }
 

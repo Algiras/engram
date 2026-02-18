@@ -181,8 +181,8 @@ impl McpServer {
                         },
                         "category": {
                             "type": "string",
-                            "description": "Category: decisions, solutions, patterns, or preferences",
-                            "enum": ["decisions", "solutions", "patterns", "preferences"]
+                            "description": "Category: decisions, solutions, patterns, bugs, insights, questions, or preferences",
+                            "enum": ["decisions", "solutions", "patterns", "bugs", "insights", "questions", "preferences"]
                         },
                         "content": {
                             "type": "string",
@@ -198,7 +198,7 @@ impl McpServer {
             },
             Tool {
                 name: "analytics".to_string(),
-                description: "Show usage analytics and top knowledge for a project".to_string(),
+                description: "Show usage analytics, token counts, and command breakdown for a project. Includes total tokens ingested from conversations, per-command usage frequency (Recall, Ingest, Inject, SemanticSearch, Context, …), top knowledge by access count, and stale knowledge that is rarely accessed.".to_string(),
                 input_schema: json!({
                     "type": "object",
                     "properties": {
@@ -232,6 +232,18 @@ impl McpServer {
                             "type": "number",
                             "description": "Maximum results to return (default: 10)",
                             "default": 10
+                        },
+                        "since": {
+                            "type": "string",
+                            "description": "Only include chunks from this time window (e.g. '7d', '2h')"
+                        },
+                        "category": {
+                            "type": "string",
+                            "description": "Only include chunks from this category (e.g. 'decisions', 'bugs')"
+                        },
+                        "file": {
+                            "type": "string",
+                            "description": "Only include chunks whose session_id or text contains this string"
                         }
                     },
                     "required": ["query"]
@@ -272,8 +284,8 @@ impl McpServer {
                         },
                         "categories": {
                             "type": "array",
-                            "items": { "type": "string", "enum": ["decisions", "solutions", "patterns"] },
-                            "description": "Which categories to extract. Defaults to all three if omitted."
+                            "items": { "type": "string", "enum": ["decisions", "solutions", "patterns", "bugs", "insights", "questions"] },
+                            "description": "Which categories to extract. Defaults to all six if omitted."
                         }
                     },
                     "required": ["project", "text"]
@@ -291,7 +303,7 @@ impl McpServer {
                         },
                         "category": {
                             "type": "string",
-                            "enum": ["decisions", "solutions", "patterns"],
+                            "enum": ["decisions", "solutions", "patterns", "bugs", "insights", "questions"],
                             "description": "Knowledge category file to search"
                         },
                         "label": {
@@ -318,7 +330,7 @@ impl McpServer {
                         },
                         "category": {
                             "type": "string",
-                            "enum": ["decisions", "solutions", "patterns"],
+                            "enum": ["decisions", "solutions", "patterns", "bugs", "insights", "questions"],
                             "description": "Knowledge category file containing the entry"
                         },
                         "label": {
@@ -351,6 +363,42 @@ impl McpServer {
                         "project": {
                             "type": "string",
                             "description": "Project name"
+                        }
+                    },
+                    "required": ["project"]
+                }),
+            },
+            Tool {
+                name: "forget_stale".to_string(),
+                description: "Remove knowledge entries older than a given duration that have never been assigned a TTL. Use this for periodic memory hygiene — e.g. 'clean up anything older than 60 days'. Always non-interactive (equivalent to --auto).".to_string(),
+                input_schema: json!({
+                    "type": "object",
+                    "properties": {
+                        "project": {
+                            "type": "string",
+                            "description": "Project name"
+                        },
+                        "older_than": {
+                            "type": "string",
+                            "description": "Duration threshold — entries older than this are removed. Format: Nd (days), Nw (weeks), Nh (hours). Examples: '30d', '6w', '90d'."
+                        }
+                    },
+                    "required": ["project", "older_than"]
+                }),
+            },
+            Tool {
+                name: "observations".to_string(),
+                description: "List the files observed (edited/created) today or on a specific date for a project. Observations are recorded by the PostToolUse hook and are used to enrich ingest prompts and smart-inject signals.".to_string(),
+                input_schema: json!({
+                    "type": "object",
+                    "properties": {
+                        "project": {
+                            "type": "string",
+                            "description": "Project name"
+                        },
+                        "date": {
+                            "type": "string",
+                            "description": "Date in YYYY-MM-DD format (default: today)"
                         }
                     },
                     "required": ["project"]
@@ -423,6 +471,8 @@ impl McpServer {
                 }
                 r
             }
+            "forget_stale" => self.tool_forget_stale(args),
+            "observations" => self.tool_observations(args),
             _ => Err(MemoryError::Config(format!("Unknown tool: {}", tool_name))),
         };
 
@@ -806,6 +856,16 @@ impl McpServer {
 
         cmd.args(["--top", &limit.to_string()]);
 
+        if let Some(since) = args["since"].as_str() {
+            cmd.args(["--since", since]);
+        }
+        if let Some(cat) = args["category"].as_str() {
+            cmd.args(["--category", cat]);
+        }
+        if let Some(file) = args["file"].as_str() {
+            cmd.args(["--file", file]);
+        }
+
         let output = cmd.output()?;
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr);
@@ -857,8 +917,15 @@ impl McpServer {
             .as_str()
             .ok_or_else(|| MemoryError::Config("Missing text parameter".into()))?;
 
-        // Which categories to extract — defaults to all three
-        let all_cats = vec!["decisions", "solutions", "patterns"];
+        // Which categories to extract — defaults to all six
+        let all_cats = vec![
+            "decisions",
+            "solutions",
+            "patterns",
+            "bugs",
+            "insights",
+            "questions",
+        ];
         let categories: Vec<&str> = if let Some(arr) = args["categories"].as_array() {
             arr.iter().filter_map(|v| v.as_str()).collect()
         } else {
@@ -888,6 +955,9 @@ impl McpServer {
                     "decisions" => prompts::decisions_prompt(text),
                     "solutions" => prompts::solutions_prompt(text),
                     "patterns" => prompts::patterns_prompt(text),
+                    "bugs" => prompts::bugs_prompt(text),
+                    "insights" => prompts::insights_prompt(text),
+                    "questions" => prompts::questions_prompt(text),
                     _ => continue,
                 };
 
@@ -1160,5 +1230,126 @@ impl McpServer {
             "context.md rebuilt for '{}'. Use `recall` to read the updated summary.",
             project
         ))
+    }
+
+    /// Remove stale (old, no-TTL) entries — delegates to `engram forget --stale --auto`.
+    fn tool_forget_stale(&self, args: serde_json::Value) -> Result<String> {
+        let project = args["project"]
+            .as_str()
+            .ok_or_else(|| MemoryError::Config("Missing project".into()))?;
+        let older_than = args["older_than"]
+            .as_str()
+            .ok_or_else(|| MemoryError::Config("Missing older_than parameter".into()))?;
+
+        // Validate duration format before shelling out
+        use crate::extractor::knowledge::parse_ttl;
+        if parse_ttl(older_than).is_none() {
+            return Err(MemoryError::Config(format!(
+                "Invalid duration '{}'. Use format like 30d, 6w, 2h.",
+                older_than
+            )));
+        }
+
+        let output = std::process::Command::new("engram")
+            .args(["forget", project, "--stale", older_than, "--auto"])
+            .output()?;
+
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            return Err(MemoryError::Config(format!(
+                "forget_stale failed: {}",
+                stderr
+            )));
+        }
+
+        let stdout = String::from_utf8_lossy(&output.stdout).to_string();
+        Ok(if stdout.trim().is_empty() {
+            format!(
+                "No stale entries older than {} found for '{}'.",
+                older_than, project
+            )
+        } else {
+            stdout
+        })
+    }
+
+    /// List files observed today (or on a given date) for a project.
+    fn tool_observations(&self, args: serde_json::Value) -> Result<String> {
+        let project = args["project"]
+            .as_str()
+            .ok_or_else(|| MemoryError::Config("Missing project".into()))?;
+
+        let date = args["date"]
+            .as_str()
+            .map(|s| s.to_string())
+            .unwrap_or_else(|| chrono::Utc::now().format("%Y-%m-%d").to_string());
+
+        let obs_path = self
+            .config
+            .memory_dir
+            .join("observations")
+            .join(project)
+            .join(format!("{}.jsonl", date));
+
+        if !obs_path.exists() {
+            return Ok(format!(
+                "No observations found for '{}' on {}.",
+                project, date
+            ));
+        }
+
+        let content = std::fs::read_to_string(&obs_path)?;
+        let mut files: Vec<String> = Vec::new();
+        let mut tool_uses: Vec<String> = Vec::new();
+
+        for line in content.lines() {
+            if let Ok(rec) = serde_json::from_str::<serde_json::Value>(line) {
+                if let Some(f) = rec.get("file").and_then(|v| v.as_str()) {
+                    if !f.is_empty() && !files.contains(&f.to_string()) {
+                        files.push(f.to_string());
+                    }
+                }
+                if let Some(tool) = rec.get("tool").and_then(|v| v.as_str()) {
+                    tool_uses.push(tool.to_string());
+                }
+            }
+        }
+
+        let total_events = content.lines().filter(|l| !l.trim().is_empty()).count();
+        let mut out = format!(
+            "Observations for '{}' on {} ({} events):\n\n",
+            project, date, total_events
+        );
+
+        if files.is_empty() {
+            out.push_str("  No file paths recorded.\n");
+        } else {
+            out.push_str(&format!("Files touched ({}):\n", files.len()));
+            for f in &files {
+                out.push_str(&format!("  {}\n", f));
+            }
+        }
+
+        // Tool use summary
+        if !tool_uses.is_empty() {
+            use std::collections::HashMap;
+            let mut counts: HashMap<&str, usize> = HashMap::new();
+            for t in &tool_uses {
+                *counts.entry(t.as_str()).or_insert(0) += 1;
+            }
+            let mut sorted: Vec<(&&str, &usize)> = counts.iter().collect();
+            sorted.sort_by(|a, b| b.1.cmp(a.1));
+            out.push_str("\nTool use breakdown:\n");
+            for (tool, count) in sorted {
+                out.push_str(&format!("  {}: {}\n", tool, count));
+            }
+        }
+
+        out.push_str(&format!(
+            "\nNote: these files are automatically used as ingest enrichment (Feature A)\nand as smart-inject signal (Feature D) for project '{}'.",
+            project
+        ));
+
+        Ok(out)
     }
 }

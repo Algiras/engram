@@ -176,6 +176,7 @@ fn collect_summary_dir(dir: &Path) -> Result<String> {
 
 // ── Forget command ──────────────────────────────────────────────────────
 
+#[allow(clippy::too_many_arguments)]
 pub fn cmd_forget(
     project: &str,
     session_id: Option<String>,
@@ -183,10 +184,12 @@ pub fn cmd_forget(
     all: bool,
     purge: bool,
     expired: bool,
+    stale: Option<String>,
+    auto_approve: bool,
 ) -> Result<()> {
     use extractor::knowledge::{
-        find_sessions_by_topic, parse_session_blocks, partition_by_expiry, reconstruct_blocks,
-        remove_session_blocks,
+        find_sessions_by_topic, parse_session_blocks, parse_ttl, partition_by_expiry,
+        reconstruct_blocks, remove_session_blocks,
     };
     use std::collections::BTreeSet;
 
@@ -214,6 +217,127 @@ pub fn cmd_forget(
         eprintln!(
             "{} No knowledge found for '{}'.",
             "Not found:".yellow(),
+            project
+        );
+        return Ok(());
+    }
+
+    // ── Stale mode ────────────────────────────────────────────────
+    if let Some(ref stale_str) = stale {
+        let duration = parse_ttl(stale_str).ok_or_else(|| {
+            error::MemoryError::Config(format!(
+                "Invalid --stale value '{}'. Use format like 30d, 6w, 2h",
+                stale_str
+            ))
+        })?;
+        let cutoff = chrono::Utc::now() - duration;
+
+        // Collect stale entries from all knowledge files
+        struct StaleEntry {
+            session_id: String,
+            category: String,
+            timestamp: String,
+            preview: String,
+        }
+        let mut stale_entries: Vec<StaleEntry> = Vec::new();
+        let mut seen_ids: BTreeSet<String> = BTreeSet::new();
+
+        for (cat, path) in [
+            ("decisions", knowledge_dir.join("decisions.md")),
+            ("solutions", knowledge_dir.join("solutions.md")),
+            ("patterns", knowledge_dir.join("patterns.md")),
+        ] {
+            if !path.exists() {
+                continue;
+            }
+            let content = std::fs::read_to_string(&path)?;
+            let (_preamble, blocks) = parse_session_blocks(&content);
+            for block in blocks {
+                if seen_ids.contains(&block.session_id) {
+                    continue;
+                }
+                if let Ok(ts) = chrono::DateTime::parse_from_rfc3339(&block.timestamp) {
+                    if ts.with_timezone(&chrono::Utc) < cutoff {
+                        seen_ids.insert(block.session_id.clone());
+                        stale_entries.push(StaleEntry {
+                            session_id: block.session_id,
+                            category: cat.to_string(),
+                            timestamp: block.timestamp,
+                            preview: block.preview,
+                        });
+                    }
+                }
+            }
+        }
+
+        if stale_entries.is_empty() {
+            println!(
+                "{} No stale entries (older than {}) found for '{}'.",
+                "Not found:".yellow(),
+                stale_str,
+                project
+            );
+            return Ok(());
+        }
+
+        println!("Stale entries (older than {}) in '{}':", stale_str, project);
+        for entry in &stale_entries {
+            let date_display = entry
+                .timestamp
+                .get(..10)
+                .unwrap_or(entry.timestamp.as_str());
+            let preview_short: String = entry.preview.chars().take(50).collect();
+            println!(
+                "  [{}]  {}  ({})  \"{}\"",
+                entry.category.cyan(),
+                entry.session_id,
+                date_display,
+                preview_short
+            );
+        }
+
+        let should_remove = if auto_approve {
+            println!(
+                "\n{} entries found. Removing (--auto)...",
+                stale_entries.len()
+            );
+            true
+        } else {
+            print!("\n{} entries found. Remove? [y/N]  ", stale_entries.len());
+            use std::io::Write;
+            std::io::stdout().flush().ok();
+            let mut input = String::new();
+            std::io::stdin().read_line(&mut input).unwrap_or(0);
+            input.trim().eq_ignore_ascii_case("y")
+        };
+
+        if !should_remove {
+            println!("Aborted.");
+            return Ok(());
+        }
+
+        let ids_to_remove: Vec<&str> = stale_entries
+            .iter()
+            .map(|e| e.session_id.as_str())
+            .collect();
+
+        for path in existing_files() {
+            let content = std::fs::read_to_string(&path)?;
+            if let Some(cleaned) = remove_session_blocks(&content, &ids_to_remove) {
+                std::fs::write(&path, cleaned)?;
+            }
+        }
+
+        // Invalidate context.md
+        let context_path = knowledge_dir.join("context.md");
+        if context_path.exists() {
+            std::fs::remove_file(&context_path)?;
+        }
+
+        println!(
+            "{} Removed {} stale entries from {}.",
+            "Done!".green().bold(),
+            stale_entries.len(),
             project
         );
         return Ok(());

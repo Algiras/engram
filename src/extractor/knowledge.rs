@@ -209,6 +209,44 @@ fn extract_session_id_from_header(header: &str) -> Option<String> {
     re.captures(header).map(|c| c[1].to_string())
 }
 
+/// Load files edited in a session from today's and yesterday's observations JSONL.
+/// Returns a deduplicated list of file paths that were touched in the given session.
+fn load_session_observations(
+    memory_dir: &Path,
+    project_name: &str,
+    session_id: &str,
+) -> Vec<String> {
+    let obs_dir = memory_dir.join("observations").join(project_name);
+    let today = chrono::Utc::now().format("%Y-%m-%d").to_string();
+    let yesterday = (chrono::Utc::now() - chrono::Duration::days(1))
+        .format("%Y-%m-%d")
+        .to_string();
+
+    let mut files: Vec<String> = Vec::new();
+    for date in &[today, yesterday] {
+        let path = obs_dir.join(format!("{}.jsonl", date));
+        if let Ok(content) = std::fs::read_to_string(&path) {
+            for line in content.lines() {
+                if let Ok(rec) = serde_json::from_str::<serde_json::Value>(line) {
+                    let matches_session = rec
+                        .get("session")
+                        .and_then(|v| v.as_str())
+                        .map(|s| s == session_id)
+                        .unwrap_or(false);
+                    if matches_session {
+                        if let Some(f) = rec.get("file").and_then(|v| v.as_str()) {
+                            if !f.is_empty() && !files.contains(&f.to_string()) {
+                                files.push(f.to_string());
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    files
+}
+
 /// Extract knowledge from a conversation and merge into project knowledge files
 pub async fn extract_and_merge_knowledge(
     config: &Config,
@@ -219,7 +257,18 @@ pub async fn extract_and_merge_knowledge(
     let client = LlmClient::new(&config.llm);
 
     // Build a text representation of the conversation for LLM input
-    let conv_text = conversation_to_text(conversation);
+    let base_text = conversation_to_text(conversation);
+    let obs_files =
+        load_session_observations(&config.memory_dir, project_name, &conversation.session_id);
+    let conv_text = if !obs_files.is_empty() {
+        format!(
+            "[Files edited in this session: {}]\n\n{}",
+            obs_files.join(", "),
+            base_text
+        )
+    } else {
+        base_text
+    };
 
     if conv_text.trim().is_empty() {
         return Ok(());
@@ -258,6 +307,30 @@ pub async fn extract_and_merge_knowledge(
         .await
         .unwrap_or_else(|e| format!("(extraction failed: {})", e));
 
+    let bugs_raw = client
+        .chat(
+            prompts::SYSTEM_KNOWLEDGE_EXTRACTOR,
+            &prompts::bugs_prompt(&conv_text),
+        )
+        .await
+        .unwrap_or_else(|e| format!("(extraction failed: {})", e));
+
+    let insights_raw = client
+        .chat(
+            prompts::SYSTEM_KNOWLEDGE_EXTRACTOR,
+            &prompts::insights_prompt(&conv_text),
+        )
+        .await
+        .unwrap_or_else(|e| format!("(extraction failed: {})", e));
+
+    let questions_raw = client
+        .chat(
+            prompts::SYSTEM_KNOWLEDGE_EXTRACTOR,
+            &prompts::questions_prompt(&conv_text),
+        )
+        .await
+        .unwrap_or_else(|e| format!("(extraction failed: {})", e));
+
     let summary = client
         .chat(
             prompts::SYSTEM_KNOWLEDGE_EXTRACTOR,
@@ -290,6 +363,9 @@ pub async fn extract_and_merge_knowledge(
     let solutions = clean_extraction(&solutions_raw);
     let patterns = clean_extraction(&patterns_raw);
     let preferences = clean_extraction(&preferences_raw);
+    let bugs = clean_extraction(&bugs_raw);
+    let insights = clean_extraction(&insights_raw);
+    let questions = clean_extraction(&questions_raw);
 
     // Write review inbox candidates (short-term memory)
     let inbox_path = knowledge_dir.join("inbox.md");
@@ -392,6 +468,25 @@ pub async fn extract_and_merge_knowledge(
             &global_dir.join("preferences.md"),
             &session_header,
             preferences,
+        )?;
+    }
+
+    // New: bugs, insights, questions
+    if let Some(ref bugs) = bugs {
+        append_knowledge(&knowledge_dir.join("bugs.md"), &session_header, bugs)?;
+    }
+    if let Some(ref insights) = insights {
+        append_knowledge(
+            &knowledge_dir.join("insights.md"),
+            &session_header,
+            insights,
+        )?;
+    }
+    if let Some(ref questions) = questions {
+        append_knowledge(
+            &knowledge_dir.join("questions.md"),
+            &session_header,
+            questions,
         )?;
     }
 

@@ -54,6 +54,7 @@ use commands::learning::{
     cmd_learn_simulate,
 };
 use commands::manual::{cmd_add, cmd_lookup, cmd_promote, cmd_review};
+use commands::observe::cmd_observe;
 use commands::sync::{
     cmd_sync_clone, cmd_sync_history, cmd_sync_init_repo, cmd_sync_list, cmd_sync_pull,
     cmd_sync_pull_repo, cmd_sync_push, cmd_sync_push_repo,
@@ -152,9 +153,20 @@ fn main() -> Result<()> {
         all,
         purge,
         expired,
+        stale,
+        auto: auto_approve,
     } = cli.command
     {
-        return cmd_forget(&project, session_id, topic, all, purge, expired);
+        return cmd_forget(
+            &project,
+            session_id,
+            topic,
+            all,
+            purge,
+            expired,
+            stale,
+            auto_approve,
+        );
     }
 
     // Hooks operate on settings files — no Config/LLM auth needed
@@ -174,6 +186,11 @@ fn main() -> Result<()> {
     // Daemon - status/stop/logs don't need LLM auth; start/run load Config themselves
     if let Commands::Daemon { command } = cli.command {
         return cmd_daemon(command);
+    }
+
+    // Observe - reads stdin, no Config/LLM needed
+    if let Commands::Observe { project } = cli.command {
+        return cmd_observe(project.as_deref());
     }
 
     // Extract provider override for commands that support it
@@ -284,6 +301,9 @@ fn main() -> Result<()> {
         project,
         top,
         threshold,
+        since,
+        category,
+        file,
     } = &cli.command
     {
         return cmd_search_semantic(
@@ -293,6 +313,9 @@ fn main() -> Result<()> {
             *top,
             *threshold,
             cli.verbose,
+            since.as_deref(),
+            category.as_deref(),
+            file.as_deref(),
         );
     }
 
@@ -446,7 +469,8 @@ fn main() -> Result<()> {
         | Commands::Diff { .. }
         | Commands::Learn { .. }
         | Commands::Hive { .. }
-        | Commands::Daemon { .. } => {
+        | Commands::Daemon { .. }
+        | Commands::Observe { .. } => {
             unreachable!()
         }
     }

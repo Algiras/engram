@@ -477,6 +477,31 @@ pub fn detect_work_context(project: &str) -> String {
         }
     }
 
+    // Augment with observations JSONL (files edited today, even without git)
+    if let Some(home) = dirs::home_dir() {
+        let obs_path = home
+            .join("memory")
+            .join("observations")
+            .join(project)
+            .join(format!("{}.jsonl", chrono::Utc::now().format("%Y-%m-%d")));
+        if let Ok(content) = std::fs::read_to_string(&obs_path) {
+            let mut obs_files: std::collections::HashSet<String> = std::collections::HashSet::new();
+            for line in content.lines() {
+                if let Ok(rec) = serde_json::from_str::<serde_json::Value>(line) {
+                    if let Some(f) = rec.get("file").and_then(|v| v.as_str()) {
+                        if !f.is_empty() {
+                            obs_files.insert(f.to_string());
+                        }
+                    }
+                }
+            }
+            let obs_vec: Vec<_> = obs_files.into_iter().take(8).collect();
+            if !obs_vec.is_empty() {
+                parts.push(format!("recently observed: {}", obs_vec.join(", ")));
+            }
+        }
+    }
+
     parts.join(". ")
 }
 
@@ -642,6 +667,22 @@ pub fn format_smart_memory(
             out.push_str(&trim_to_budget(&prefs, BUDGET_PREFERENCES));
             out.push_str("\n\n---\n\n");
         }
+    }
+
+    // Track inject event
+    {
+        use crate::analytics::{EventTracker, EventType, UsageEvent};
+        let tracker = EventTracker::new(memory_dir);
+        let _ = tracker.track(UsageEvent {
+            timestamp: chrono::Utc::now(),
+            event_type: EventType::Inject,
+            project: project.to_string(),
+            query: Some(signal[..signal.len().min(80)].to_string()),
+            category: None,
+            results_count: Some(selected.len()),
+            session_id: None,
+            tokens_consumed: Some(total_tokens as u64),
+        });
     }
 
     Ok(out)

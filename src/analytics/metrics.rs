@@ -111,6 +111,7 @@ mod tests {
                 category: Some("patterns".to_string()),
                 results_count: None,
                 session_id: None,
+                tokens_consumed: None,
             },
             UsageEvent {
                 timestamp: chrono::Utc::now(),
@@ -120,6 +121,7 @@ mod tests {
                 category: Some("patterns".to_string()),
                 results_count: None,
                 session_id: None,
+                tokens_consumed: None,
             },
         ];
 

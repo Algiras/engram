@@ -1,6 +1,8 @@
 use crate::config::Config;
 use crate::embeddings;
+use crate::embeddings::store::SearchFilter;
 use crate::error::{MemoryError, Result};
+use crate::extractor::knowledge::parse_ttl;
 use colored::Colorize;
 
 pub fn cmd_embed(
@@ -107,6 +109,7 @@ pub fn cmd_embed(
     })
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn cmd_search_semantic(
     config: &Config,
     query: &str,
@@ -114,11 +117,32 @@ pub fn cmd_search_semantic(
     top_k: usize,
     threshold: f32,
     verbose: bool,
+    since: Option<&str>,
+    category: Option<&str>,
+    file: Option<&str>,
 ) -> Result<()> {
     let rt = tokio::runtime::Builder::new_current_thread()
         .enable_all()
         .build()
         .map_err(|e| MemoryError::Config(format!("tokio runtime: {}", e)))?;
+
+    // Build search filter from optional arguments
+    let filter = {
+        let since_dt = since.and_then(|s| parse_ttl(s).map(|dur| chrono::Utc::now() - dur));
+        if since.is_some() && since_dt.is_none() {
+            return Err(MemoryError::Config(format!(
+                "Invalid --since value '{}'. Use format like 7d, 2h, 30m",
+                since.unwrap_or("")
+            )));
+        }
+        SearchFilter {
+            since: since_dt,
+            category: category.map(|s| s.to_string()),
+            file_hint: file.map(|s| s.to_string()),
+        }
+    };
+
+    let has_filter = since.is_some() || category.is_some() || file.is_some();
 
     rt.block_on(async {
         let provider = embeddings::EmbeddingProvider::from_config(config);
@@ -130,18 +154,22 @@ pub fn cmd_search_semantic(
                 embeddings::EmbeddingProvider::OllamaLocal { .. } => "Ollama (nomic-embed-text)",
             };
             println!("{} Provider: {}", "Search:".cyan(), name);
+            if has_filter {
+                println!(
+                    "{} Filters: since={:?}  category={:?}  file={:?}",
+                    "Search:".cyan(),
+                    since,
+                    category,
+                    file
+                );
+            }
         }
 
         if let Some(proj) = project {
-            // Search specific project
-            let results = embeddings::search::SemanticSearch::search(
-                &config.memory_dir,
-                proj,
-                query,
-                &provider,
-                top_k,
-            )
-            .await?;
+            // Search specific project (filtered)
+            let results =
+                search_project_filtered(&config.memory_dir, proj, query, &provider, top_k, &filter)
+                    .await?;
 
             println!(
                 "{} Semantic search results for '{}':\n",
@@ -149,14 +177,9 @@ pub fn cmd_search_semantic(
                 query
             );
 
-            for (score, text, category) in results {
+            for (score, text, cat) in results {
                 if score >= threshold {
-                    println!(
-                        "  {} [{}] ({:.1}%)",
-                        ">".green(),
-                        category.cyan(),
-                        score * 100.0
-                    );
+                    println!("  {} [{}] ({:.1}%)", ">".green(), cat.cyan(), score * 100.0);
                     if verbose {
                         println!("    similarity: {:.4}", score);
                     }
@@ -184,18 +207,19 @@ pub fn cmd_search_semantic(
                     continue;
                 }
 
-                if let Ok(results) = embeddings::search::SemanticSearch::search(
+                if let Ok(results) = search_project_filtered(
                     &config.memory_dir,
                     &project_name,
                     query,
                     &provider,
                     top_k,
+                    &filter,
                 )
                 .await
                 {
-                    for (score, text, category) in results {
+                    for (score, text, cat) in results {
                         if score >= threshold {
-                            all_results.push((score, text, category, project_name.clone()));
+                            all_results.push((score, text, cat, project_name.clone()));
                         }
                     }
                 }
@@ -211,12 +235,12 @@ pub fn cmd_search_semantic(
                 query
             );
 
-            for (score, text, category, proj) in all_results {
+            for (score, text, cat, proj) in all_results {
                 println!(
                     "  {} [{}:{}] ({:.1}%)",
                     ">".green(),
                     proj.dimmed(),
-                    category.cyan(),
+                    cat.cyan(),
                     score * 100.0
                 );
                 if verbose {
@@ -226,8 +250,55 @@ pub fn cmd_search_semantic(
             }
         }
 
+        // Track usage
+        let tracker = crate::analytics::EventTracker::new(&config.memory_dir);
+        let _ = tracker.track(crate::analytics::UsageEvent {
+            timestamp: chrono::Utc::now(),
+            event_type: crate::analytics::EventType::SemanticSearch,
+            project: project
+                .map(|s| s.to_string())
+                .unwrap_or_else(|| "all".to_string()),
+            query: Some(query.to_string()),
+            category: category.map(|s| s.to_string()),
+            results_count: None,
+            session_id: None,
+            tokens_consumed: None,
+        });
+
         Ok(())
     })
+}
+
+/// Search a project's embedding index with an optional filter.
+async fn search_project_filtered(
+    memory_dir: &std::path::Path,
+    project: &str,
+    query: &str,
+    provider: &embeddings::EmbeddingProvider,
+    top_k: usize,
+    filter: &SearchFilter,
+) -> Result<Vec<(f32, String, String)>> {
+    use embeddings::store::EmbeddingStore;
+
+    let index_path = memory_dir
+        .join("knowledge")
+        .join(project)
+        .join("embeddings.json");
+
+    if !index_path.exists() {
+        return Err(MemoryError::Config(
+            "No embedding index found. Run 'engram embed' first.".into(),
+        ));
+    }
+
+    let store = EmbeddingStore::load(&index_path)?;
+    let query_embedding = provider.embed(query).await?;
+    let results = store.search_filtered(&query_embedding, top_k, filter);
+
+    Ok(results
+        .into_iter()
+        .map(|(score, chunk)| (score, chunk.text.clone(), chunk.metadata.category.clone()))
+        .collect())
 }
 
 fn truncate_text(text: &str, max_len: usize) -> String {

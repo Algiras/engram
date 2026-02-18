@@ -172,6 +172,9 @@ pub fn cmd_analytics(
                 analytics::EventType::Export => "📤",
                 analytics::EventType::GraphQuery => "🕸️",
                 analytics::EventType::SemanticSearch => "🧠",
+                analytics::EventType::Context => "📄",
+                analytics::EventType::Inject => "💉",
+                analytics::EventType::Ingest => "📥",
             };
 
             println!(

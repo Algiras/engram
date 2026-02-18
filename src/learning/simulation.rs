@@ -16,6 +16,7 @@ pub fn simulate_recall_session(config: &Config, project: &str, recall_count: usi
             category: Some("patterns".to_string()),
             results_count: Some(3),
             session_id: Some(format!("sim-{}", i)),
+            tokens_consumed: None,
         })?;
     }
 
@@ -41,6 +42,7 @@ pub fn simulate_mixed_usage(config: &Config, project: &str, iterations: usize) -
             category: Some(if i % 2 == 0 { "patterns" } else { "decisions" }.to_string()),
             results_count: Some((i % 5) + 1),
             session_id: Some(format!("sim-{}", i)),
+            tokens_consumed: None,
         })?;
     }
 
@@ -65,6 +67,7 @@ pub fn simulate_high_frequency_knowledge(
             category: Some("patterns".to_string()),
             results_count: Some(1),
             session_id: Some(format!("high-freq-{}", i)),
+            tokens_consumed: None,
         })?;
     }
 

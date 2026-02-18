@@ -280,6 +280,27 @@ fn process_session(
         });
     }
 
+    // Track ingest event with token counts
+    {
+        use crate::analytics::{EventTracker, EventType, UsageEvent};
+        let tracker = EventTracker::new(&config.memory_dir);
+        let total_tokens = conversation.total_input_tokens + conversation.total_output_tokens;
+        let _ = tracker.track(UsageEvent {
+            timestamp: chrono::Utc::now(),
+            event_type: EventType::Ingest,
+            project: project_name.to_string(),
+            query: None,
+            category: None,
+            results_count: None,
+            session_id: Some(session.session_id.clone()),
+            tokens_consumed: if total_tokens > 0 {
+                Some(total_tokens)
+            } else {
+                None
+            },
+        });
+    }
+
     Ok(Some(analytics))
 }
 
@@ -375,6 +396,7 @@ pub fn cmd_search(
         category: None,
         results_count: if found { Some(1) } else { Some(0) },
         session_id: None,
+        tokens_consumed: None,
     });
 
     Ok(())
@@ -436,6 +458,7 @@ pub fn cmd_recall(config: &Config, project: &str, verbose: bool) -> Result<()> {
         category: None,
         results_count: None,
         session_id: None,
+        tokens_consumed: None,
     });
 
     // Track learning signals from recall
@@ -473,6 +496,20 @@ pub fn cmd_context(config: &Config, project: &str, verbose: bool) -> Result<()> 
     };
 
     print!("{}", content);
+
+    // Track usage
+    let tracker = analytics::EventTracker::new(&config.memory_dir);
+    let _ = tracker.track(analytics::UsageEvent {
+        timestamp: chrono::Utc::now(),
+        event_type: analytics::EventType::Context,
+        project: project.to_string(),
+        query: None,
+        category: None,
+        results_count: None,
+        session_id: None,
+        tokens_consumed: None,
+    });
+
     Ok(())
 }
 

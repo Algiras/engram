@@ -11,6 +11,8 @@ pub struct Insights {
     pub top_knowledge: Vec<String>,
     pub stale_knowledge: Vec<String>,
     pub usage_trend: String,
+    pub tokens_ingested: u64,
+    pub command_breakdown: Vec<(String, usize)>,
 }
 
 pub fn generate_insights(events: &[UsageEvent]) -> Insights {
@@ -23,6 +25,8 @@ pub fn generate_insights(events: &[UsageEvent]) -> Insights {
             top_knowledge: Vec::new(),
             stale_knowledge: Vec::new(),
             usage_trend: "no data".to_string(),
+            tokens_ingested: 0,
+            command_breakdown: Vec::new(),
         };
     }
 
@@ -92,6 +96,17 @@ pub fn generate_insights(events: &[UsageEvent]) -> Insights {
         "stable".to_string()
     };
 
+    // Tokens ingested from Ingest events
+    let tokens_ingested: u64 = events
+        .iter()
+        .filter(|e| matches!(e.event_type, crate::analytics::tracker::EventType::Ingest))
+        .filter_map(|e| e.tokens_consumed)
+        .sum();
+
+    // Command breakdown sorted by count descending
+    let mut command_breakdown: Vec<(String, usize)> = event_counts.into_iter().collect();
+    command_breakdown.sort_by(|a, b| b.1.cmp(&a.1));
+
     Insights {
         total_events: events.len(),
         unique_projects,
@@ -100,6 +115,8 @@ pub fn generate_insights(events: &[UsageEvent]) -> Insights {
         top_knowledge,
         stale_knowledge,
         usage_trend: trend,
+        tokens_ingested,
+        command_breakdown,
     }
 }
 
@@ -121,6 +138,17 @@ pub fn format_insights(insights: &Insights) -> String {
         insights.most_common_event
     ));
     output.push_str(&format!("Usage trend: {}\n", insights.usage_trend));
+
+    if insights.tokens_ingested > 0 {
+        output.push_str(&format!("Tokens ingested: {}\n", insights.tokens_ingested));
+    }
+
+    if !insights.command_breakdown.is_empty() {
+        output.push_str("\n📋 Command Usage Breakdown:\n");
+        for (cmd, count) in &insights.command_breakdown {
+            output.push_str(&format!("  {}: {}\n", cmd, count));
+        }
+    }
 
     if !insights.top_knowledge.is_empty() {
         output.push_str("\n🔥 Top Knowledge (by usage):\n");
@@ -162,6 +190,7 @@ mod tests {
                 category: None,
                 results_count: None,
                 session_id: None,
+                tokens_consumed: None,
             },
             UsageEvent {
                 timestamp: chrono::Utc::now(),
@@ -171,6 +200,7 @@ mod tests {
                 category: Some("patterns".to_string()),
                 results_count: None,
                 session_id: None,
+                tokens_consumed: None,
             },
         ];
 

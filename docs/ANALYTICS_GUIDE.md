@@ -14,6 +14,23 @@ The analytics system automatically tracks every interaction with the knowledge b
 - **Export**: When you export knowledge
 - **GraphQuery**: When you query the knowledge graph
 - **SemanticSearch**: When you perform semantic searches
+- **Context**: When you pipe context via `engram context <project>` (v0.3.1+)
+- **Inject**: When smart inject writes MEMORY.md (v0.3.1+)
+- **Ingest**: Each processed session, including `tokens_consumed` (v0.3.1+)
+
+### Token Tracking (v0.3.1+)
+
+Ingest events now store the total token count (`input + output`) from each processed conversation.
+The analytics output shows a **Tokens ingested** line and a **Command Usage Breakdown** table:
+
+```
+Tokens ingested: 184230
+
+📋 Command Usage Breakdown:
+  Recall: 18
+  Ingest: 12
+  Search: 7
+```
 
 ## Usage Analytics Command
 

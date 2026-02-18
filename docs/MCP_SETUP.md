@@ -65,6 +65,33 @@ After updating the configuration, restart Claude Desktop for the changes to take
 
 Once configured, Claude Desktop will have access to these tools:
 
+### Read tools
+
+| Tool | Description |
+|------|-------------|
+| `recall` | Full project context + knowledge summary |
+| `search` | Regex search across all memory files |
+| `lookup` | Topic lookup within a project's knowledge files |
+| `projects` | List all discovered projects |
+| `analytics` | Usage stats, token counts, command breakdown |
+| `search_semantic` | Vector similarity search (requires `engram embed` first) |
+| `graph_query` | Traverse knowledge graph by concept |
+| `observations` | List files edited today (or a given date) for a project |
+| `status` | Session stats (adds/updates/forgets this session) |
+
+### Write tools
+
+| Tool | Description |
+|------|-------------|
+| `reflect` | LLM-extract knowledge from text and store it immediately |
+| `add` | Manually add a knowledge entry |
+| `update` | Replace an existing entry by label |
+| `forget` | Remove an entry by label |
+| `forget_stale` | Prune all entries older than a duration (e.g. `30d`) |
+| `synthesize` | Rebuild `context.md` via LLM after edits |
+
+---
+
 ### `recall`
 Retrieve project context and knowledge summary.
 
@@ -100,6 +127,43 @@ List all discovered projects with activity.
 
 **Example usage:**
 > Claude, show me all my projects
+
+### `analytics`
+Show usage analytics, token counts ingested, and command breakdown.
+
+**Parameters:**
+- `project` (string, optional): Project name (all projects if omitted)
+- `days` (number, optional): Days to look back (default: 30)
+
+**Example output:**
+```
+Tokens ingested: 184230
+
+📋 Command Usage Breakdown:
+  Recall: 18
+  Ingest: 12
+  SemanticSearch: 3
+```
+
+### `forget_stale` _(new in v0.3.1)_
+Remove knowledge entries older than a duration that have no TTL. Runs non-interactively (always `--auto`).
+
+**Parameters:**
+- `project` (string, required): Project name
+- `older_than` (string, required): Duration — `Nd` (days), `Nw` (weeks), `Nh` (hours). E.g. `30d`, `6w`
+
+**Example usage:**
+> Claude, clean up anything older than 60 days in the Personal project
+
+### `observations` _(new in v0.3.1)_
+Show files observed (edited/written) today or on a given date. These are the same files used to enrich ingest prompts (Feature A) and smart-inject signals (Feature D).
+
+**Parameters:**
+- `project` (string, required): Project name
+- `date` (string, optional): Date in `YYYY-MM-DD` format (default: today)
+
+**Example usage:**
+> Claude, what files did I touch today in the Personal project?
 
 ## Available Resources
 

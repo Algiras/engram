@@ -49,6 +49,7 @@ fn red_pill_memory_poisoning_cascade() {
                     category: Some("patterns".to_string()),
                     results_count: Some(1),
                     session_id: Some(format!("legit-{}", i)),
+                    tokens_consumed: None,
                 })
                 .unwrap();
         }
@@ -69,6 +70,7 @@ fn red_pill_memory_poisoning_cascade() {
                 category: Some("patterns".to_string()),
                 results_count: Some(1),
                 session_id: Some("poison".to_string()),
+                tokens_consumed: None,
             })
             .unwrap();
     }
@@ -135,6 +137,7 @@ fn red_pill_false_memory_reinforcement() {
                     category: Some("patterns".to_string()),
                     results_count: Some(1),
                     session_id: Some(format!("cycle-{}-{}", cycle, i)),
+                    tokens_consumed: None,
                 })
                 .unwrap();
         }
@@ -256,6 +259,7 @@ fn red_pill_conflicting_signals() {
                 category: Some("patterns".to_string()),
                 results_count: Some(1),
                 session_id: Some("high-freq".to_string()),
+                tokens_consumed: None,
             })
             .unwrap();
     }
@@ -280,6 +284,7 @@ fn red_pill_conflicting_signals() {
                 category: Some("patterns".to_string()),
                 results_count: Some(1),
                 session_id: Some(format!("other-{}", i)),
+                tokens_consumed: None,
             })
             .unwrap();
     }
@@ -450,6 +455,7 @@ fn red_pill_zero_divided_by_zero() {
                 category: Some("patterns".to_string()),
                 results_count: Some(0), // Zero results!
                 session_id: Some(format!("zero-{}", i)),
+                tokens_consumed: None,
             })
             .unwrap();
     }

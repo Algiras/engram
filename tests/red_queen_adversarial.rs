@@ -75,6 +75,7 @@ fn red_queen_malformed_knowledge_ids() {
                 category,
                 results_count: Some(1),
                 session_id: Some(format!("evil-{}", i)),
+                tokens_consumed: None,
             })
             .unwrap();
     }
@@ -105,6 +106,7 @@ fn red_queen_events_without_categories() {
                 category: None, // No category!
                 results_count: Some(1),
                 session_id: Some(format!("no-cat-{}", i)),
+                tokens_consumed: None,
             })
             .unwrap();
     }
@@ -137,6 +139,7 @@ fn red_queen_extremely_high_frequency() {
                 category: Some("patterns".to_string()),
                 results_count: Some(1),
                 session_id: Some(format!("spam-{}", i)),
+                tokens_consumed: None,
             })
             .unwrap();
     }
