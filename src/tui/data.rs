@@ -2,8 +2,6 @@ use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
 
-extern crate libc;
-
 use chrono::{DateTime, Utc};
 use serde::Deserialize;
 
@@ -369,7 +367,9 @@ pub fn render_pack_detail(pack: &PackEntry, memory_dir: &Path) -> String {
                 let preview = if content.len() > 500 {
                     let end = {
                         let mut e = 500;
-                        while !content.is_char_boundary(e) { e -= 1; }
+                        while !content.is_char_boundary(e) {
+                            e -= 1;
+                        }
                         e
                     };
                     format!("{}...\n\n(Use 'v' to view full content)", &content[..end])
@@ -622,11 +622,8 @@ pub fn load_daemon_status(memory_dir: &Path) -> String {
         false
     };
 
-    output.push_str(&format!(
-        "Log:     {}\n",
-        log_file.display()
-    ));
-    output.push_str("\n");
+    output.push_str(&format!("Log:     {}\n", log_file.display()));
+    output.push('\n');
 
     // Show last 20 lines of log
     if log_file.exists() {

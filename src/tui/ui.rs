@@ -837,9 +837,15 @@ pub fn render_daemon(f: &mut Frame, app: &App) {
         .take(main_area.height.saturating_sub(2) as usize)
         .map(|line| {
             if line.contains("RUNNING") {
-                Line::from(Span::styled(line.to_string(), Style::default().fg(Color::Green)))
+                Line::from(Span::styled(
+                    line.to_string(),
+                    Style::default().fg(Color::Green),
+                ))
             } else if line.contains("STOPPED") {
-                Line::from(Span::styled(line.to_string(), Style::default().fg(Color::Yellow)))
+                Line::from(Span::styled(
+                    line.to_string(),
+                    Style::default().fg(Color::Yellow),
+                ))
             } else {
                 Line::from(line.to_string())
             }
@@ -1061,7 +1067,10 @@ fn render_action_confirm_dialog(f: &mut Frame, app: &App, action: &TuiAction) {
         ),
         TuiAction::DaemonStart => (
             "Start Daemon",
-            format!("Start background ingest daemon (interval: {}min)?", app.daemon_interval),
+            format!(
+                "Start background ingest daemon (interval: {}min)?",
+                app.daemon_interval
+            ),
             "Daemon will auto-ingest new sessions in the background.",
         ),
         TuiAction::DaemonStop => (

@@ -6,6 +6,7 @@ use std::thread;
 use std::time::Duration;
 
 use colored::Colorize;
+use serde::{Deserialize, Serialize};
 
 use crate::config::Config;
 use crate::error::{MemoryError, Result};
@@ -18,6 +19,10 @@ fn log_file(config: &Config) -> PathBuf {
     config.memory_dir.join("daemon.log")
 }
 
+fn cfg_file(config: &Config) -> PathBuf {
+    config.memory_dir.join("daemon.cfg")
+}
+
 fn read_pid(config: &Config) -> Option<u32> {
     let path = pid_file(config);
     let contents = fs::read_to_string(&path).ok()?;
@@ -27,6 +32,41 @@ fn read_pid(config: &Config) -> Option<u32> {
 fn is_running(pid: u32) -> bool {
     // Send signal 0 — checks existence without killing
     unsafe { libc::kill(pid as i32, 0) == 0 }
+}
+
+#[derive(Serialize, Deserialize)]
+struct DaemonCfg {
+    interval: u64,
+    provider: Option<String>,
+}
+
+fn write_daemon_cfg(config: &Config, interval: u64, provider: Option<&str>) -> Result<()> {
+    let cfg = DaemonCfg {
+        interval,
+        provider: provider.map(|s| s.to_string()),
+    };
+    let json = serde_json::to_string(&cfg)
+        .map_err(|e| MemoryError::Io(std::io::Error::other(e.to_string())))?;
+    fs::write(cfg_file(config), json).map_err(MemoryError::Io)
+}
+
+fn read_daemon_cfg(config: &Config) -> Option<DaemonCfg> {
+    let contents = fs::read_to_string(cfg_file(config)).ok()?;
+    serde_json::from_str(&contents).ok()
+}
+
+/// Rotate log file: if > max_lines, keep only the last keep_lines lines.
+fn rotate_log_if_needed(log_path: &PathBuf, max_lines: usize, keep_lines: usize) {
+    let contents = match fs::read_to_string(log_path) {
+        Ok(c) => c,
+        Err(_) => return,
+    };
+    let lines: Vec<&str> = contents.lines().collect();
+    if lines.len() > max_lines {
+        let start = lines.len().saturating_sub(keep_lines);
+        let truncated = lines[start..].join("\n") + "\n";
+        let _ = fs::write(log_path, truncated);
+    }
 }
 
 pub fn cmd_daemon_start(config: &Config, interval: u64, provider: Option<&str>) -> Result<()> {
@@ -43,9 +83,8 @@ pub fn cmd_daemon_start(config: &Config, interval: u64, provider: Option<&str>) 
     }
 
     let log_path = log_file(config);
-    let engram_bin = std::env::current_exe().unwrap_or_else(|_| PathBuf::from("engram"));
 
-    let mut cmd = Command::new(&engram_bin);
+    let mut cmd = Command::new("engram");
     cmd.arg("daemon").arg("run");
     cmd.arg("--interval").arg(interval.to_string());
     if let Some(p) = provider {
@@ -57,34 +96,41 @@ pub fn cmd_daemon_start(config: &Config, interval: u64, provider: Option<&str>) 
         .create(true)
         .append(true)
         .open(&log_path)
-        .map_err(|e| MemoryError::Io(e))?;
+        .map_err(MemoryError::Io)?;
 
     let child = cmd
         .stdin(Stdio::null())
-        .stdout(log_file_handle.try_clone().map_err(|e| MemoryError::Io(e))?)
+        .stdout(log_file_handle.try_clone().map_err(MemoryError::Io)?)
         .stderr(log_file_handle)
         .spawn()
-        .map_err(|e| MemoryError::Io(e))?;
+        .map_err(MemoryError::Io)?;
 
     let pid = child.id();
 
     // Write PID file
-    fs::write(pid_file(config), pid.to_string()).map_err(|e| MemoryError::Io(e))?;
+    fs::write(pid_file(config), pid.to_string()).map_err(MemoryError::Io)?;
+
+    // Persist config so status/TUI can read it back
+    write_daemon_cfg(config, interval, provider)?;
 
     // Detach from child (don't wait)
     drop(child);
 
-    println!(
-        "{} Daemon started (PID {})",
-        "engram:".cyan().bold(),
-        pid
-    );
+    // Verify the daemon actually started
+    thread::sleep(Duration::from_millis(500));
+    if !is_running(pid) {
+        let _ = fs::remove_file(pid_file(config));
+        return Err(MemoryError::Io(std::io::Error::other(format!(
+            "Daemon failed to start (PID {} no longer running). Check logs: {}",
+            pid,
+            log_path.display()
+        ))));
+    }
+
+    println!("{} Daemon started (PID {})", "engram:".cyan().bold(), pid);
     println!("  Interval: every {} minutes", interval);
     println!("  Logs:     {}", log_path.display());
-    println!(
-        "  Stop:     {}",
-        "engram daemon stop".yellow()
-    );
+    println!("  Stop:     {}", "engram daemon stop".yellow());
 
     Ok(())
 }
@@ -99,7 +145,11 @@ pub fn cmd_daemon_stop(config: &Config) -> Result<()> {
     };
 
     if !is_running(pid) {
-        println!("{} Daemon was not running (stale PID {})", "engram:".cyan().bold(), pid);
+        println!(
+            "{} Daemon was not running (stale PID {})",
+            "engram:".cyan().bold(),
+            pid
+        );
         let _ = fs::remove_file(pid_file(config));
         return Ok(());
     }
@@ -127,6 +177,8 @@ pub fn cmd_daemon_stop(config: &Config) -> Result<()> {
 }
 
 pub fn cmd_daemon_status(config: &Config) -> Result<()> {
+    let cfg = read_daemon_cfg(config);
+
     match read_pid(config) {
         Some(pid) if is_running(pid) => {
             println!(
@@ -135,6 +187,12 @@ pub fn cmd_daemon_status(config: &Config) -> Result<()> {
                 "running".green().bold(),
                 pid
             );
+            if let Some(c) = &cfg {
+                println!("  Interval: every {} minutes", c.interval);
+                if let Some(p) = &c.provider {
+                    println!("  Provider: {}", p);
+                }
+            }
             println!("  Logs: {}", log_file(config).display());
         }
         Some(pid) => {
@@ -162,23 +220,25 @@ pub fn cmd_daemon_logs(config: &Config, lines: usize, follow: bool) -> Result<()
     let log_path = log_file(config);
 
     if !log_path.exists() {
-        println!("{} No log file found. Has the daemon been started?", "engram:".yellow());
+        println!(
+            "{} No log file found. Has the daemon been started?",
+            "engram:".yellow()
+        );
         return Ok(());
     }
 
     if follow {
         // Tail -f style
-        let file = fs::File::open(&log_path).map_err(|e| MemoryError::Io(e))?;
+        let file = fs::File::open(&log_path).map_err(MemoryError::Io)?;
         let mut reader = BufReader::new(file);
         let mut line = String::new();
 
         // Seek to end - last N lines
-        let all_lines: Vec<String> = BufReader::new(
-            fs::File::open(&log_path).map_err(|e| MemoryError::Io(e))?
-        )
-        .lines()
-        .filter_map(|l| l.ok())
-        .collect();
+        let all_lines: Vec<String> =
+            BufReader::new(fs::File::open(&log_path).map_err(MemoryError::Io)?)
+                .lines()
+                .map_while(|l| l.ok())
+                .collect();
 
         let start = all_lines.len().saturating_sub(lines);
         for l in &all_lines[start..] {
@@ -195,12 +255,11 @@ pub fn cmd_daemon_logs(config: &Config, lines: usize, follow: bool) -> Result<()
             }
         }
     } else {
-        let all_lines: Vec<String> = BufReader::new(
-            fs::File::open(&log_path).map_err(|e| MemoryError::Io(e))?
-        )
-        .lines()
-        .filter_map(|l| l.ok())
-        .collect();
+        let all_lines: Vec<String> =
+            BufReader::new(fs::File::open(&log_path).map_err(MemoryError::Io)?)
+                .lines()
+                .map_while(|l| l.ok())
+                .collect();
 
         let start = all_lines.len().saturating_sub(lines);
         for l in &all_lines[start..] {
@@ -227,35 +286,48 @@ pub fn cmd_daemon_run(config: &Config, interval_mins: u64, provider: Option<&str
     log(&format!("  Memory dir: {}", config.memory_dir.display()));
 
     let interval = Duration::from_secs(interval_mins * 60);
+    let timeout = Duration::from_secs(7200); // 2 hours
 
     // Write our own PID (in case start didn't, e.g. direct invocation)
     let pid = std::process::id();
     let _ = fs::write(pid_file(config), pid.to_string());
 
+    let log_path = log_file(config);
+
     loop {
         log("Running ingest...");
 
-        let engram_bin = std::env::current_exe().unwrap_or_else(|_| PathBuf::from("engram"));
-        let mut cmd = Command::new(&engram_bin);
+        let mut cmd = Command::new("engram");
         cmd.arg("ingest");
         if let Some(p) = provider {
             cmd.arg("--provider").arg(p);
         }
 
-        match cmd.output() {
-            Ok(output) => {
-                let stdout = String::from_utf8_lossy(&output.stdout);
-                let stderr = String::from_utf8_lossy(&output.stderr);
-                for line in stdout.lines() {
-                    log(&format!("  {}", line));
-                }
-                for line in stderr.lines() {
-                    log(&format!("  [err] {}", line));
-                }
-                if output.status.success() {
-                    log("Ingest complete");
-                } else {
-                    log("Ingest exited with error");
+        match cmd.spawn() {
+            Ok(mut child) => {
+                let start = std::time::Instant::now();
+                let exit_status = loop {
+                    match child.try_wait() {
+                        Ok(Some(status)) => break Some(status),
+                        Ok(None) => {
+                            if start.elapsed() >= timeout {
+                                log("Ingest timed out after 2 hours — killing child process");
+                                let _ = child.kill();
+                                break None;
+                            }
+                            thread::sleep(Duration::from_secs(1));
+                        }
+                        Err(e) => {
+                            log(&format!("Error waiting for ingest: {}", e));
+                            break None;
+                        }
+                    }
+                };
+
+                match exit_status {
+                    Some(s) if s.success() => log("Ingest complete"),
+                    Some(_) => log("Ingest exited with error"),
+                    None => log("Ingest killed (timeout or wait error)"),
                 }
             }
             Err(e) => {
@@ -263,7 +335,141 @@ pub fn cmd_daemon_run(config: &Config, interval_mins: u64, provider: Option<&str
             }
         }
 
+        // Rotate log if needed (> 5000 lines -> keep last 2500)
+        rotate_log_if_needed(&log_path, 5000, 2500);
+
         log(&format!("Sleeping {} minutes...", interval_mins));
         thread::sleep(interval);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::io::Write;
+    use tempfile::TempDir;
+
+    fn make_test_config(dir: &TempDir) -> Config {
+        Config {
+            memory_dir: dir.path().to_path_buf(),
+            claude_projects_dir: dir.path().to_path_buf(),
+            llm: crate::auth::providers::ResolvedProvider {
+                provider: crate::auth::providers::Provider::Anthropic,
+                endpoint: "https://api.anthropic.com".to_string(),
+                model: "claude-haiku-4-5-20251001".to_string(),
+                api_key: None,
+            },
+        }
+    }
+
+    #[test]
+    fn test_read_pid_missing_file() {
+        let dir = TempDir::new().unwrap();
+        let config = make_test_config(&dir);
+        assert_eq!(read_pid(&config), None);
+    }
+
+    #[test]
+    fn test_read_pid_invalid_content() {
+        let dir = TempDir::new().unwrap();
+        let config = make_test_config(&dir);
+        fs::write(pid_file(&config), "not-a-number").unwrap();
+        assert_eq!(read_pid(&config), None);
+    }
+
+    #[test]
+    fn test_is_running_current_process() {
+        // Our own PID is definitely running
+        let our_pid = std::process::id();
+        assert!(is_running(our_pid));
+    }
+
+    #[test]
+    fn test_is_running_exited_process() {
+        // Spawn a short-lived process, wait for it, then verify it's gone
+        let mut child = Command::new("true").spawn().unwrap();
+        let pid = child.id();
+        child.wait().unwrap();
+        // After wait(), the process has exited and been reaped — is_running should be false
+        assert!(!is_running(pid));
+    }
+
+    #[test]
+    fn test_log_rotation_truncates_large_log() {
+        let dir = TempDir::new().unwrap();
+        let log_path = dir.path().join("daemon.log");
+
+        // Write 6000 lines
+        let mut f = fs::File::create(&log_path).unwrap();
+        for i in 0..6000usize {
+            writeln!(f, "line {}", i).unwrap();
+        }
+        drop(f);
+
+        rotate_log_if_needed(&log_path, 5000, 2500);
+
+        let contents = fs::read_to_string(&log_path).unwrap();
+        let line_count = contents.lines().count();
+        assert!(
+            line_count <= 2500,
+            "expected <= 2500 lines after rotation, got {}",
+            line_count
+        );
+        // Verify the last lines are preserved (not the first)
+        assert!(
+            contents.contains("line 5999"),
+            "last line should be preserved"
+        );
+    }
+
+    #[test]
+    fn test_log_rotation_skips_small_log() {
+        let dir = TempDir::new().unwrap();
+        let log_path = dir.path().join("daemon.log");
+
+        // Write only 100 lines — below threshold
+        let mut f = fs::File::create(&log_path).unwrap();
+        for i in 0..100usize {
+            writeln!(f, "line {}", i).unwrap();
+        }
+        drop(f);
+
+        rotate_log_if_needed(&log_path, 5000, 2500);
+
+        let contents = fs::read_to_string(&log_path).unwrap();
+        assert_eq!(
+            contents.lines().count(),
+            100,
+            "small log should not be truncated"
+        );
+    }
+
+    #[test]
+    fn test_daemon_cfg_roundtrip() {
+        let dir = TempDir::new().unwrap();
+        let config = make_test_config(&dir);
+
+        write_daemon_cfg(&config, 30, Some("anthropic")).unwrap();
+        let cfg = read_daemon_cfg(&config).unwrap();
+        assert_eq!(cfg.interval, 30);
+        assert_eq!(cfg.provider.as_deref(), Some("anthropic"));
+    }
+
+    #[test]
+    fn test_daemon_cfg_no_provider() {
+        let dir = TempDir::new().unwrap();
+        let config = make_test_config(&dir);
+
+        write_daemon_cfg(&config, 15, None).unwrap();
+        let cfg = read_daemon_cfg(&config).unwrap();
+        assert_eq!(cfg.interval, 15);
+        assert!(cfg.provider.is_none());
+    }
+
+    #[test]
+    fn test_read_daemon_cfg_missing_returns_none() {
+        let dir = TempDir::new().unwrap();
+        let config = make_test_config(&dir);
+        assert!(read_daemon_cfg(&config).is_none());
     }
 }

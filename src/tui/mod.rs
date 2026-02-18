@@ -11,6 +11,7 @@ use fuzzy_matcher::skim::SkimMatcherV2;
 use fuzzy_matcher::FuzzyMatcher;
 use ratatui::backend::CrosstermBackend;
 use ratatui::Terminal;
+use std::time::Duration;
 
 use data::{MemoryItem, MemoryTree};
 
@@ -287,6 +288,15 @@ impl App {
                 Screen::Daemon => ui::render_daemon(f, self),
                 Screen::Help => ui::render_help(f, self),
             })?;
+
+            // Poll with a 3-second timeout so Daemon screen auto-refreshes
+            if !event::poll(Duration::from_secs(3))? {
+                // Timeout — no key pressed
+                if matches!(self.screen, Screen::Daemon) {
+                    self.load_daemon_data();
+                }
+                continue;
+            }
 
             if let Event::Key(key) = event::read()? {
                 // Global: dismiss action message with any key
@@ -904,6 +914,15 @@ impl App {
     }
 
     fn load_daemon_data(&mut self) {
+        // Read persisted interval from daemon.cfg if available
+        let cfg_path = self.memory_dir.join("daemon.cfg");
+        if let Ok(contents) = std::fs::read_to_string(&cfg_path) {
+            if let Ok(cfg) = serde_json::from_str::<serde_json::Value>(&contents) {
+                if let Some(interval) = cfg.get("interval").and_then(|v| v.as_u64()) {
+                    self.daemon_interval = interval;
+                }
+            }
+        }
         self.daemon_content = data::load_daemon_status(&self.memory_dir);
     }
 

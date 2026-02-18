@@ -787,8 +787,8 @@ pub enum RegistryCommand {
 pub enum DaemonCommand {
     /// Start the background ingest daemon
     Start {
-        /// How often to run ingest, in minutes (default: 15)
-        #[arg(long, default_value = "15")]
+        /// How often to run ingest, in minutes (1-1440, default: 15)
+        #[arg(long, default_value = "15", value_parser = clap::value_parser!(u64).range(1..=1440))]
         interval: u64,
 
         /// LLM provider override (anthropic, openai, ollama)
