@@ -5,6 +5,16 @@ use std::path::{Path, PathBuf};
 use chrono::{DateTime, Utc};
 use serde::Deserialize;
 
+#[cfg(unix)]
+fn pid_is_alive(pid: u32) -> bool {
+    unsafe { libc::kill(pid as i32, 0) == 0 }
+}
+
+#[cfg(not(unix))]
+fn pid_is_alive(_pid: u32) -> bool {
+    false
+}
+
 /// A browsable item in the right panel.
 #[derive(Clone)]
 pub enum MemoryItem {
@@ -605,7 +615,7 @@ pub fn load_daemon_status(memory_dir: &Path) -> String {
     let running = if let Ok(contents) = std::fs::read_to_string(&pid_file) {
         let pid: Option<u32> = contents.trim().parse().ok();
         if let Some(pid) = pid {
-            let alive = unsafe { libc::kill(pid as i32, 0) == 0 };
+            let alive = pid_is_alive(pid);
             if alive {
                 output.push_str(&format!("Status:  RUNNING (PID {})\n", pid));
                 true

@@ -29,9 +29,15 @@ fn read_pid(config: &Config) -> Option<u32> {
     contents.trim().parse().ok()
 }
 
+#[cfg(unix)]
 fn is_running(pid: u32) -> bool {
     // Send signal 0 — checks existence without killing
     unsafe { libc::kill(pid as i32, 0) == 0 }
+}
+
+#[cfg(not(unix))]
+fn is_running(_pid: u32) -> bool {
+    false
 }
 
 #[derive(Serialize, Deserialize)]
@@ -155,9 +161,17 @@ pub fn cmd_daemon_stop(config: &Config) -> Result<()> {
     }
 
     // Kill the entire process group (daemon + any running ingest child)
+    #[cfg(unix)]
     unsafe {
         libc::kill(-(pid as i32), libc::SIGTERM);
     };
+    #[cfg(not(unix))]
+    {
+        // On non-Unix, kill by PID directly (no process group support)
+        let _ = Command::new("taskkill")
+            .args(["/PID", &pid.to_string(), "/F"])
+            .output();
+    }
 
     // Wait up to 5s for it to exit
     for _ in 0..50 {
@@ -167,6 +181,7 @@ pub fn cmd_daemon_stop(config: &Config) -> Result<()> {
         }
     }
 
+    #[cfg(unix)]
     if is_running(pid) {
         unsafe { libc::kill(-(pid as i32), libc::SIGKILL) };
     }
@@ -279,7 +294,10 @@ pub fn cmd_daemon_run(config: &Config, interval_mins: u64, provider: Option<&str
     };
 
     // Create a new process group so SIGTERM to -pgid kills daemon + children
-    unsafe { libc::setpgid(0, 0) };
+    #[cfg(unix)]
+    unsafe {
+        libc::setpgid(0, 0);
+    }
 
     log("Engram daemon started");
     log(&format!("  Interval: {} minutes", interval_mins));
