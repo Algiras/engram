@@ -62,13 +62,9 @@ impl AuthStore {
             std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600))?;
         }
 
-        #[cfg(windows)]
-        {
-            // On Windows, set read-only to limit exposure; full ACL requires platform crates
-            let mut perms = std::fs::metadata(&path)?.permissions();
-            perms.set_readonly(false); // ensure owner can still write
-            std::fs::set_permissions(&path, perms)?;
-        }
+        // Windows: full per-user ACL requires a platform crate (e.g. windows-acl).
+        // The standard library only exposes a read-only flag which is not equivalent
+        // to Unix 0600, so no meaningful restriction is applied here.
 
         Ok(())
     }
@@ -121,8 +117,8 @@ pub fn resolve_provider(
         }
     }
 
-    // 4. Any stored credential (prefer anthropic > openai)
-    for &provider in &[Provider::Anthropic, Provider::OpenAI] {
+    // 4. Any stored credential (prefer anthropic > openai > gemini)
+    for &provider in &[Provider::Anthropic, Provider::OpenAI, Provider::Gemini] {
         if store.get(provider).is_some() {
             return resolve_for_provider(provider, &store, env_endpoint, env_model);
         }
@@ -182,6 +178,9 @@ fn detect_from_env() -> Option<Provider> {
     }
     if std::env::var("OPENAI_API_KEY").is_ok() {
         return Some(Provider::OpenAI);
+    }
+    if std::env::var("GEMINI_API_KEY").is_ok() {
+        return Some(Provider::Gemini);
     }
     None
 }

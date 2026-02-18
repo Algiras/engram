@@ -32,9 +32,9 @@ pub fn cmd_auth_login(provider_name: Option<String>, set_default: bool) -> Resul
             "Note:".cyan(),
             provider.display_name()
         );
-        // Still allow setting as default
-        if set_default {
-            let mut store = auth::AuthStore::load()?;
+        // Set as default if requested, or if no default is currently set
+        let mut store = auth::AuthStore::load()?;
+        if set_default || store.default_provider.is_none() {
             store.default_provider = Some(provider.to_string());
             store.save()?;
             println!(
@@ -182,13 +182,19 @@ pub fn cmd_auth_status() -> Result<()> {
                 }
             }
         }
-        Err(_) => {
-            println!(
-                "{} No provider configured. Using {} as fallback.",
-                "Note:".yellow(),
-                "Ollama (local)".cyan()
-            );
-            println!("  Run 'engram auth login' to configure a provider.");
+        Err(e) => {
+            // Distinguish config/IO errors from "genuinely no provider set"
+            let msg = e.to_string();
+            if msg.contains("No API key") || msg.contains("No provider") {
+                println!(
+                    "{} No provider configured. Using {} as fallback.",
+                    "Note:".yellow(),
+                    "Ollama (local)".cyan()
+                );
+                println!("  Run 'engram auth login' to configure a provider.");
+            } else {
+                println!("{} Failed to resolve provider: {}", "Error:".red(), e);
+            }
         }
     }
 
