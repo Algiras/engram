@@ -17,6 +17,7 @@ fn render_screen_tabs(f: &mut Frame, active: &str, area: Rect) {
         ("Learning", "L"),
         ("Analytics", "A"),
         ("Health", "H"),
+        ("Daemon", "D"),
         ("Help", "?"),
     ];
 
@@ -815,6 +816,83 @@ pub fn render_health(f: &mut Frame, app: &App) {
     render_action_overlays(f, app);
 }
 
+/// Render Daemon screen
+pub fn render_daemon(f: &mut Frame, app: &App) {
+    let area = f.area();
+
+    let layout = Layout::vertical([
+        Constraint::Length(1),
+        Constraint::Min(3),
+        Constraint::Length(1),
+    ])
+    .split(area);
+
+    render_screen_tabs(f, "Daemon", layout[0]);
+    let main_area = layout[1];
+
+    let lines: Vec<Line> = app
+        .daemon_content
+        .lines()
+        .skip(app.daemon_scroll as usize)
+        .take(main_area.height.saturating_sub(2) as usize)
+        .map(|line| {
+            if line.contains("RUNNING") {
+                Line::from(Span::styled(
+                    line.to_string(),
+                    Style::default().fg(Color::Green),
+                ))
+            } else if line.contains("STOPPED") {
+                Line::from(Span::styled(
+                    line.to_string(),
+                    Style::default().fg(Color::Yellow),
+                ))
+            } else {
+                Line::from(line.to_string())
+            }
+        })
+        .collect();
+
+    let title = format!(
+        " Daemon — interval: {}min (use +/- to adjust) ",
+        app.daemon_interval
+    );
+
+    let block = Block::default()
+        .title(title)
+        .borders(Borders::ALL)
+        .border_style(Style::default().fg(Color::Cyan));
+
+    let paragraph = Paragraph::new(lines)
+        .block(block)
+        .wrap(Wrap { trim: false });
+
+    f.render_widget(paragraph, main_area);
+
+    // Status bar
+    let status = Line::from(vec![
+        Span::raw(" ["),
+        Span::styled("q/Esc", Style::default().fg(Color::Cyan)),
+        Span::raw("] Back  ["),
+        Span::styled("r", Style::default().fg(Color::Cyan)),
+        Span::raw("] Reload  ["),
+        Span::styled("s", Style::default().fg(Color::Green)),
+        Span::raw("] Start  ["),
+        Span::styled("x", Style::default().fg(Color::Red)),
+        Span::raw("] Stop  ["),
+        Span::styled("+/-", Style::default().fg(Color::Yellow)),
+        Span::raw("] Interval  ["),
+        Span::styled("j/k", Style::default().fg(Color::Cyan)),
+        Span::raw("] Scroll"),
+    ]);
+
+    f.render_widget(
+        Paragraph::new(status).style(Style::default().bg(Color::DarkGray)),
+        layout[2],
+    );
+
+    render_action_overlays(f, app);
+}
+
 /// Render Help screen
 pub fn render_help(f: &mut Frame, _app: &App) {
     let area = f.area();
@@ -870,6 +948,12 @@ pub fn render_help(f: &mut Frame, _app: &App) {
         Line::from("  x             - Run doctor (health check + auto-fix)"),
         Line::from("  c             - Cleanup expired entries"),
         Line::from("  r             - Reload data"),
+        Line::from(""),
+        Line::from("Daemon Screen:"),
+        Line::from("  s             - Start daemon (uses current interval)"),
+        Line::from("  x             - Stop daemon"),
+        Line::from("  +/-           - Adjust polling interval (minutes)"),
+        Line::from("  r             - Reload status & logs"),
         Line::from(""),
         Line::from("Viewer/Detail Screens:"),
         Line::from("  j/k           - Scroll line by line"),
@@ -980,6 +1064,19 @@ fn render_action_confirm_dialog(f: &mut Frame, app: &App, action: &TuiAction) {
             "Build Knowledge Graph",
             format!("Build knowledge graph for '{}'?", project_name),
             "This extracts concepts and relationships from knowledge files.",
+        ),
+        TuiAction::DaemonStart => (
+            "Start Daemon",
+            format!(
+                "Start background ingest daemon (interval: {}min)?",
+                app.daemon_interval
+            ),
+            "Daemon will auto-ingest new sessions in the background.",
+        ),
+        TuiAction::DaemonStop => (
+            "Stop Daemon",
+            "Stop the running background daemon?".to_string(),
+            "The daemon process will be terminated.",
         ),
     };
 

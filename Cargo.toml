@@ -43,6 +43,7 @@ shellexpand = "3"
 petgraph = "0.6"
 similar = "2"
 rand = "0.8"
+libc = "0.2"
 
 [dev-dependencies]
 tempfile = "3"
