@@ -11,7 +11,7 @@ set -e
 
 REPO="${REPO:-Algiras/engram}"
 BINARY="engram"
-INSTALL_DIR="${INSTALL_DIR:-/usr/local/bin}"
+INSTALL_DIR="${INSTALL_DIR:-$HOME/.local/bin}"
 RELEASE_BASE_URL="${RELEASE_BASE_URL:-https://github.com/${REPO}/releases/download}"
 
 require_cmd() {
@@ -190,6 +190,23 @@ main() {
 
     echo ""
     echo "Installed ${BINARY} ${VERSION} to ${INSTALL_DIR}/${BINARY}"
+
+    # Add to PATH if needed
+    case ":$PATH:" in
+        *":${INSTALL_DIR}:"*) ;;
+        *)
+            echo ""
+            echo "Add ${INSTALL_DIR} to your PATH:"
+            if [ -f "$HOME/.zshrc" ]; then
+                echo "  echo 'export PATH=\"\$HOME/.local/bin:\$PATH\"' >> ~/.zshrc && source ~/.zshrc"
+            elif [ -f "$HOME/.bashrc" ]; then
+                echo "  echo 'export PATH=\"\$HOME/.local/bin:\$PATH\"' >> ~/.bashrc && source ~/.bashrc"
+            else
+                echo "  export PATH=\"\$HOME/.local/bin:\$PATH\""
+            fi
+            ;;
+    esac
+
     echo ""
     echo "Get started:"
     echo "  engram auth login              # Configure LLM provider"
