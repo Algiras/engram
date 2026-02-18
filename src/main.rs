@@ -85,14 +85,16 @@ fn main() -> Result<()> {
         return cmd_tui();
     }
 
-    // Inject operates on disk only — no Config/LLM auth needed
+    // Inject operates on disk only (smart mode needs embed index but not LLM)
     if let Commands::Inject {
         project,
         full,
         no_auto_clean,
+        smart,
+        budget,
     } = cli.command
     {
-        return cmd_inject(project, full, no_auto_clean);
+        return cmd_inject(project, full, no_auto_clean, smart, budget);
     }
 
     // Lookup operates on knowledge files — no Config/LLM auth needed
@@ -487,7 +489,13 @@ fn cmd_tui() -> Result<()> {
 
 // ── Inject command ──────────────────────────────────────────────────────
 
-fn cmd_inject(project: Option<String>, full: bool, no_auto_clean: bool) -> Result<()> {
+fn cmd_inject(
+    project: Option<String>,
+    full: bool,
+    no_auto_clean: bool,
+    smart: bool,
+    budget: usize,
+) -> Result<()> {
     let home = dirs::home_dir()
         .ok_or_else(|| error::MemoryError::Config("Could not determine home directory".into()))?;
 
@@ -567,22 +575,72 @@ fn cmd_inject(project: Option<String>, full: bool, no_auto_clean: bool) -> Resul
         return Ok(());
     };
 
-    let combined = if full {
-        inject::build_full_memory(
-            &project_name,
-            &context_content,
-            &raw_preferences,
-            &raw_shared,
-            &memory_dir,
-        )?
+    let (combined, mode) = if smart {
+        let signal = inject::detect_work_context(&project_name);
+        println!(
+            "{} Context signal: {}",
+            "Smart:".cyan(),
+            &signal[..signal.len().min(100)]
+        );
+        let entries = inject::smart_search_sync(&project_name, &memory_dir, &signal, 20, 0.45)?;
+        if entries.is_empty() {
+            println!(
+                "{} No embedding index found for '{}' — falling back to compact mode.",
+                "Note:".yellow(),
+                project_name
+            );
+            (
+                inject::build_compact_memory(
+                    &project_name,
+                    &context_content,
+                    &raw_preferences,
+                    &raw_shared,
+                    &memory_dir,
+                )?,
+                "compact (fallback)",
+            )
+        } else {
+            let selected = entries.iter().filter(|e| e.selected).count();
+            let tokens: usize = entries
+                .iter()
+                .filter(|e| e.selected)
+                .map(|e| e.estimated_tokens())
+                .sum();
+            println!(
+                "{} Selected {}/{} entries (~{}/{} tokens)",
+                "Smart:".cyan(),
+                selected,
+                entries.len(),
+                tokens,
+                budget
+            );
+            (
+                inject::format_smart_memory(&project_name, &signal, &entries, budget, &memory_dir)?,
+                "smart",
+            )
+        }
+    } else if full {
+        (
+            inject::build_full_memory(
+                &project_name,
+                &context_content,
+                &raw_preferences,
+                &raw_shared,
+                &memory_dir,
+            )?,
+            "full",
+        )
     } else {
-        inject::build_compact_memory(
-            &project_name,
-            &context_content,
-            &raw_preferences,
-            &raw_shared,
-            &memory_dir,
-        )?
+        (
+            inject::build_compact_memory(
+                &project_name,
+                &context_content,
+                &raw_preferences,
+                &raw_shared,
+                &memory_dir,
+            )?,
+            "compact",
+        )
     };
 
     // Write to MEMORY.md
@@ -592,7 +650,6 @@ fn cmd_inject(project: Option<String>, full: bool, no_auto_clean: bool) -> Resul
     let line_count = combined.lines().count();
     std::fs::write(&memory_file, &combined)?;
 
-    let mode = if full { "full" } else { "compact" };
     println!(
         "{} Injected {} knowledge for '{}' ({} lines) into {}",
         "Done!".green().bold(),

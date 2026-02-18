@@ -19,6 +19,7 @@ fn render_screen_tabs(f: &mut Frame, active: &str, area: Rect) {
         ("Health", "H"),
         ("Daemon", "D"),
         ("Config", "C"),
+        ("Inject", "I"),
         ("Help", "?"),
     ];
 
@@ -1015,6 +1016,132 @@ pub fn render_help(f: &mut Frame, _app: &App) {
 }
 
 /// Render Config screen — provider and embedding selection with live connectivity testing.
+pub fn render_inject_preview(f: &mut Frame, app: &App) {
+    let area = f.area();
+
+    let layout = Layout::vertical([
+        Constraint::Length(1), // tab bar
+        Constraint::Length(2), // signal / status
+        Constraint::Min(3),    // entry list
+        Constraint::Length(1), // footer keys
+    ])
+    .split(area);
+
+    render_screen_tabs(f, "Inject", layout[0]);
+
+    // Signal / status header
+    let selected_count = app.inject_entries.iter().filter(|e| e.selected).count();
+    let selected_tokens: usize = app
+        .inject_entries
+        .iter()
+        .filter(|e| e.selected)
+        .map(|e| e.estimated_tokens())
+        .sum();
+    let status_text = if app.inject_entries.is_empty() {
+        app.inject_preview_status.clone()
+    } else {
+        format!(
+            " {} entries · {}/{} selected · ~{}/{} tokens · budget +/-\n {}",
+            app.inject_entries.len(),
+            selected_count,
+            app.inject_entries.len(),
+            selected_tokens,
+            app.inject_preview_budget,
+            app.inject_preview_status
+        )
+    };
+    let status_color = if app.inject_entries.is_empty() {
+        Color::Yellow
+    } else {
+        Color::Cyan
+    };
+    f.render_widget(
+        Paragraph::new(status_text).style(Style::default().fg(status_color)),
+        layout[1],
+    );
+
+    // Entry list
+    let main_area = layout[2];
+    if app.inject_entries.is_empty() {
+        f.render_widget(
+            Paragraph::new(
+                "\n  No embedding index found.\n  Run: engram embed <project> --provider gemini",
+            )
+            .block(
+                Block::default()
+                    .borders(Borders::ALL)
+                    .title(" Smart Inject — no index ")
+                    .border_style(Style::default().fg(Color::Yellow)),
+            ),
+            main_area,
+        );
+    } else {
+        let items: Vec<ListItem> = app
+            .inject_entries
+            .iter()
+            .enumerate()
+            .map(|(i, e)| {
+                let check = if e.selected {
+                    Span::styled("[✓] ", Style::default().fg(Color::Green))
+                } else {
+                    Span::styled("[ ] ", Style::default().fg(Color::DarkGray))
+                };
+                let score_str = format!("{:.0}%", e.score * 100.0);
+                let score_color = if e.score >= 0.7 {
+                    Color::Green
+                } else if e.score >= 0.55 {
+                    Color::Yellow
+                } else {
+                    Color::DarkGray
+                };
+                let score = Span::styled(
+                    format!("{:>4} ", score_str),
+                    Style::default().fg(score_color),
+                );
+                let cat = Span::styled(
+                    format!("[{:<9}] ", e.category),
+                    Style::default().fg(Color::Cyan),
+                );
+                let preview_text: String = e.preview.chars().take(60).collect();
+                let tok = Span::styled(
+                    format!(" ~{}t", e.estimated_tokens()),
+                    Style::default().fg(Color::DarkGray),
+                );
+
+                let line = Line::from(vec![check, score, cat, Span::raw(preview_text), tok]);
+
+                let style = if i == app.inject_preview_index {
+                    Style::default().bg(Color::DarkGray)
+                } else {
+                    Style::default()
+                };
+                ListItem::new(line).style(style)
+            })
+            .collect();
+
+        let block = Block::default()
+            .borders(Borders::ALL)
+            .title(format!(
+                " Smart Inject — {} entries ranked by relevance ",
+                app.inject_entries.len()
+            ))
+            .border_style(Style::default().fg(Color::Cyan));
+
+        let mut state = ListState::default();
+        state.select(Some(app.inject_preview_index));
+        f.render_stateful_widget(List::new(items).block(block), main_area, &mut state);
+    }
+
+    // Footer
+    f.render_widget(
+        Paragraph::new(
+            " j/k: navigate  Space: toggle  a: all/none  Enter: inject selected  q: back  +/-: budget",
+        )
+        .style(Style::default().bg(Color::DarkGray).fg(Color::White)),
+        layout[3],
+    );
+}
+
 pub fn render_config(f: &mut Frame, app: &App) {
     use crate::auth::{providers::Provider, AuthStore};
 

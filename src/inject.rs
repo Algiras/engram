@@ -403,6 +403,250 @@ pub fn trim_to_budget(content: &str, max_lines: usize) -> String {
     out
 }
 
+// ── Smart injection ────────────────────────────────────────────────────
+
+/// A single entry selected by smart inject for preview/inclusion.
+#[derive(Clone, Debug)]
+pub struct SmartEntry {
+    pub category: String,
+    pub session_id: String,
+    pub preview: String, // first 120 chars of content
+    pub content: String,
+    pub score: f32,     // semantic relevance 0.0–1.0
+    pub selected: bool, // toggled in TUI preview
+}
+
+impl SmartEntry {
+    /// Rough token estimate (~4 chars per token).
+    pub fn estimated_tokens(&self) -> usize {
+        (self.content.len() / 4).max(1)
+    }
+}
+
+/// Detect what the user is currently working on from git + CWD.
+/// Returns a natural-language context signal for semantic search.
+pub fn detect_work_context(project: &str) -> String {
+    let mut parts = vec![format!("project: {}", project)];
+
+    // Changed / staged files
+    let changed = std::process::Command::new("git")
+        .args(["diff", "--name-only", "HEAD"])
+        .output()
+        .ok()
+        .and_then(|o| String::from_utf8(o.stdout).ok())
+        .unwrap_or_default();
+    let staged = std::process::Command::new("git")
+        .args(["diff", "--name-only", "--cached"])
+        .output()
+        .ok()
+        .and_then(|o| String::from_utf8(o.stdout).ok())
+        .unwrap_or_default();
+    let all_changed: Vec<&str> = changed
+        .lines()
+        .chain(staged.lines())
+        .filter(|l| !l.is_empty())
+        .take(12)
+        .collect();
+    if !all_changed.is_empty() {
+        parts.push(format!("changed files: {}", all_changed.join(", ")));
+    }
+
+    // Recent commit messages
+    let log = std::process::Command::new("git")
+        .args(["log", "--oneline", "-5"])
+        .output()
+        .ok()
+        .and_then(|o| String::from_utf8(o.stdout).ok())
+        .unwrap_or_default();
+    let msgs: Vec<&str> = log.lines().take(3).collect();
+    if !msgs.is_empty() {
+        parts.push(format!("recent commits: {}", msgs.join("; ")));
+    }
+
+    // Current branch
+    let branch = std::process::Command::new("git")
+        .args(["branch", "--show-current"])
+        .output()
+        .ok()
+        .and_then(|o| String::from_utf8(o.stdout).ok())
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty());
+    if let Some(b) = branch {
+        if b != "master" && b != "main" {
+            parts.push(format!("branch: {}", b));
+        }
+    }
+
+    parts.join(". ")
+}
+
+/// Load the embedding store and run semantic search against the work context.
+/// Returns entries sorted by relevance, highest first.
+/// Falls back to empty vec if no embedding index exists.
+pub async fn smart_search(
+    project: &str,
+    memory_dir: &std::path::Path,
+    signal: &str,
+    top_k: usize,
+    threshold: f32,
+) -> crate::error::Result<Vec<SmartEntry>> {
+    use crate::config::Config;
+    use crate::embeddings::{provider::EmbeddingProvider, store::EmbeddingStore};
+
+    let index_path = memory_dir
+        .join("knowledge")
+        .join(project)
+        .join("embeddings.json");
+    if !index_path.exists() {
+        return Ok(vec![]);
+    }
+
+    let store = EmbeddingStore::load(&index_path)?;
+    if store.chunks.is_empty() {
+        return Ok(vec![]);
+    }
+
+    // Build embedding provider from stored config
+    let config = Config::load(None)?;
+    let embed_provider = EmbeddingProvider::from_config(&config);
+
+    let results = store
+        .search_text(signal, &embed_provider, top_k * 3)
+        .await?;
+
+    // Deduplicate by session_id (keep highest scoring chunk per session)
+    let mut seen: std::collections::HashMap<String, SmartEntry> = std::collections::HashMap::new();
+    for (score, chunk) in results {
+        if score < threshold {
+            continue;
+        }
+        let session_id = chunk
+            .metadata
+            .session_id
+            .clone()
+            .unwrap_or_else(|| chunk.id.clone());
+        let entry = seen.entry(session_id.clone()).or_insert(SmartEntry {
+            category: chunk.metadata.category.clone(),
+            session_id: session_id.clone(),
+            preview: chunk
+                .text
+                .lines()
+                .find(|l| !l.trim().is_empty())
+                .unwrap_or("")
+                .trim()
+                .chars()
+                .take(120)
+                .collect(),
+            content: chunk.text.clone(),
+            score,
+            selected: true,
+        });
+        if score > entry.score {
+            entry.score = score;
+            entry.preview = chunk
+                .text
+                .lines()
+                .find(|l| !l.trim().is_empty())
+                .unwrap_or("")
+                .trim()
+                .chars()
+                .take(120)
+                .collect();
+        }
+    }
+
+    let mut entries: Vec<SmartEntry> = seen.into_values().collect();
+    entries.sort_by(|a, b| {
+        b.score
+            .partial_cmp(&a.score)
+            .unwrap_or(std::cmp::Ordering::Equal)
+    });
+    entries.truncate(top_k);
+
+    Ok(entries)
+}
+
+/// Sync wrapper for smart_search.
+pub fn smart_search_sync(
+    project: &str,
+    memory_dir: &std::path::Path,
+    signal: &str,
+    top_k: usize,
+    threshold: f32,
+) -> crate::error::Result<Vec<SmartEntry>> {
+    tokio::runtime::Runtime::new()
+        .expect("tokio runtime")
+        .block_on(smart_search(project, memory_dir, signal, top_k, threshold))
+}
+
+/// Build a smart MEMORY.md from selected entries + standard header/footer.
+pub fn format_smart_memory(
+    project: &str,
+    signal: &str,
+    entries: &[SmartEntry],
+    token_budget: usize,
+    memory_dir: &std::path::Path,
+) -> crate::error::Result<String> {
+    let selected: Vec<&SmartEntry> = entries.iter().filter(|e| e.selected).collect();
+    let total_tokens: usize = selected.iter().map(|e| e.estimated_tokens()).sum();
+
+    let mut out = String::new();
+    out.push_str("# Project Memory (auto-injected by engram)\n\n");
+    out.push_str(&format!(
+        "<!-- Smart inject: {}/{} entries · ~{} tokens · signal: {} -->\n\n",
+        selected.len(),
+        entries.len(),
+        total_tokens,
+        &signal[..signal.len().min(80)]
+    ));
+    out.push_str(&format!("## Project: {}\n\n", project));
+
+    // Grouped by category
+    let categories = ["decisions", "solutions", "patterns", "context"];
+    for cat in &categories {
+        let cat_entries: Vec<&&SmartEntry> =
+            selected.iter().filter(|e| e.category == *cat).collect();
+        if cat_entries.is_empty() {
+            continue;
+        }
+
+        out.push_str(&format!("### {}\n\n", cat));
+        let mut tokens_used = 0;
+        for e in cat_entries {
+            let entry_tokens = e.estimated_tokens();
+            if tokens_used + entry_tokens > token_budget {
+                break;
+            }
+            out.push_str(&format!(
+                "<!-- relevance: {:.0}% -->\n{}\n\n",
+                e.score * 100.0,
+                e.content.trim()
+            ));
+            tokens_used += entry_tokens;
+        }
+    }
+
+    out.push_str("---\n\n");
+    out.push_str(&retrieval_guide());
+
+    // Append compact prefs + pack summary
+    let global_prefs_path = memory_dir
+        .join("knowledge")
+        .join("_global")
+        .join("preferences.md");
+    let raw_prefs = std::fs::read_to_string(&global_prefs_path).ok();
+    if let Some(ref p) = raw_prefs {
+        let prefs = compact_preferences(p, memory_dir, project);
+        if !prefs.is_empty() {
+            out.push_str("\n## User Preferences (consolidated)\n\n");
+            out.push_str(&trim_to_budget(&prefs, BUDGET_PREFERENCES));
+            out.push_str("\n\n---\n\n");
+        }
+    }
+
+    Ok(out)
+}
+
 /// Build the retrieval guide footer for MEMORY.md.
 pub fn retrieval_guide() -> String {
     r#"## Retrieving More Context

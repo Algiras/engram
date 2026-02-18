@@ -97,6 +97,12 @@ pub enum Commands {
         /// Skip automatic cleanup of expired entries (not recommended)
         #[arg(long)]
         no_auto_clean: bool,
+        /// Use semantic search to inject only what is relevant to current git context
+        #[arg(long)]
+        smart: bool,
+        /// Token budget for smart inject (default: 1500)
+        #[arg(long, default_value = "1500")]
+        budget: usize,
     },
 
     /// Manage Claude Code hooks for automatic memory integration

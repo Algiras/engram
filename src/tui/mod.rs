@@ -25,6 +25,7 @@ enum Screen {
     Health,
     Daemon,
     Config,
+    InjectPreview,
     Help,
 }
 
@@ -115,6 +116,13 @@ pub struct App {
     config_model_list_index: usize,
     config_model_list_scroll: usize,
     pending_model_fetch: Option<crate::auth::providers::Provider>,
+    // Inject preview state
+    pub inject_entries: Vec<crate::inject::SmartEntry>,
+    inject_preview_index: usize,
+    inject_preview_signal: String,
+    inject_preview_budget: usize,
+    inject_preview_status: String,
+    pending_inject_preview: bool,
 }
 
 impl App {
@@ -172,6 +180,12 @@ impl App {
             config_model_list_index: 0,
             config_model_list_scroll: 0,
             pending_model_fetch: None,
+            inject_entries: Vec::new(),
+            inject_preview_index: 0,
+            inject_preview_signal: String::new(),
+            inject_preview_budget: 1500,
+            inject_preview_status: String::new(),
+            pending_inject_preview: false,
         }
     }
 
@@ -317,6 +331,7 @@ impl App {
                 Screen::Health => ui::render_health(f, self),
                 Screen::Daemon => ui::render_daemon(f, self),
                 Screen::Config => ui::render_config(f, self),
+                Screen::InjectPreview => ui::render_inject_preview(f, self),
                 Screen::Help => ui::render_help(f, self),
             })?;
 
@@ -358,6 +373,52 @@ impl App {
                         self.config_model_input = self.current_config_model();
                         self.config_model_input_mode = true;
                         self.config_status = format!("Fetch failed ({}) — enter name manually", e);
+                    }
+                }
+            }
+
+            // Execute pending smart inject preview load
+            if self.pending_inject_preview {
+                self.pending_inject_preview = false;
+                let project = self.current_project_name().unwrap_or_else(|| {
+                    std::env::current_dir()
+                        .ok()
+                        .and_then(|p| p.file_name().map(|n| n.to_string_lossy().to_string()))
+                        .unwrap_or_default()
+                });
+                let home = dirs::home_dir().unwrap_or_default();
+                let memory_dir = home.join("memory");
+                let _search_result: Result<Vec<crate::inject::SmartEntry>, _> =
+                    crate::inject::smart_search_sync(
+                        &project,
+                        &memory_dir,
+                        &self.inject_preview_signal,
+                        20,
+                        0.45,
+                    );
+                match _search_result {
+                    Ok(entries) if !entries.is_empty() => {
+                        let total_tokens: usize = entries
+                            .iter()
+                            .map(|e: &crate::inject::SmartEntry| e.estimated_tokens())
+                            .sum();
+                        self.inject_preview_status = format!(
+                            "{} entries · ~{} tokens · signal: {}",
+                            entries.len(),
+                            total_tokens,
+                            &self.inject_preview_signal[..self.inject_preview_signal.len().min(60)]
+                        );
+                        self.inject_entries = entries;
+                        self.inject_preview_index = 0;
+                    }
+                    Ok(_) => {
+                        self.inject_preview_status =
+                            "No embedding index — run 'engram embed <project>' first. Press q to go back.".to_string();
+                        self.inject_entries.clear();
+                    }
+                    Err(e) => {
+                        self.inject_preview_status = format!("Error: {} — press q to go back", e);
+                        self.inject_entries.clear();
                     }
                 }
             }
@@ -425,6 +486,9 @@ impl App {
                     }
                     Screen::Config => {
                         self.handle_config_keys(key.code);
+                    }
+                    Screen::InjectPreview => {
+                        self.handle_inject_preview_keys(key.code);
                     }
                     Screen::Help => {
                         self.handle_help_keys(key.code)?;
@@ -587,7 +651,18 @@ impl App {
                 self.show_action_confirm = Some(TuiAction::Regen);
             }
             KeyCode::Char('I') => {
-                self.show_action_confirm = Some(TuiAction::Inject);
+                // Load smart inject preview instead of direct confirm
+                let project = self.current_project_name().unwrap_or_else(|| {
+                    std::env::current_dir()
+                        .ok()
+                        .and_then(|p| p.file_name().map(|n| n.to_string_lossy().to_string()))
+                        .unwrap_or_default()
+                });
+                self.inject_preview_signal = crate::inject::detect_work_context(&project);
+                self.inject_preview_budget = 1500;
+                self.inject_preview_status = "Loading smart context...".to_string();
+                self.pending_inject_preview = true;
+                self.screen = Screen::InjectPreview;
             }
 
             _ => {}
@@ -966,6 +1041,121 @@ impl App {
                 true
             }
             _ => false,
+        }
+    }
+
+    fn handle_inject_preview_keys(&mut self, code: KeyCode) {
+        match code {
+            KeyCode::Char('q') | KeyCode::Esc => {
+                self.screen = Screen::Browser;
+            }
+            KeyCode::Char('j') | KeyCode::Down => {
+                if self.inject_preview_index + 1 < self.inject_entries.len() {
+                    self.inject_preview_index += 1;
+                }
+            }
+            KeyCode::Char('k') | KeyCode::Up => {
+                self.inject_preview_index = self.inject_preview_index.saturating_sub(1);
+            }
+            KeyCode::Char(' ') => {
+                // Toggle selection
+                if let Some(e) = self.inject_entries.get_mut(self.inject_preview_index) {
+                    e.selected = !e.selected;
+                    if self.inject_preview_index + 1 < self.inject_entries.len() {
+                        self.inject_preview_index += 1;
+                    }
+                }
+            }
+            KeyCode::Char('a') | KeyCode::Char('A') => {
+                // Toggle all
+                let all_selected = self.inject_entries.iter().all(|e| e.selected);
+                for e in &mut self.inject_entries {
+                    e.selected = !all_selected;
+                }
+            }
+            KeyCode::Enter => {
+                // Execute inject with selected entries
+                if self.inject_entries.is_empty() {
+                    self.screen = Screen::Browser;
+                    return;
+                }
+                let project = self.current_project_name().unwrap_or_else(|| {
+                    std::env::current_dir()
+                        .ok()
+                        .and_then(|p| p.file_name().map(|n| n.to_string_lossy().to_string()))
+                        .unwrap_or_default()
+                });
+                let home = dirs::home_dir().unwrap_or_default();
+                let memory_dir = home.join("memory");
+                let signal = self.inject_preview_signal.clone();
+                let budget = self.inject_preview_budget;
+                let entries = self.inject_entries.clone();
+
+                match crate::inject::format_smart_memory(
+                    &project,
+                    &signal,
+                    &entries,
+                    budget,
+                    &memory_dir,
+                ) {
+                    Ok(content) => {
+                        // Find claude project dir and write
+                        let claude_dir = home.join(".claude").join("projects");
+                        let selected = entries.iter().filter(|e| e.selected).count();
+                        // Write via engram inject --smart (spawn process to handle dir finding)
+                        let result = std::process::Command::new("engram")
+                            .args([
+                                "inject",
+                                "--smart",
+                                "--budget",
+                                &budget.to_string(),
+                                &project,
+                            ])
+                            .output();
+                        match result {
+                            Ok(o) if o.status.success() => {
+                                self.action_message = Some((
+                                    format!(
+                                        "Smart inject: {} entries written for '{}'",
+                                        selected, project
+                                    ),
+                                    false,
+                                ));
+                            }
+                            Ok(o) => {
+                                let err = String::from_utf8_lossy(&o.stderr);
+                                self.action_message = Some((
+                                    format!(
+                                        "Inject failed: {}",
+                                        err.lines().last().unwrap_or("unknown")
+                                    ),
+                                    true,
+                                ));
+                            }
+                            Err(e) => {
+                                self.action_message = Some((format!("Inject error: {}", e), true));
+                            }
+                        }
+                        let _ = content;
+                        let _ = claude_dir;
+                        self.screen = Screen::Browser;
+                    }
+                    Err(e) => {
+                        self.action_message = Some((format!("Format error: {}", e), true));
+                        self.screen = Screen::Browser;
+                    }
+                }
+            }
+            KeyCode::Char('+') => {
+                self.inject_preview_budget = (self.inject_preview_budget + 500).min(8000);
+            }
+            KeyCode::Char('-') => {
+                self.inject_preview_budget =
+                    self.inject_preview_budget.saturating_sub(500).max(500);
+            }
+            _ => {
+                self.handle_tab_switch(code);
+            }
         }
     }
 
