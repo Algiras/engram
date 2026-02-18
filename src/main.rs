@@ -33,7 +33,10 @@ use colored::Colorize;
 use config::Config;
 use error::Result;
 
-use commands::auth::{cmd_auth_list, cmd_auth_login, cmd_auth_logout, cmd_auth_status};
+use commands::auth::{
+    cmd_auth_embed, cmd_auth_embed_model, cmd_auth_list, cmd_auth_login, cmd_auth_logout,
+    cmd_auth_model, cmd_auth_models, cmd_auth_status, cmd_auth_test,
+};
 use commands::consolidate::{cmd_consolidate, cmd_doctor};
 use commands::core::{
     cmd_context, cmd_export, cmd_ingest, cmd_mcp, cmd_projects, cmd_recall, cmd_search, cmd_status,
@@ -69,6 +72,11 @@ fn main() -> Result<()> {
             AuthCommand::List => cmd_auth_list(),
             AuthCommand::Logout { provider } => cmd_auth_logout(&provider),
             AuthCommand::Status => cmd_auth_status(),
+            AuthCommand::Test { provider } => cmd_auth_test(provider),
+            AuthCommand::Model { provider, model } => cmd_auth_model(&provider, &model),
+            AuthCommand::Embed { provider } => cmd_auth_embed(&provider),
+            AuthCommand::Models { provider, embed } => cmd_auth_models(provider, embed),
+            AuthCommand::EmbedModel { provider, model } => cmd_auth_embed_model(&provider, &model),
         };
     }
 
@@ -265,7 +273,7 @@ fn main() -> Result<()> {
 
     // Embed command
     if let Commands::Embed { project, provider } = &cli.command {
-        return cmd_embed(&config, project, provider.as_deref());
+        return cmd_embed(&config, project, provider.as_deref(), cli.verbose);
     }
 
     // SearchSemantic command
@@ -276,7 +284,14 @@ fn main() -> Result<()> {
         threshold,
     } = &cli.command
     {
-        return cmd_search_semantic(&config, query, project.as_deref(), *top, *threshold);
+        return cmd_search_semantic(
+            &config,
+            query,
+            project.as_deref(),
+            *top,
+            *threshold,
+            cli.verbose,
+        );
     }
 
     // Consolidate command
@@ -370,7 +385,16 @@ fn main() -> Result<()> {
             ttl,
             ..
         } => {
-            cmd_ingest(&config, force, dry_run, project, since, skip_knowledge, ttl)?;
+            cmd_ingest(
+                &config,
+                force,
+                dry_run,
+                project,
+                since,
+                skip_knowledge,
+                ttl,
+                cli.verbose,
+            )?;
         }
         Commands::Search {
             query,
@@ -381,10 +405,10 @@ fn main() -> Result<()> {
             cmd_search(&config, &query, project, knowledge, context)?;
         }
         Commands::Recall { project } => {
-            cmd_recall(&config, &project)?;
+            cmd_recall(&config, &project, cli.verbose)?;
         }
         Commands::Context { project } => {
-            cmd_context(&config, &project)?;
+            cmd_context(&config, &project, cli.verbose)?;
         }
         Commands::Status => {
             cmd_status(&config)?;
@@ -397,7 +421,7 @@ fn main() -> Result<()> {
             persist_cleanup,
             ..
         } => {
-            cmd_regen(&config, &project, persist_cleanup)?;
+            cmd_regen(&config, &project, persist_cleanup, cli.verbose)?;
         }
         Commands::Auth { .. }
         | Commands::Tui
@@ -501,7 +525,7 @@ fn cmd_inject(project: Option<String>, full: bool, no_auto_clean: bool) -> Resul
     let context_content = if context_path.exists() {
         std::fs::read_to_string(&context_path)?
     } else {
-        match build_raw_context(&project_name, &knowledge_dir.join(&project_name)) {
+        match inject::build_raw_context(&project_name, &knowledge_dir.join(&project_name)) {
             Some(raw) => raw,
             None => {
                 eprintln!(
@@ -603,59 +627,4 @@ fn find_claude_project_dir(
     }
 
     Ok(None)
-}
-
-/// Build a lightweight context string from raw knowledge files (no LLM).
-/// Used as fallback when context.md doesn't exist but knowledge files do.
-/// Returns None if no knowledge files exist or all are empty/expired.
-pub(crate) fn build_raw_context(project: &str, project_knowledge_dir: &Path) -> Option<String> {
-    use extractor::knowledge::{parse_session_blocks, partition_by_expiry, reconstruct_blocks};
-
-    let read_and_filter = |path: &Path| -> String {
-        let raw = std::fs::read_to_string(path).unwrap_or_default();
-        let (preamble, blocks) = parse_session_blocks(&raw);
-        let (active, _) = partition_by_expiry(blocks);
-        reconstruct_blocks(&preamble, &active)
-    };
-
-    let decisions = read_and_filter(&project_knowledge_dir.join("decisions.md"));
-    let solutions = read_and_filter(&project_knowledge_dir.join("solutions.md"));
-    let patterns = read_and_filter(&project_knowledge_dir.join("patterns.md"));
-
-    if decisions.trim().is_empty() && solutions.trim().is_empty() && patterns.trim().is_empty() {
-        return None;
-    }
-
-    let mut out = format!("# {} - Project Context (raw, not synthesized)\n\n", project);
-
-    if !decisions.trim().is_empty() {
-        out.push_str(&decisions);
-        out.push_str("\n\n");
-    }
-    if !solutions.trim().is_empty() {
-        out.push_str(&solutions);
-        out.push_str("\n\n");
-    }
-    if !patterns.trim().is_empty() {
-        out.push_str(&patterns);
-        out.push_str("\n\n");
-    }
-
-    Some(out)
-}
-
-pub(crate) fn parse_duration(s: &str) -> Result<chrono::Duration> {
-    let s = s.trim();
-    let (num_str, unit) = s.split_at(s.len().saturating_sub(1));
-    let num: i64 = num_str
-        .parse()
-        .map_err(|_| crate::error::MemoryError::InvalidDuration(s.to_string()))?;
-
-    match unit {
-        "m" => Ok(chrono::Duration::minutes(num)),
-        "h" => Ok(chrono::Duration::hours(num)),
-        "d" => Ok(chrono::Duration::days(num)),
-        "w" => Ok(chrono::Duration::weeks(num)),
-        _ => Err(crate::error::MemoryError::InvalidDuration(s.to_string())),
-    }
 }

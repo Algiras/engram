@@ -568,6 +568,47 @@ pub enum AuthCommand {
 
     /// Show active provider and configuration
     Status,
+
+    /// Test connectivity to a provider (real API call, ~10 tokens)
+    Test {
+        /// Provider to test. Tests all configured providers if omitted.
+        provider: Option<String>,
+    },
+
+    /// Set model override for a provider (saved to auth.json)
+    Model {
+        /// Provider name (anthropic, openai, ollama, gemini)
+        provider: String,
+        /// Model name to use for this provider
+        model: String,
+    },
+
+    /// Set preferred embedding provider (saved to auth.json)
+    Embed {
+        /// Embedding provider to use
+        #[arg(value_parser = ["openai", "gemini", "ollama"])]
+        provider: String,
+    },
+
+    /// List available models from a provider's /v1/models endpoint
+    Models {
+        /// Provider to query (openai, ollama, vscode, openrouter).
+        /// Defaults to the active provider.
+        provider: Option<String>,
+
+        /// List embedding models instead of LLM models
+        #[arg(long)]
+        embed: bool,
+    },
+
+    /// Set embedding model override (saved to auth.json)
+    EmbedModel {
+        /// Embedding provider (openai, gemini, ollama)
+        #[arg(value_parser = ["openai", "gemini", "ollama"])]
+        provider: String,
+        /// Model name to use for embeddings
+        model: String,
+    },
 }
 
 #[derive(Subcommand)]

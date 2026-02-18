@@ -15,6 +15,7 @@ use crate::state;
 
 // ── Core commands ───────────────────────────────────────────────────────
 
+#[allow(clippy::too_many_arguments)]
 pub fn cmd_ingest(
     config: &Config,
     force: bool,
@@ -23,6 +24,7 @@ pub fn cmd_ingest(
     since: Option<String>,
     skip_knowledge: bool,
     ttl: Option<String>,
+    verbose: bool,
 ) -> Result<()> {
     use indicatif::{ProgressBar, ProgressStyle};
     use rayon::prelude::*;
@@ -37,7 +39,9 @@ pub fn cmd_ingest(
         }
     }
 
-    let since_duration = since.map(|s| crate::parse_duration(&s)).transpose()?;
+    let since_duration = since
+        .map(|s| crate::extractor::knowledge::parse_duration_strict(&s))
+        .transpose()?;
 
     // Discover projects
     let projects = parser::discovery::discover_projects(&config.claude_projects_dir)?;
@@ -152,6 +156,18 @@ pub fn cmd_ingest(
             Ok(analytics) => {
                 manifest.mark_processed(&path)?;
                 if let Some(a) = analytics {
+                    if verbose {
+                        let tool_uses: usize = a.tool_usage.values().sum();
+                        println!(
+                            "  {} {} ({} turns, {} tool uses)",
+                            "✓".green(),
+                            path.file_name()
+                                .map(|n| n.to_string_lossy().to_string())
+                                .unwrap_or_default(),
+                            a.turn_count,
+                            tool_uses,
+                        );
+                    }
                     all_analytics.push(a);
                 }
                 success_count += 1;
@@ -364,15 +380,24 @@ pub fn cmd_search(
     Ok(())
 }
 
-pub fn cmd_recall(config: &Config, project: &str) -> Result<()> {
+pub fn cmd_recall(config: &Config, project: &str, verbose: bool) -> Result<()> {
     let knowledge_dir = config.memory_dir.join("knowledge").join(project);
     let context_path = knowledge_dir.join("context.md");
 
     // Get local project knowledge
     let local_content = if context_path.exists() {
+        if verbose {
+            println!("{} Using synthesized context.md", "Source:".cyan());
+        }
         Some(std::fs::read_to_string(&context_path)?)
     } else {
-        crate::build_raw_context(project, &knowledge_dir)
+        if verbose {
+            println!(
+                "{} context.md not found, using raw knowledge fallback",
+                "Source:".cyan()
+            );
+        }
+        crate::inject::build_raw_context(project, &knowledge_dir)
     };
 
     // Get knowledge from installed packs
@@ -421,15 +446,24 @@ pub fn cmd_recall(config: &Config, project: &str) -> Result<()> {
     Ok(())
 }
 
-pub fn cmd_context(config: &Config, project: &str) -> Result<()> {
+pub fn cmd_context(config: &Config, project: &str, verbose: bool) -> Result<()> {
     let knowledge_dir = config.memory_dir.join("knowledge").join(project);
     let context_path = knowledge_dir.join("context.md");
 
     // Raw stdout, no formatting — suitable for piping
     let content = if context_path.exists() {
+        if verbose {
+            eprintln!("{} Using synthesized context.md", "Source:".cyan());
+        }
         std::fs::read_to_string(&context_path)?
     } else {
-        match crate::build_raw_context(project, &knowledge_dir) {
+        if verbose {
+            eprintln!(
+                "{} context.md not found, using raw knowledge fallback",
+                "Source:".cyan()
+            );
+        }
+        match crate::inject::build_raw_context(project, &knowledge_dir) {
             Some(raw) => raw,
             None => {
                 eprintln!("No context for project '{}'", project);

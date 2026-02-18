@@ -4,6 +4,7 @@
 pub mod analytics;
 pub mod auth;
 pub mod cli;
+pub mod commands;
 pub mod config;
 pub mod diff;
 pub mod embeddings;

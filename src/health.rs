@@ -317,7 +317,7 @@ async fn generate_embeddings(config: &crate::config::Config, project: &str) -> R
     use crate::embeddings::search::SemanticSearch;
     use crate::embeddings::EmbeddingProvider;
 
-    let provider = EmbeddingProvider::from_env()?;
+    let provider = EmbeddingProvider::from_config(config);
     SemanticSearch::build_index(&config.memory_dir, project, &provider).await?;
     Ok(())
 }

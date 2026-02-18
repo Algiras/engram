@@ -3,7 +3,12 @@ use crate::embeddings;
 use crate::error::{MemoryError, Result};
 use colored::Colorize;
 
-pub fn cmd_embed(config: &Config, project: &str, provider_override: Option<&str>) -> Result<()> {
+pub fn cmd_embed(
+    config: &Config,
+    project: &str,
+    provider_override: Option<&str>,
+    verbose: bool,
+) -> Result<()> {
     let rt = tokio::runtime::Builder::new_current_thread()
         .enable_all()
         .build()
@@ -17,22 +22,63 @@ pub fn cmd_embed(config: &Config, project: &str, provider_override: Option<&str>
         );
 
         let provider = if let Some(prov) = provider_override {
+            // Read stored embed_model from auth.json for all explicit-provider paths
+            let stored_embed_model = crate::auth::AuthStore::load()
+                .ok()
+                .and_then(|s| s.embed_model);
+
             match prov {
                 "openai" => {
                     let key = std::env::var("OPENAI_API_KEY")
                         .map_err(|_| MemoryError::Config("OPENAI_API_KEY not set".into()))?;
-                    embeddings::EmbeddingProvider::OpenAI { api_key: key }
+                    let model =
+                        stored_embed_model.unwrap_or_else(|| "text-embedding-3-small".to_string());
+                    if verbose {
+                        println!("{} Provider: OpenAI ({})", "Embed:".cyan(), model);
+                    }
+                    embeddings::EmbeddingProvider::OpenAI {
+                        api_key: key,
+                        model,
+                    }
                 }
                 "gemini" => {
                     let key = std::env::var("GEMINI_API_KEY")
                         .map_err(|_| MemoryError::Config("GEMINI_API_KEY not set".into()))?;
-                    embeddings::EmbeddingProvider::Gemini { api_key: key }
+                    let model =
+                        stored_embed_model.unwrap_or_else(|| "gemini-embedding-001".to_string());
+                    if verbose {
+                        println!("{} Provider: Gemini ({})", "Embed:".cyan(), model);
+                    }
+                    embeddings::EmbeddingProvider::Gemini {
+                        api_key: key,
+                        model,
+                    }
                 }
-                "ollama" => embeddings::EmbeddingProvider::OllamaLocal,
+                "ollama" => {
+                    let model =
+                        stored_embed_model.unwrap_or_else(|| "nomic-embed-text".to_string());
+                    if verbose {
+                        println!("{} Provider: Ollama ({})", "Embed:".cyan(), model);
+                    }
+                    embeddings::EmbeddingProvider::OllamaLocal { model }
+                }
                 _ => return Err(MemoryError::Config(format!("Unknown provider: {}", prov))),
             }
         } else {
-            embeddings::EmbeddingProvider::from_env()?
+            let p = embeddings::EmbeddingProvider::from_config(config);
+            if verbose {
+                let name = match &p {
+                    embeddings::EmbeddingProvider::OpenAI { .. } => {
+                        "OpenAI (text-embedding-3-small)"
+                    }
+                    embeddings::EmbeddingProvider::Gemini { .. } => "Gemini (text-embedding-004)",
+                    embeddings::EmbeddingProvider::OllamaLocal { .. } => {
+                        "Ollama (nomic-embed-text)"
+                    }
+                };
+                println!("{} Provider: {}", "Embed:".cyan(), name);
+            }
+            p
         };
 
         let store =
@@ -67,6 +113,7 @@ pub fn cmd_search_semantic(
     project: Option<&str>,
     top_k: usize,
     threshold: f32,
+    verbose: bool,
 ) -> Result<()> {
     let rt = tokio::runtime::Builder::new_current_thread()
         .enable_all()
@@ -74,7 +121,16 @@ pub fn cmd_search_semantic(
         .map_err(|e| MemoryError::Config(format!("tokio runtime: {}", e)))?;
 
     rt.block_on(async {
-        let provider = embeddings::EmbeddingProvider::from_env()?;
+        let provider = embeddings::EmbeddingProvider::from_config(config);
+
+        if verbose {
+            let name = match &provider {
+                embeddings::EmbeddingProvider::OpenAI { .. } => "OpenAI (text-embedding-3-small)",
+                embeddings::EmbeddingProvider::Gemini { .. } => "Gemini (text-embedding-004)",
+                embeddings::EmbeddingProvider::OllamaLocal { .. } => "Ollama (nomic-embed-text)",
+            };
+            println!("{} Provider: {}", "Search:".cyan(), name);
+        }
 
         if let Some(proj) = project {
             // Search specific project
@@ -101,6 +157,9 @@ pub fn cmd_search_semantic(
                         category.cyan(),
                         score * 100.0
                     );
+                    if verbose {
+                        println!("    similarity: {:.4}", score);
+                    }
                     println!("    {}\n", truncate_text(&text, 150));
                 }
             }
@@ -160,6 +219,9 @@ pub fn cmd_search_semantic(
                     category.cyan(),
                     score * 100.0
                 );
+                if verbose {
+                    println!("    similarity: {:.4}", score);
+                }
                 println!("    {}\n", truncate_text(&text, 150));
             }
         }

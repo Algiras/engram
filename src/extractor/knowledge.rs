@@ -126,6 +126,11 @@ pub fn parse_ttl(s: &str) -> Option<chrono::Duration> {
     }
 }
 
+/// Parse duration string, returning an error if the format is invalid.
+pub fn parse_duration_strict(s: &str) -> crate::error::Result<chrono::Duration> {
+    parse_ttl(s).ok_or_else(|| crate::error::MemoryError::InvalidDuration(s.to_string()))
+}
+
 /// Returns true if block has TTL and is expired (permanent entries → false)
 pub fn is_expired(block: &SessionBlock) -> bool {
     let ttl_str = match &block.ttl {
@@ -168,7 +173,7 @@ pub fn reconstruct_blocks(preamble: &str, blocks: &[SessionBlock]) -> String {
 }
 
 /// Replace an existing session block with new content. Returns None if session not found.
-fn replace_session_block(
+pub fn replace_session_block(
     file_content: &str,
     session_id: &str,
     new_header: &str,

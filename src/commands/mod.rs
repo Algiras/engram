@@ -9,4 +9,5 @@ pub mod hooks;
 pub mod knowledge;
 pub mod learning;
 pub mod manual;
+pub mod provider_test;
 pub mod sync;

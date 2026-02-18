@@ -8,7 +8,12 @@ use std::path::Path;
 
 // ── Regen command ───────────────────────────────────────────────────────
 
-pub fn cmd_regen(config: &Config, project: &str, persist_cleanup: bool) -> Result<()> {
+pub fn cmd_regen(
+    config: &Config,
+    project: &str,
+    persist_cleanup: bool,
+    verbose: bool,
+) -> Result<()> {
     use extractor::knowledge::{parse_session_blocks, partition_by_expiry, reconstruct_blocks};
 
     let knowledge_dir = config.memory_dir.join("knowledge").join(project);
@@ -40,24 +45,63 @@ pub fn cmd_regen(config: &Config, project: &str, persist_cleanup: bool) -> Resul
         let solutions_raw = read_or_empty(&knowledge_dir.join("solutions.md"));
         let patterns_raw = read_or_empty(&knowledge_dir.join("patterns.md"));
 
+        if verbose {
+            let count_active = |content: &str| -> usize {
+                let (_preamble, blocks) = parse_session_blocks(content);
+                blocks
+                    .iter()
+                    .filter(|b| !extractor::knowledge::is_expired(b))
+                    .count()
+            };
+            let total_active = count_active(&decisions_raw)
+                + count_active(&solutions_raw)
+                + count_active(&patterns_raw);
+            println!(
+                "{} TTL filter: {} active entries, {} expired removed",
+                "Stats:".cyan(),
+                total_active,
+                cleanup.removed_count
+            );
+        }
+
         (decisions_raw, solutions_raw, patterns_raw)
     } else {
         // Filter in-memory only (don't persist)
-        let filter_expired = |content: &str| -> String {
+        let filter_expired = |content: &str| -> (String, usize, usize) {
             let (preamble, blocks) = parse_session_blocks(content);
+            let active_count = blocks
+                .iter()
+                .filter(|b| !extractor::knowledge::is_expired(b))
+                .count();
+            let expired_count = blocks.len() - active_count;
             let (active, _expired) = partition_by_expiry(blocks);
-            reconstruct_blocks(&preamble, &active)
+            (
+                reconstruct_blocks(&preamble, &active),
+                active_count,
+                expired_count,
+            )
         };
 
         let decisions_raw = read_or_empty(&knowledge_dir.join("decisions.md"));
         let solutions_raw = read_or_empty(&knowledge_dir.join("solutions.md"));
         let patterns_raw = read_or_empty(&knowledge_dir.join("patterns.md"));
 
-        (
-            filter_expired(&decisions_raw),
-            filter_expired(&solutions_raw),
-            filter_expired(&patterns_raw),
-        )
+        let (d, d_active, d_expired) = filter_expired(&decisions_raw);
+        let (s, s_active, s_expired) = filter_expired(&solutions_raw);
+        let (p, p_active, p_expired) = filter_expired(&patterns_raw);
+
+        if verbose {
+            let total_active = d_active + s_active + p_active;
+            let total_expired = d_expired + s_expired + p_expired;
+            println!(
+                "{} TTL filter: {} active entries, {} expired removed",
+                "Stats:".cyan(),
+                total_active,
+                total_expired
+            );
+        }
+
+        (d, s, p)
     };
     let summaries = collect_summary_dir(&summary_dir)?;
 

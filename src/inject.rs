@@ -11,6 +11,43 @@ use crate::extractor::knowledge::{
 };
 use crate::hive::PackInstaller;
 
+/// Build a lightweight context string from raw knowledge files (no LLM).
+/// Used as fallback when context.md doesn't exist but knowledge files do.
+/// Returns None if no knowledge files exist or all are empty/expired.
+pub fn build_raw_context(project: &str, project_knowledge_dir: &Path) -> Option<String> {
+    let read_and_filter = |path: &Path| -> String {
+        let raw = std::fs::read_to_string(path).unwrap_or_default();
+        let (preamble, blocks) = parse_session_blocks(&raw);
+        let (active, _) = partition_by_expiry(blocks);
+        reconstruct_blocks(&preamble, &active)
+    };
+
+    let decisions = read_and_filter(&project_knowledge_dir.join("decisions.md"));
+    let solutions = read_and_filter(&project_knowledge_dir.join("solutions.md"));
+    let patterns = read_and_filter(&project_knowledge_dir.join("patterns.md"));
+
+    if decisions.trim().is_empty() && solutions.trim().is_empty() && patterns.trim().is_empty() {
+        return None;
+    }
+
+    let mut out = format!("# {} - Project Context (raw, not synthesized)\n\n", project);
+
+    if !decisions.trim().is_empty() {
+        out.push_str(&decisions);
+        out.push_str("\n\n");
+    }
+    if !solutions.trim().is_empty() {
+        out.push_str(&solutions);
+        out.push_str("\n\n");
+    }
+    if !patterns.trim().is_empty() {
+        out.push_str(&patterns);
+        out.push_str("\n\n");
+    }
+
+    Some(out)
+}
+
 /// Line budget for compact MEMORY.md sections
 pub const COMPACT_MAX_LINES: usize = 180;
 pub const BUDGET_PREFERENCES: usize = 25;

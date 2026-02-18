@@ -18,6 +18,7 @@ fn render_screen_tabs(f: &mut Frame, active: &str, area: Rect) {
         ("Analytics", "A"),
         ("Health", "H"),
         ("Daemon", "D"),
+        ("Config", "C"),
         ("Help", "?"),
     ];
 
@@ -955,6 +956,24 @@ pub fn render_help(f: &mut Frame, _app: &App) {
         Line::from("  +/-           - Adjust polling interval (minutes)"),
         Line::from("  r             - Reload status & logs"),
         Line::from(""),
+        Line::from("Config Screen (C):"),
+        Line::from("  Tab           - Switch between LLM panel / Embed panel"),
+        Line::from("  j/k           - Navigate providers in focused panel"),
+        Line::from("  Enter         - Set default LLM  /  select embed provider"),
+        Line::from("  T             - Test selected provider (live API ping)"),
+        Line::from("  M             - Set model:"),
+        Line::from("                  OpenAI/Ollama/VSCode/OpenRouter → scrollable picker"),
+        Line::from("                  Anthropic/Gemini → text input"),
+        Line::from("  q/Esc         - Back to Browser"),
+        Line::from(""),
+        Line::from("Providers (engram auth list/status):"),
+        Line::from("  anthropic     - Claude models, requires ANTHROPIC_API_KEY"),
+        Line::from("  openai        - GPT models, requires OPENAI_API_KEY"),
+        Line::from("  gemini        - Google models, requires GEMINI_API_KEY"),
+        Line::from("  openrouter    - 100+ models, many free ★, requires OPENROUTER_API_KEY"),
+        Line::from("  vscode        - VS Code LM bridge, no key needed"),
+        Line::from("  ollama        - Local models, no key needed"),
+        Line::from(""),
         Line::from("Viewer/Detail Screens:"),
         Line::from("  j/k           - Scroll line by line"),
         Line::from("  Space/PgDn    - Scroll page down"),
@@ -993,6 +1012,252 @@ pub fn render_help(f: &mut Frame, _app: &App) {
         Paragraph::new(status).style(Style::default().bg(Color::DarkGray)),
         layout[2],
     );
+}
+
+/// Render Config screen — provider and embedding selection with live connectivity testing.
+pub fn render_config(f: &mut Frame, app: &App) {
+    use crate::auth::{providers::Provider, AuthStore};
+
+    let area = f.area();
+
+    let layout = Layout::vertical([
+        Constraint::Length(1),
+        Constraint::Min(3),
+        Constraint::Length(1),
+    ])
+    .split(area);
+
+    render_screen_tabs(f, "Config", layout[0]);
+
+    // Split content into LLM (top 60%) and Embed (bottom 40%)
+    let content_chunks =
+        Layout::vertical([Constraint::Percentage(60), Constraint::Percentage(40)]).split(layout[1]);
+
+    // --- LLM Providers list ---
+    let store = AuthStore::load().unwrap_or_default();
+    let llm_providers = Provider::all();
+
+    let llm_items: Vec<ListItem> = llm_providers
+        .iter()
+        .enumerate()
+        .map(|(i, &p)| {
+            let model = store
+                .get(p)
+                .and_then(|c| c.model.clone())
+                .unwrap_or_else(|| p.default_model().to_string());
+            let is_default = store.default_provider.as_deref() == Some(&p.to_string());
+            let default_tag = if is_default { "  [default]" } else { "" };
+            let line = format!(
+                "{}  {:<28}  model: {:<30}{}",
+                if is_default { "✓" } else { "○" },
+                p.display_name(),
+                model,
+                default_tag
+            );
+            let style = if i == app.config_llm_index && app.config_focus_llm {
+                Style::default().fg(Color::Black).bg(Color::Cyan)
+            } else if i == app.config_llm_index {
+                Style::default().fg(Color::Cyan)
+            } else {
+                Style::default()
+            };
+            ListItem::new(line).style(style)
+        })
+        .collect();
+
+    let llm_border_style = if app.config_focus_llm {
+        Style::default().fg(Color::Cyan)
+    } else {
+        Style::default().fg(Color::DarkGray)
+    };
+    let llm_block = Block::default()
+        .title(" LLM Providers  [Enter] set default  [T] test  [M] set model ")
+        .borders(Borders::ALL)
+        .border_style(llm_border_style);
+
+    let mut llm_state = ListState::default();
+    llm_state.select(Some(app.config_llm_index));
+    f.render_stateful_widget(
+        List::new(llm_items).block(llm_block),
+        content_chunks[0],
+        &mut llm_state,
+    );
+
+    // --- Embedding Providers list ---
+    let embed_options = [
+        ("openai", "OpenAI text-embedding-3-small"),
+        ("gemini", "Gemini text-embedding-004"),
+        ("ollama", "Ollama nomic-embed-text"),
+    ];
+
+    let embed_items: Vec<ListItem> = embed_options
+        .iter()
+        .enumerate()
+        .map(|(i, (key, label))| {
+            let is_selected = store.embed_provider.as_deref() == Some(key);
+            let is_inferred = store.embed_provider.is_none() && i == 0;
+            let tag = if is_selected {
+                "  [selected]"
+            } else if is_inferred {
+                "  (inferred)"
+            } else {
+                ""
+            };
+            let line = format!("{}  {}{}", if is_selected { "●" } else { "○" }, label, tag);
+            let style = if i == app.config_embed_index && !app.config_focus_llm {
+                Style::default().fg(Color::Black).bg(Color::Cyan)
+            } else if i == app.config_embed_index {
+                Style::default().fg(Color::Cyan)
+            } else {
+                Style::default()
+            };
+            ListItem::new(line).style(style)
+        })
+        .collect();
+
+    let embed_border_style = if !app.config_focus_llm {
+        Style::default().fg(Color::Cyan)
+    } else {
+        Style::default().fg(Color::DarkGray)
+    };
+    let embed_block = Block::default()
+        .title(" Embedding Provider  [Enter] select ")
+        .borders(Borders::ALL)
+        .border_style(embed_border_style);
+
+    let mut embed_state = ListState::default();
+    embed_state.select(Some(app.config_embed_index));
+    f.render_stateful_widget(
+        List::new(embed_items).block(embed_block),
+        content_chunks[1],
+        &mut embed_state,
+    );
+
+    // --- Status bar ---
+    let status_style =
+        if app.config_status.starts_with("OK") || app.config_status.starts_with("Set") {
+            Style::default().fg(Color::Green).bg(Color::DarkGray)
+        } else if app.config_status.starts_with("FAIL") || app.config_status.starts_with("Error") {
+            Style::default().fg(Color::Red).bg(Color::DarkGray)
+        } else {
+            Style::default().fg(Color::White).bg(Color::DarkGray)
+        };
+
+    let status_text = if app.config_test_running {
+        " Testing... (waiting for API response) ".to_string()
+    } else {
+        format!(" {} ", app.config_status)
+    };
+
+    f.render_widget(Paragraph::new(status_text).style(status_style), layout[2]);
+
+    // Model list picker overlay (for providers with /v1/models)
+    if app.config_model_list_mode {
+        render_model_list_overlay(f, app);
+    } else if app.config_model_input_mode {
+        // Text input fallback (Anthropic, Gemini)
+        render_model_input_overlay(f, app);
+    }
+}
+
+fn render_model_list_overlay(f: &mut Frame, app: &App) {
+    let area = f.area();
+
+    let popup_width = 72u16.min(area.width.saturating_sub(4));
+    // Show up to 20 models + 4 chrome lines
+    let visible = 20usize.min(area.height.saturating_sub(6) as usize);
+    let popup_height = (visible as u16 + 4).min(area.height.saturating_sub(2));
+    let x = (area.width.saturating_sub(popup_width)) / 2;
+    let y = (area.height.saturating_sub(popup_height)) / 2;
+    let popup_area = Rect::new(x, y, popup_width, popup_height);
+
+    let provider = app.current_config_provider();
+    let title = format!(
+        " {} models ({} total) — ★ free ",
+        provider.display_name(),
+        app.config_model_list.len()
+    );
+
+    let items: Vec<ListItem> = app
+        .config_model_list
+        .iter()
+        .skip(app.config_model_list_scroll)
+        .take(visible)
+        .enumerate()
+        .map(|(i, model)| {
+            let abs_index = i + app.config_model_list_scroll;
+            let is_free = model.ends_with(":free");
+            let prefix = if is_free { "★ " } else { "  " };
+            let label = format!("{}{}", prefix, model);
+
+            let style = if abs_index == app.config_model_list_index {
+                Style::default().fg(Color::Black).bg(Color::Cyan)
+            } else if is_free {
+                Style::default().fg(Color::Green)
+            } else {
+                Style::default()
+            };
+            ListItem::new(label).style(style)
+        })
+        .collect();
+
+    let block = Block::default()
+        .title(title)
+        .borders(Borders::ALL)
+        .border_style(Style::default().fg(Color::Cyan));
+
+    let mut state = ListState::default();
+    // The list only shows `visible` items starting from scroll, so the selected
+    // item within the visible window is the cursor minus the scroll offset
+    let visible_selected = app
+        .config_model_list_index
+        .saturating_sub(app.config_model_list_scroll);
+    state.select(Some(visible_selected));
+
+    f.render_widget(Clear, popup_area);
+
+    // Split into list area + status line
+    let inner = Layout::vertical([Constraint::Min(3), Constraint::Length(1)]).split(popup_area);
+
+    f.render_stateful_widget(List::new(items).block(block), inner[0], &mut state);
+
+    let help = Paragraph::new(" j/k: navigate  PgUp/PgDn: page  Enter: select  Esc: cancel ")
+        .style(Style::default().bg(Color::DarkGray).fg(Color::White));
+    f.render_widget(help, inner[1]);
+}
+
+fn render_model_input_overlay(f: &mut Frame, app: &App) {
+    let area = f.area();
+
+    let popup_width = 60u16.min(area.width.saturating_sub(4));
+    let popup_height = 6u16;
+    let x = (area.width.saturating_sub(popup_width)) / 2;
+    let y = (area.height.saturating_sub(popup_height)) / 2;
+    let popup_area = Rect::new(x, y, popup_width, popup_height);
+
+    let text = vec![
+        Line::from(""),
+        Line::from("Enter model name:"),
+        Line::from(""),
+        Line::from(format!("> {}_", app.config_model_input)),
+        Line::from(""),
+        Line::from(Span::styled(
+            "[Enter] confirm  [Esc] cancel",
+            Style::default().fg(Color::DarkGray),
+        )),
+    ];
+
+    let block = Block::default()
+        .title(" Set Model ")
+        .borders(Borders::ALL)
+        .border_style(Style::default().fg(Color::Yellow));
+
+    let paragraph = Paragraph::new(text)
+        .block(block)
+        .alignment(Alignment::Center);
+
+    f.render_widget(Clear, popup_area);
+    f.render_widget(paragraph, popup_area);
 }
 
 /// Render action confirmation dialog and action result message overlays.

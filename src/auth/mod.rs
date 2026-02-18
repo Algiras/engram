@@ -13,6 +13,10 @@ pub struct AuthStore {
     pub default_provider: Option<String>,
     #[serde(default)]
     pub providers: HashMap<String, ProviderCredential>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub embed_provider: Option<String>, // "openai" | "gemini" | "ollama"
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub embed_model: Option<String>, // e.g. "text-embedding-3-large", "nomic-embed-text"
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]

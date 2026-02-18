@@ -7,6 +7,8 @@ pub enum Provider {
     OpenAI,
     Ollama,
     Gemini,
+    VSCode,
+    OpenRouter,
 }
 
 impl Provider {
@@ -16,6 +18,8 @@ impl Provider {
             Provider::OpenAI,
             Provider::Ollama,
             Provider::Gemini,
+            Provider::VSCode,
+            Provider::OpenRouter,
         ]
     }
 
@@ -25,6 +29,8 @@ impl Provider {
             Provider::OpenAI => "https://api.openai.com/v1",
             Provider::Ollama => "http://localhost:11434/v1",
             Provider::Gemini => "https://generativelanguage.googleapis.com/v1",
+            Provider::VSCode => "http://localhost:11435/v1",
+            Provider::OpenRouter => "https://openrouter.ai/api/v1",
         }
     }
 
@@ -33,14 +39,20 @@ impl Provider {
             Provider::Anthropic => "claude-sonnet-4-5-20250929",
             Provider::OpenAI => "gpt-4o",
             Provider::Ollama => "gemma3:4b",
-            Provider::Gemini => "gemini-pro",
+            Provider::Gemini => "gemini-2.0-flash",
+            Provider::VSCode => "gpt-4o",
+            // A free model available without credits — use `engram auth models openrouter`
+            // to discover all available models including other free ones.
+            Provider::OpenRouter => "meta-llama/llama-3.1-8b-instruct:free",
         }
     }
 
     pub fn requires_auth(&self) -> bool {
         match self {
-            Provider::Anthropic | Provider::OpenAI | Provider::Gemini => true,
-            Provider::Ollama => false,
+            Provider::Anthropic | Provider::OpenAI | Provider::Gemini | Provider::OpenRouter => {
+                true
+            }
+            Provider::Ollama | Provider::VSCode => false,
         }
     }
 
@@ -50,6 +62,8 @@ impl Provider {
             Provider::OpenAI => "OPENAI_API_KEY",
             Provider::Ollama => "",
             Provider::Gemini => "GEMINI_API_KEY",
+            Provider::VSCode => "",
+            Provider::OpenRouter => "OPENROUTER_API_KEY",
         }
     }
 
@@ -59,7 +73,15 @@ impl Provider {
             Provider::OpenAI => "OpenAI",
             Provider::Ollama => "Ollama (local)",
             Provider::Gemini => "Google Gemini",
+            Provider::VSCode => "VS Code LM API",
+            Provider::OpenRouter => "OpenRouter",
         }
+    }
+
+    /// Whether this provider supports model discovery (live query).
+    /// Anthropic has no public /models endpoint.
+    pub fn supports_model_list(&self) -> bool {
+        !matches!(self, Provider::Anthropic)
     }
 
     pub fn from_str_loose(s: &str) -> Option<Provider> {
@@ -68,6 +90,8 @@ impl Provider {
             "openai" | "gpt" => Some(Provider::OpenAI),
             "ollama" | "local" => Some(Provider::Ollama),
             "gemini" | "google" => Some(Provider::Gemini),
+            "vscode" | "vs-code" | "copilot" => Some(Provider::VSCode),
+            "openrouter" | "or" => Some(Provider::OpenRouter),
             _ => None,
         }
     }
@@ -80,6 +104,8 @@ impl fmt::Display for Provider {
             Provider::OpenAI => write!(f, "openai"),
             Provider::Ollama => write!(f, "ollama"),
             Provider::Gemini => write!(f, "gemini"),
+            Provider::VSCode => write!(f, "vscode"),
+            Provider::OpenRouter => write!(f, "openrouter"),
         }
     }
 }

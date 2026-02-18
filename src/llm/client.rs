@@ -27,19 +27,32 @@ impl LlmClient {
     /// Send a chat completion request and return the response text
     pub async fn chat(&self, system: &str, user: &str) -> Result<String> {
         match self.provider {
-            Provider::Anthropic => self.chat_anthropic(system, user).await,
-            Provider::OpenAI | Provider::Ollama => self.chat_openai_compat(system, user).await,
-            Provider::Gemini => self.chat_gemini(system, user).await,
+            Provider::Anthropic => self.chat_anthropic(system, user, 2048).await,
+            Provider::OpenAI | Provider::Ollama | Provider::VSCode | Provider::OpenRouter => {
+                self.chat_openai_compat(system, user, 2048).await
+            }
+            Provider::Gemini => self.chat_gemini(system, user, 2048).await,
+        }
+    }
+
+    /// Minimal connectivity test — "hi" → any response, max 10 tokens.
+    pub(crate) async fn chat_minimal(&self, user: &str) -> Result<String> {
+        match self.provider {
+            Provider::Anthropic => self.chat_anthropic("", user, 10).await,
+            Provider::OpenAI | Provider::Ollama | Provider::VSCode | Provider::OpenRouter => {
+                self.chat_openai_compat("", user, 10).await
+            }
+            Provider::Gemini => self.chat_gemini("", user, 10).await,
         }
     }
 
     /// Anthropic Messages API
-    async fn chat_anthropic(&self, system: &str, user: &str) -> Result<String> {
+    async fn chat_anthropic(&self, system: &str, user: &str, max_tokens: u32) -> Result<String> {
         let url = format!("{}/v1/messages", self.endpoint);
 
         let body = serde_json::json!({
             "model": self.model,
-            "max_tokens": 2048,
+            "max_tokens": max_tokens,
             "system": system,
             "messages": [
                 { "role": "user", "content": user },
@@ -76,7 +89,12 @@ impl LlmClient {
     }
 
     /// OpenAI-compatible API (OpenAI, Ollama, etc.)
-    async fn chat_openai_compat(&self, system: &str, user: &str) -> Result<String> {
+    async fn chat_openai_compat(
+        &self,
+        system: &str,
+        user: &str,
+        max_tokens: u32,
+    ) -> Result<String> {
         let url = format!("{}/chat/completions", self.endpoint);
 
         let body = serde_json::json!({
@@ -86,13 +104,19 @@ impl LlmClient {
                 { "role": "user", "content": user },
             ],
             "temperature": 0.3,
-            "max_tokens": 2048,
+            "max_tokens": max_tokens,
         });
 
         let mut req = self.client.post(&url).json(&body);
 
         if let Some(ref key) = self.api_key {
             req = req.header("Authorization", format!("Bearer {}", key));
+        }
+        // OpenRouter attribution headers (optional but recommended by their docs)
+        if self.provider == Provider::OpenRouter {
+            req = req
+                .header("HTTP-Referer", "https://github.com/user/engram")
+                .header("X-Title", "engram");
         }
 
         let response = req.send().await?;
@@ -117,22 +141,15 @@ impl LlmClient {
     }
 
     /// Google Gemini API
-    async fn chat_gemini(&self, system: &str, user: &str) -> Result<String> {
+    async fn chat_gemini(&self, system: &str, user: &str, max_tokens: u32) -> Result<String> {
         // Gemini API uses a different URL structure with the API key as a query param
         let api_key = self.api_key.as_deref().ok_or_else(|| {
             MemoryError::Config("Gemini API key required (set GEMINI_API_KEY)".into())
         })?;
 
-        // Use gemini-pro if model contains "flash" or "pro", otherwise use as-is
-        let model_name = if self.model.contains("gemini") {
-            &self.model
-        } else {
-            "gemini-pro"
-        };
-
         let url = format!(
             "{}/models/{}:generateContent?key={}",
-            self.endpoint, model_name, api_key
+            self.endpoint, self.model, api_key
         );
 
         // Combine system and user messages into a single prompt
@@ -146,7 +163,7 @@ impl LlmClient {
             }],
             "generationConfig": {
                 "temperature": 0.3,
-                "maxOutputTokens": 2048,
+                "maxOutputTokens": max_tokens,
             }
         });
 

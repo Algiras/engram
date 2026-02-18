@@ -24,6 +24,7 @@ enum Screen {
     Analytics,
     Health,
     Daemon,
+    Config,
     Help,
 }
 
@@ -98,6 +99,22 @@ pub struct App {
     pub action_message: Option<(String, bool)>, // (message, is_error)
     pub show_action_confirm: Option<TuiAction>,
     pending_action: Option<(String, Vec<String>)>, // (label, cli args)
+
+    // Config screen state
+    config_llm_index: usize,
+    config_embed_index: usize,
+    config_focus_llm: bool,
+    pub config_status: String,
+    config_test_running: bool,
+    config_model_input_mode: bool,
+    pub config_model_input: String,
+    pending_config_test: Option<crate::auth::providers::Provider>,
+    // Model picker (shown when provider supports /v1/models)
+    pub config_model_list: Vec<String>,
+    config_model_list_mode: bool,
+    config_model_list_index: usize,
+    config_model_list_scroll: usize,
+    pending_model_fetch: Option<crate::auth::providers::Provider>,
 }
 
 impl App {
@@ -142,6 +159,19 @@ impl App {
             action_message: None,
             show_action_confirm: None,
             pending_action: None,
+            config_llm_index: 0,
+            config_embed_index: 0,
+            config_focus_llm: true,
+            config_status: String::new(),
+            config_test_running: false,
+            config_model_input_mode: false,
+            config_model_input: String::new(),
+            pending_config_test: None,
+            config_model_list: Vec::new(),
+            config_model_list_mode: false,
+            config_model_list_index: 0,
+            config_model_list_scroll: 0,
+            pending_model_fetch: None,
         }
     }
 
@@ -286,8 +316,51 @@ impl App {
                 Screen::Analytics => ui::render_analytics(f, self),
                 Screen::Health => ui::render_health(f, self),
                 Screen::Daemon => ui::render_daemon(f, self),
+                Screen::Config => ui::render_config(f, self),
                 Screen::Help => ui::render_help(f, self),
             })?;
+
+            // Execute pending config test (blocking HTTP call)
+            if let Some(provider) = self.pending_config_test.take() {
+                let result = crate::commands::provider_test::test_provider_sync(provider);
+                self.config_test_running = false;
+                self.config_status = if result.success {
+                    format!(
+                        "OK  {}ms  {}  \"{}\"",
+                        result.latency_ms, result.model, result.response_snippet
+                    )
+                } else {
+                    format!("FAIL: {}", result.error.as_deref().unwrap_or("unknown"))
+                };
+            }
+
+            // Execute pending model fetch (blocking HTTP call to /v1/models)
+            if let Some(provider) = self.pending_model_fetch.take() {
+                match crate::commands::provider_test::fetch_models_sync(provider) {
+                    Ok(models) if !models.is_empty() => {
+                        self.config_model_list = models;
+                        self.config_model_list_index = 0;
+                        self.config_model_list_scroll = 0;
+                        self.config_model_list_mode = true;
+                        self.config_status = format!(
+                            "{} models available — j/k: nav  Enter: select  Esc: cancel",
+                            self.config_model_list.len()
+                        );
+                    }
+                    Ok(_) => {
+                        // Empty list — fall back to text input
+                        self.config_model_input = self.current_config_model();
+                        self.config_model_input_mode = true;
+                        self.config_status = "No models returned — enter name manually".to_string();
+                    }
+                    Err(e) => {
+                        // Error — fall back to text input
+                        self.config_model_input = self.current_config_model();
+                        self.config_model_input_mode = true;
+                        self.config_status = format!("Fetch failed ({}) — enter name manually", e);
+                    }
+                }
+            }
 
             // Poll with a 3-second timeout so Daemon screen auto-refreshes
             if !event::poll(Duration::from_secs(3))? {
@@ -349,6 +422,9 @@ impl App {
                     }
                     Screen::Daemon => {
                         self.handle_daemon_keys(key.code, terminal)?;
+                    }
+                    Screen::Config => {
+                        self.handle_config_keys(key.code);
                     }
                     Screen::Help => {
                         self.handle_help_keys(key.code)?;
@@ -851,6 +927,11 @@ impl App {
                 self.screen = Screen::Browser;
                 true
             }
+            KeyCode::Char('C') => {
+                self.load_config_data();
+                self.screen = Screen::Config;
+                true
+            }
             KeyCode::Char('p') => {
                 self.screen = Screen::Packs;
                 self.pack_index = 0;
@@ -886,6 +967,245 @@ impl App {
             }
             _ => false,
         }
+    }
+
+    fn handle_config_keys(&mut self, code: KeyCode) {
+        use crate::auth::providers::Provider;
+
+        // Model list picker mode
+        if self.config_model_list_mode {
+            self.handle_model_list_keys(code);
+            return;
+        }
+
+        // Model input overlay mode
+        if self.config_model_input_mode {
+            match code {
+                KeyCode::Enter => self.apply_model_input(),
+                KeyCode::Esc => {
+                    self.config_model_input_mode = false;
+                    self.config_model_input.clear();
+                }
+                KeyCode::Backspace => {
+                    self.config_model_input.pop();
+                }
+                KeyCode::Char(c) => {
+                    self.config_model_input.push(c);
+                }
+                _ => {}
+            }
+            return;
+        }
+
+        match code {
+            KeyCode::Tab => {
+                self.config_focus_llm = !self.config_focus_llm;
+            }
+            KeyCode::Char('j') | KeyCode::Down => {
+                if self.config_focus_llm {
+                    let max = Provider::all().len().saturating_sub(1);
+                    if self.config_llm_index < max {
+                        self.config_llm_index += 1;
+                    }
+                } else if self.config_embed_index < 2 {
+                    self.config_embed_index += 1;
+                }
+            }
+            KeyCode::Char('k') | KeyCode::Up => {
+                if self.config_focus_llm {
+                    self.config_llm_index = self.config_llm_index.saturating_sub(1);
+                } else {
+                    self.config_embed_index = self.config_embed_index.saturating_sub(1);
+                }
+            }
+            KeyCode::Enter => {
+                if self.config_focus_llm {
+                    self.set_default_provider();
+                } else {
+                    self.set_embed_provider();
+                }
+            }
+            KeyCode::Char('T') => {
+                self.config_status = "Testing...".to_string();
+                self.config_test_running = true;
+                let provider = self.current_config_provider();
+                self.pending_config_test = Some(provider);
+            }
+            KeyCode::Char('M') => {
+                let provider = self.current_config_provider();
+                if provider.supports_model_list() {
+                    self.config_status =
+                        format!("Fetching models from {}...", provider.display_name());
+                    self.pending_model_fetch = Some(provider);
+                } else {
+                    // Anthropic / Gemini — no /models endpoint, use text input
+                    self.config_model_input = self.current_config_model();
+                    self.config_model_input_mode = true;
+                }
+            }
+            KeyCode::Char('q') | KeyCode::Esc => {
+                self.screen = Screen::Browser;
+            }
+            _ => {
+                self.handle_tab_switch(code);
+            }
+        }
+    }
+
+    fn handle_model_list_keys(&mut self, code: KeyCode) {
+        let count = self.config_model_list.len();
+        match code {
+            KeyCode::Esc => {
+                self.config_model_list_mode = false;
+                self.load_config_data();
+            }
+            KeyCode::Enter => {
+                if let Some(model) = self.config_model_list.get(self.config_model_list_index) {
+                    let model = model.clone();
+                    self.save_model_for_current_provider(&model);
+                    self.config_model_list_mode = false;
+                }
+            }
+            KeyCode::Char('j') | KeyCode::Down => {
+                if self.config_model_list_index + 1 < count {
+                    self.config_model_list_index += 1;
+                    // Scroll window down when cursor approaches bottom
+                    if self.config_model_list_index >= self.config_model_list_scroll + 18 {
+                        self.config_model_list_scroll += 1;
+                    }
+                }
+            }
+            KeyCode::Char('k') | KeyCode::Up => {
+                if self.config_model_list_index > 0 {
+                    self.config_model_list_index -= 1;
+                    if self.config_model_list_index < self.config_model_list_scroll {
+                        self.config_model_list_scroll =
+                            self.config_model_list_scroll.saturating_sub(1);
+                    }
+                }
+            }
+            KeyCode::PageDown => {
+                self.config_model_list_index =
+                    (self.config_model_list_index + 10).min(count.saturating_sub(1));
+                self.config_model_list_scroll = self.config_model_list_index.saturating_sub(9);
+            }
+            KeyCode::PageUp => {
+                self.config_model_list_index = self.config_model_list_index.saturating_sub(10);
+                self.config_model_list_scroll = self.config_model_list_index;
+            }
+            _ => {}
+        }
+    }
+
+    fn save_model_for_current_provider(&mut self, model: &str) {
+        use crate::auth::{AuthStore, ProviderCredential};
+        let provider = self.current_config_provider();
+        if let Ok(mut store) = AuthStore::load() {
+            if let Some(cred) = store.providers.get_mut(&provider.to_string()) {
+                cred.model = Some(model.to_string());
+            } else {
+                store.set(
+                    provider,
+                    ProviderCredential {
+                        cred_type: "api".to_string(),
+                        key: String::new(),
+                        endpoint: None,
+                        model: Some(model.to_string()),
+                    },
+                );
+            }
+            if store.save().is_ok() {
+                self.config_status =
+                    format!("Set model for {} to {}", provider.display_name(), model);
+            } else {
+                self.config_status = "Error: failed to save".to_string();
+            }
+        }
+    }
+
+    fn load_config_data(&mut self) {
+        let store = crate::auth::AuthStore::load().unwrap_or_default();
+        let default = store.default_provider.as_deref().unwrap_or("none");
+        let embed = store
+            .embed_provider
+            .as_deref()
+            .unwrap_or("inferred from LLM");
+        self.config_status = format!("Default LLM: {}  |  Embed: {}", default, embed);
+    }
+
+    pub fn current_config_provider(&self) -> crate::auth::providers::Provider {
+        crate::auth::providers::Provider::all()[self.config_llm_index]
+    }
+
+    fn current_config_model(&self) -> String {
+        use crate::auth::AuthStore;
+        let provider = self.current_config_provider();
+        let store = AuthStore::load().unwrap_or_default();
+        store
+            .get(provider)
+            .and_then(|c| c.model.clone())
+            .unwrap_or_else(|| provider.default_model().to_string())
+    }
+
+    fn set_default_provider(&mut self) {
+        use crate::auth::AuthStore;
+        let provider = self.current_config_provider();
+        if let Ok(mut store) = AuthStore::load() {
+            store.default_provider = Some(provider.to_string());
+            if store.save().is_ok() {
+                self.config_status =
+                    format!("Set default LLM provider to {}", provider.display_name());
+            } else {
+                self.config_status = "Error: failed to save".to_string();
+            }
+        }
+    }
+
+    fn set_embed_provider(&mut self) {
+        use crate::auth::AuthStore;
+        let embed_providers = ["openai", "gemini", "ollama"];
+        let name = embed_providers[self.config_embed_index];
+        if let Ok(mut store) = AuthStore::load() {
+            store.embed_provider = Some(name.to_string());
+            if store.save().is_ok() {
+                self.config_status = format!("Set embedding provider to {}", name);
+            } else {
+                self.config_status = "Error: failed to save".to_string();
+            }
+        }
+    }
+
+    fn apply_model_input(&mut self) {
+        use crate::auth::{AuthStore, ProviderCredential};
+        let model = self.config_model_input.trim().to_string();
+        self.config_model_input_mode = false;
+        if model.is_empty() {
+            self.config_model_input.clear();
+            return;
+        }
+        let provider = self.current_config_provider();
+        if let Ok(mut store) = AuthStore::load() {
+            if let Some(cred) = store.providers.get_mut(&provider.to_string()) {
+                cred.model = Some(model.clone());
+            } else {
+                store.set(
+                    provider,
+                    ProviderCredential {
+                        cred_type: "api".to_string(),
+                        key: String::new(),
+                        endpoint: None,
+                        model: Some(model.clone()),
+                    },
+                );
+            }
+            if store.save().is_ok() {
+                self.config_status =
+                    format!("Set model for {} to {}", provider.display_name(), model);
+            } else {
+                self.config_status = "Error: failed to save".to_string();
+            }
+        }
+        self.config_model_input.clear();
     }
 
     fn load_learning_data(&mut self) {
