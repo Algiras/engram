@@ -108,8 +108,12 @@ get_latest_version() {
         return
     fi
 
-    API_URL="https://api.github.com/repos/${REPO}/releases/latest"
-    VERSION="$(curl -fsSL "$API_URL" | sed 's/.*"tag_name": *"\([^"]*\)".*/\1/' | grep '^v')"
+    # Follow the GitHub releases/latest redirect to get the version tag.
+    # This avoids the unauthenticated API rate limit (60 req/hour).
+    # Override LATEST_REDIRECT_URL for testing.
+    LATEST_URL="${LATEST_REDIRECT_URL:-https://github.com/${REPO}/releases/latest}"
+    VERSION="$(curl -fsSL -o /dev/null -w "%{url_effective}" -L "$LATEST_URL" \
+        | sed 's|.*/tag/||')"
 
     if [ -z "$VERSION" ]; then
         echo "Error: could not determine latest version." >&2
