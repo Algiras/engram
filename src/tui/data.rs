@@ -2,6 +2,8 @@ use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
 
+extern crate libc;
+
 use chrono::{DateTime, Utc};
 use serde::Deserialize;
 
@@ -584,4 +586,64 @@ pub fn load_health_report(memory_dir: &Path, project: &str) -> String {
         }
         Err(e) => format!("Error running health check: {}", e),
     }
+}
+
+pub fn load_daemon_status(memory_dir: &Path) -> String {
+    let pid_file = memory_dir.join("daemon.pid");
+    let log_file = memory_dir.join("daemon.log");
+
+    let mut output = String::new();
+    output.push_str("Engram Daemon\n");
+    output.push_str("=============\n\n");
+
+    // Check PID
+    let running = if let Ok(contents) = std::fs::read_to_string(&pid_file) {
+        let pid: Option<u32> = contents.trim().parse().ok();
+        if let Some(pid) = pid {
+            let alive = unsafe { libc::kill(pid as i32, 0) == 0 };
+            if alive {
+                output.push_str(&format!("Status:  RUNNING (PID {})\n", pid));
+                true
+            } else {
+                output.push_str(&format!("Status:  STOPPED (stale PID {})\n", pid));
+                false
+            }
+        } else {
+            output.push_str("Status:  STOPPED\n");
+            false
+        }
+    } else {
+        output.push_str("Status:  STOPPED\n");
+        false
+    };
+
+    output.push_str(&format!(
+        "Log:     {}\n",
+        log_file.display()
+    ));
+    output.push_str("\n");
+
+    // Show last 20 lines of log
+    if log_file.exists() {
+        if let Ok(contents) = std::fs::read_to_string(&log_file) {
+            let lines: Vec<&str> = contents.lines().collect();
+            let start = lines.len().saturating_sub(20);
+            output.push_str("Recent Log (last 20 lines):\n");
+            output.push_str("---------------------------\n");
+            for line in &lines[start..] {
+                output.push_str(line);
+                output.push('\n');
+            }
+        }
+    } else if running {
+        output.push_str("(log file not yet created)\n");
+    } else {
+        output.push_str("No log file found. Start the daemon to create one.\n");
+        output.push_str("\nQuick Start:\n");
+        output.push_str("  Press [s] to start daemon (15 min interval)\n");
+        output.push_str("  Press [+/-] to adjust interval before starting\n");
+        output.push_str("  Or: engram daemon start --interval 30\n");
+    }
+
+    output
 }

@@ -101,6 +101,12 @@ pub enum Commands {
         command: HooksCommand,
     },
 
+    /// Run a background daemon that continuously ingests new sessions
+    Daemon {
+        #[command(subcommand)]
+        command: DaemonCommand,
+    },
+
     /// Regenerate context.md from existing knowledge files (no re-ingestion)
     Regen {
         /// Project name
@@ -774,5 +780,48 @@ pub enum RegistryCommand {
     Update {
         /// Registry name (updates all if not specified)
         name: Option<String>,
+    },
+}
+
+#[derive(Subcommand)]
+pub enum DaemonCommand {
+    /// Start the background ingest daemon
+    Start {
+        /// How often to run ingest, in minutes (default: 15)
+        #[arg(long, default_value = "15")]
+        interval: u64,
+
+        /// LLM provider override (anthropic, openai, ollama)
+        #[arg(long)]
+        provider: Option<String>,
+    },
+
+    /// Stop the running daemon
+    Stop,
+
+    /// Show daemon status
+    Status,
+
+    /// Show daemon logs
+    Logs {
+        /// Number of lines to show (default: 50)
+        #[arg(short, long, default_value = "50")]
+        lines: usize,
+
+        /// Follow log output (like tail -f)
+        #[arg(short, long)]
+        follow: bool,
+    },
+
+    /// Run the daemon loop in the foreground (internal — used by start)
+    #[command(hide = true)]
+    Run {
+        /// Polling interval in minutes
+        #[arg(long, default_value = "15")]
+        interval: u64,
+
+        /// LLM provider override
+        #[arg(long)]
+        provider: Option<String>,
     },
 }

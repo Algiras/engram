@@ -22,6 +22,7 @@ enum Screen {
     Learning,
     Analytics,
     Health,
+    Daemon,
     Help,
 }
 
@@ -41,6 +42,8 @@ pub enum TuiAction {
     Doctor,
     CleanupExpired,
     GraphBuild,
+    DaemonStart,
+    DaemonStop,
 }
 
 pub struct App {
@@ -85,6 +88,11 @@ pub struct App {
     health_content: String,
     health_scroll: u16,
 
+    // Daemon state
+    daemon_content: String,
+    daemon_scroll: u16,
+    daemon_interval: u64,
+
     // Action state
     pub action_message: Option<(String, bool)>, // (message, is_error)
     pub show_action_confirm: Option<TuiAction>,
@@ -127,6 +135,9 @@ impl App {
             analytics_days: 30,
             health_content: String::new(),
             health_scroll: 0,
+            daemon_content: String::new(),
+            daemon_scroll: 0,
+            daemon_interval: 15,
             action_message: None,
             show_action_confirm: None,
             pending_action: None,
@@ -260,6 +271,7 @@ impl App {
                     Screen::Learning => self.load_learning_data(),
                     Screen::Analytics => self.load_analytics_data(),
                     Screen::Health => self.load_health_data(),
+                    Screen::Daemon => self.load_daemon_data(),
                     _ => {}
                 }
             }
@@ -272,6 +284,7 @@ impl App {
                 Screen::Learning => ui::render_learning(f, self),
                 Screen::Analytics => ui::render_analytics(f, self),
                 Screen::Health => ui::render_health(f, self),
+                Screen::Daemon => ui::render_daemon(f, self),
                 Screen::Help => ui::render_help(f, self),
             })?;
 
@@ -323,6 +336,9 @@ impl App {
                     }
                     Screen::Health => {
                         self.handle_health_keys(key.code, terminal)?;
+                    }
+                    Screen::Daemon => {
+                        self.handle_daemon_keys(key.code, terminal)?;
                     }
                     Screen::Help => {
                         self.handle_help_keys(key.code)?;
@@ -463,6 +479,13 @@ impl App {
                 self.load_health_data();
                 self.screen = Screen::Health;
                 self.health_scroll = 0;
+            }
+
+            // Switch to Daemon screen
+            KeyCode::Char('D') => {
+                self.load_daemon_data();
+                self.screen = Screen::Daemon;
+                self.daemon_scroll = 0;
             }
 
             // Show Help
@@ -841,6 +864,12 @@ impl App {
                 self.health_scroll = 0;
                 true
             }
+            KeyCode::Char('D') => {
+                self.load_daemon_data();
+                self.screen = Screen::Daemon;
+                self.daemon_scroll = 0;
+                true
+            }
             KeyCode::Char('?') => {
                 self.screen = Screen::Help;
                 true
@@ -872,6 +901,68 @@ impl App {
         } else {
             self.health_content = "No project selected".to_string();
         }
+    }
+
+    fn load_daemon_data(&mut self) {
+        self.daemon_content = data::load_daemon_status(&self.memory_dir);
+    }
+
+    fn handle_daemon_keys(
+        &mut self,
+        code: KeyCode,
+        terminal: &Terminal<CrosstermBackend<io::Stdout>>,
+    ) -> io::Result<()> {
+        let page_size = terminal.size()?.height.saturating_sub(4);
+        let total_lines = self.daemon_content.lines().count() as u16;
+
+        match code {
+            KeyCode::Esc | KeyCode::Char('q') => {
+                self.screen = Screen::Browser;
+            }
+            KeyCode::Char('r') => {
+                self.load_daemon_data();
+                self.daemon_scroll = 0;
+            }
+            KeyCode::Char('s') => {
+                self.show_action_confirm = Some(TuiAction::DaemonStart);
+            }
+            KeyCode::Char('x') => {
+                self.show_action_confirm = Some(TuiAction::DaemonStop);
+            }
+            KeyCode::Char('+') | KeyCode::Char('>') => {
+                self.daemon_interval = (self.daemon_interval + 5).min(120);
+            }
+            KeyCode::Char('-') | KeyCode::Char('<') => {
+                self.daemon_interval = (self.daemon_interval.saturating_sub(5)).max(1);
+            }
+            KeyCode::Char('j') | KeyCode::Down => {
+                if self.daemon_scroll < total_lines {
+                    self.daemon_scroll += 1;
+                }
+            }
+            KeyCode::Char('k') | KeyCode::Up => {
+                self.daemon_scroll = self.daemon_scroll.saturating_sub(1);
+            }
+            KeyCode::PageDown | KeyCode::Char(' ') => {
+                self.daemon_scroll = self
+                    .daemon_scroll
+                    .saturating_add(page_size)
+                    .min(total_lines);
+            }
+            KeyCode::PageUp => {
+                self.daemon_scroll = self.daemon_scroll.saturating_sub(page_size);
+            }
+            KeyCode::Home | KeyCode::Char('g') => {
+                self.daemon_scroll = 0;
+            }
+            KeyCode::End | KeyCode::Char('G') => {
+                self.daemon_scroll = total_lines;
+            }
+            _ => {
+                self.handle_tab_switch(code);
+            }
+        }
+        Ok(())
     }
 
     fn handle_learning_keys(
@@ -1162,6 +1253,16 @@ impl App {
                 "Graph Build",
                 vec!["graph".into(), "build".into(), project_name.into()],
             ),
+            TuiAction::DaemonStart => (
+                "Daemon Start",
+                vec![
+                    "daemon".into(),
+                    "start".into(),
+                    "--interval".into(),
+                    self.daemon_interval.to_string(),
+                ],
+            ),
+            TuiAction::DaemonStop => ("Daemon Stop", vec!["daemon".into(), "stop".into()]),
         };
 
         // Store the action details temporarily - actual execution happens in run() loop

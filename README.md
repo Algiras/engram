@@ -153,8 +153,12 @@ Credentials are stored in `~/.config/engram/auth.json` with `0600` permissions.
 | `hive install <pack>` | Install a knowledge pack |
 | `hive list` | List installed packs |
 | `hive registry add <url>` | Add a pack registry |
+| `daemon start [--interval N]` | Start background ingest daemon (polls every N minutes, default 15) |
+| `daemon stop` | Stop the running daemon |
+| `daemon status` | Show daemon status and PID |
+| `daemon logs [-f]` | View daemon log output (use `-f` to follow) |
 
-See [HIVE_GUIDE.md](docs/HIVE_GUIDE.md) for full hive commands. See [LEARNING_GUIDE.md](docs/LEARNING_GUIDE.md) for the learning system.
+See [HIVE_GUIDE.md](docs/HIVE_GUIDE.md) for full hive commands. See [LEARNING_GUIDE.md](docs/LEARNING_GUIDE.md) for the learning system. See [DAEMON_GUIDE.md](docs/DAEMON_GUIDE.md) for background ingest.
 
 ## How It Works
 
@@ -185,7 +189,9 @@ See [HIVE_GUIDE.md](docs/HIVE_GUIDE.md) for full hive commands. See [LEARNING_GU
 ├── knowledge/_global/                   # Cross-project preferences
 ├── analytics/                           # Usage and activity data
 ├── packs/installed/                     # Installed hive knowledge packs
-└── hive/registries/                     # Registry clones
+├── hive/registries/                     # Registry clones
+├── daemon.pid                           # Daemon PID (present when running)
+└── daemon.log                           # Daemon output log
 ```
 
 ## Claude Code Hook

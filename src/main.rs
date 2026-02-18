@@ -3,6 +3,7 @@ mod analytics;
 mod auth;
 mod cli;
 mod config;
+mod daemon;
 mod diff;
 mod embeddings;
 mod error;
@@ -24,8 +25,8 @@ use std::path::{Path, PathBuf};
 
 use clap::Parser;
 use cli::{
-    AuthCommand, Cli, Commands, GraphCommand, HiveCommand, HooksCommand, LearnCommand, PackCommand,
-    RegistryCommand, SyncCommand,
+    AuthCommand, Cli, Commands, DaemonCommand, GraphCommand, HiveCommand, HooksCommand,
+    LearnCommand, PackCommand, RegistryCommand, SyncCommand,
 };
 use colored::Colorize;
 use config::Config;
@@ -134,6 +135,11 @@ fn main() -> Result<()> {
     // Hive operations - distributed knowledge sharing (no Config/LLM auth needed)
     if let Commands::Hive { command } = cli.command {
         return cmd_hive(command);
+    }
+
+    // Daemon - status/stop/logs don't need LLM auth; start/run load Config themselves
+    if let Commands::Daemon { command } = cli.command {
+        return cmd_daemon(command);
     }
 
     // Extract provider override for commands that support it
@@ -389,12 +395,31 @@ fn main() -> Result<()> {
         | Commands::Analytics { .. }
         | Commands::Diff { .. }
         | Commands::Learn { .. }
-        | Commands::Hive { .. } => {
+        | Commands::Hive { .. }
+        | Commands::Daemon { .. } => {
             unreachable!()
         }
     }
 
     Ok(())
+}
+
+// ── Daemon command ───────────────────────────────────────────────────────
+
+fn cmd_daemon(command: DaemonCommand) -> Result<()> {
+    // Daemon status/stop/logs work without LLM auth — load Config directly
+    let config = Config::load(None)?;
+    match command {
+        DaemonCommand::Start { interval, provider } => {
+            daemon::cmd_daemon_start(&config, interval, provider.as_deref())
+        }
+        DaemonCommand::Stop => daemon::cmd_daemon_stop(&config),
+        DaemonCommand::Status => daemon::cmd_daemon_status(&config),
+        DaemonCommand::Logs { lines, follow } => daemon::cmd_daemon_logs(&config, lines, follow),
+        DaemonCommand::Run { interval, provider } => {
+            daemon::cmd_daemon_run(&config, interval, provider.as_deref())
+        }
+    }
 }
 
 // ── TUI command ─────────────────────────────────────────────────────────
