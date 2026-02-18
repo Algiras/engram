@@ -7,7 +7,7 @@ use std::collections::{BTreeMap, HashMap};
 use std::path::Path;
 
 use crate::extractor::knowledge::{
-    parse_session_blocks, partition_by_expiry, reconstruct_blocks, SessionBlock,
+    parse_session_blocks, partition_by_expiry, reconstruct_blocks, strip_private_tags, SessionBlock,
 };
 use crate::hive::PackInstaller;
 
@@ -685,7 +685,7 @@ pub fn format_smart_memory(
         });
     }
 
-    Ok(out)
+    Ok(strip_private_tags(&out))
 }
 
 /// Build the retrieval guide footer for MEMORY.md.
@@ -756,7 +756,7 @@ pub fn build_compact_memory(
     // 5. Retrieval guide footer
     combined.push_str(&retrieval_guide());
 
-    Ok(combined)
+    Ok(strip_private_tags(&combined))
 }
 
 /// Build full MEMORY.md (legacy behavior, no truncation).
@@ -800,7 +800,7 @@ pub fn build_full_memory(
         combined.push_str(&pack_content);
     }
 
-    Ok(combined)
+    Ok(strip_private_tags(&combined))
 }
 
 #[cfg(test)]

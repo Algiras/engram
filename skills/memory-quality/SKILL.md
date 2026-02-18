@@ -1,16 +1,18 @@
 ---
 name: engram:memory-quality
 description: >
-  Memory quality and observability tools for engram. Covers four features:
-  (A) observation-enriched ingest — edited files are passed to the LLM during knowledge extraction;
-  (B) access tracking + token analytics — every command records a usage event, ingest logs token counts;
-  (C) smart stale-forget — prune old knowledge that has never had a TTL;
-  (D) observation-augmented smart inject — today's observed files are added to the semantic search signal.
-  Use this skill when asked about stale knowledge cleanup, analytics, smart inject behaviour, or ingest enrichment.
+  Memory quality, observability, and progressive context tools for engram. Covers six features:
+  (A) observation-enriched ingest — edited files passed to LLM during extraction;
+  (B) access tracking + token analytics — every command records usage events with token counts;
+  (C) smart stale-forget — prune old no-TTL knowledge;
+  (D) observation-augmented smart inject — today's observed files added to semantic signal;
+  (E) progressive MCP context — index/recall(session_ids)/timeline for ~10x token savings;
+  (F) <private> tag filtering — wrap any content to exclude it from storage and injection.
+  Use this skill when asked about stale knowledge, analytics, smart inject, private content, or MCP token efficiency.
 license: MIT
 metadata:
   author: engram
-  version: "1.0.0"
+  version: "1.1.0"
   repository: https://github.com/Algiras/engram
   triggers:
     - stale knowledge
@@ -26,11 +28,98 @@ metadata:
     - ingest enrichment
     - engram analytics
     - memory quality
+    - private tag
+    - "<private>"
+    - progressive context
+    - mcp index
+    - mcp timeline
+    - token efficient recall
+    - session ids recall
 ---
 
 # Memory Quality & Observability (engram v0.3+)
 
 Four features shipped in this plan that improve how engram captures, measures, and prunes knowledge.
+
+---
+
+## Feature E — Progressive MCP Context Retrieval
+
+**Why:** `recall` previously returned the full synthesized context on every call — often 2,000–8,000 tokens whether needed or not. Three-stage retrieval gives the LLM surgical control.
+
+### The 3-tier workflow
+
+```
+1. index("Personal")          → ~100 tokens — compact manifest of all entries
+2. timeline("Personal", id)   → ~150 tokens — chronological context around one entry
+3. recall("Personal",         → ~300 tokens/entry — full content for specific IDs
+     session_ids=["abc","def"])
+```
+
+### `index` tool
+Returns every active entry as a single line: `session_id (date) — "preview"`, grouped by category.
+
+```
+## Personal knowledge index (14 entries)
+Use recall(session_ids=[...]) to fetch specific entries.
+
+### decisions (3)
+  reflect-2026-01-15 (2026-01-15) — "Decided to use tokio runtime for async..."
+  a3b2c1d0 (2026-01-10) — "Chose PostgreSQL over SQLite for..."
+  ...
+
+### patterns (5)
+  manual-di (2026-01-08) — "Pattern: DI via constructor injection..."
+  ...
+```
+
+### `recall` with `session_ids`
+Pass specific IDs from `index` to get only those blocks:
+
+```json
+{"project": "Personal", "session_ids": ["reflect-2026-01-15", "manual-di"]}
+```
+
+Without `session_ids`, `recall` still returns the full synthesized context (backward-compatible).
+
+### `timeline` tool
+Shows a ±N window of sessions sorted chronologically around any given session:
+
+```
+## Timeline: 'reflect-2026-01-15' (±3 sessions)
+
+  a3b2c1d0 [decisions] (2026-01-10) — "Chose PostgreSQL..."
+  manual-di [patterns] (2026-01-12) — "Pattern: DI via..."
+► reflect-2026-01-15 [decisions] (2026-01-15) — "Decided to use tokio..."
+  x9y8z7w6 [solutions] (2026-01-18) — "Problem: connection pool..."
+
+Use recall(session_ids=[...]) to fetch full content.
+```
+
+---
+
+## Feature F — `<private>` Tag Filtering
+
+Wrap any content in `<private>...</private>` to exclude it from:
+- LLM knowledge extraction during `engram ingest`
+- `MEMORY.md` injection (compact, full, and smart modes)
+- All MCP tool responses (`recall`, `search`, `lookup`, `index`)
+
+### Usage
+
+```
+This is a normal message.
+<private>My API key is sk-proj-... and my password is hunter2</private>
+This part will be captured normally.
+```
+
+**Case-insensitive** — `<PRIVATE>`, `<Private>`, etc. all work.
+**Multi-line** — the tag spans as many lines as needed.
+**No configuration** — active by default everywhere.
+
+### What is NOT filtered
+- CLI `engram recall` and `engram context` commands — you always see your own full knowledge
+- The raw `.md` knowledge files on disk — private content is never written there in the first place (stripped before the LLM extraction prompt)
 
 ---
 

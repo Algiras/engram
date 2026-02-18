@@ -108,8 +108,8 @@ impl McpServer {
     fn handle_tools_list(&self, id: serde_json::Value) -> Response {
         let tools = vec![
             Tool {
-                name: "recall".to_string(),
-                description: "Recall project context and knowledge summary".to_string(),
+                name: "index".to_string(),
+                description: "Return a compact knowledge index for a project — one line per entry (category, session ID, date, preview). Use this first to discover what exists before calling recall. ~80-150 tokens regardless of knowledge base size.".to_string(),
                 input_schema: json!({
                     "type": "object",
                     "properties": {
@@ -119,6 +119,48 @@ impl McpServer {
                         }
                     },
                     "required": ["project"]
+                }),
+            },
+            Tool {
+                name: "recall".to_string(),
+                description: "Recall project knowledge. Without session_ids returns the full synthesized context. With session_ids returns only those specific blocks (~300 tokens each) — use index first to find relevant IDs.".to_string(),
+                input_schema: json!({
+                    "type": "object",
+                    "properties": {
+                        "project": {
+                            "type": "string",
+                            "description": "Project name"
+                        },
+                        "session_ids": {
+                            "type": "array",
+                            "items": { "type": "string" },
+                            "description": "Optional list of session IDs to fetch (from index). Omit for full context."
+                        }
+                    },
+                    "required": ["project"]
+                }),
+            },
+            Tool {
+                name: "timeline".to_string(),
+                description: "Show a chronological window of sessions around a given session ID. Useful for understanding temporal context — what was decided before/after a specific entry. Returns session list with previews, not full content.".to_string(),
+                input_schema: json!({
+                    "type": "object",
+                    "properties": {
+                        "project": {
+                            "type": "string",
+                            "description": "Project name"
+                        },
+                        "session_id": {
+                            "type": "string",
+                            "description": "The session to centre the timeline on"
+                        },
+                        "window": {
+                            "type": "number",
+                            "description": "Number of sessions to show on each side (default: 3)",
+                            "default": 3
+                        }
+                    },
+                    "required": ["project", "session_id"]
                 }),
             },
             Tool {
@@ -418,7 +460,9 @@ impl McpServer {
         let args = params.get("arguments").cloned().unwrap_or(json!({}));
 
         let result = match tool_name {
+            "index" => self.tool_index(args),
             "recall" => self.tool_recall(args),
+            "timeline" => self.tool_timeline(args),
             "search" => self.tool_search(args),
             "lookup" => self.tool_lookup(args),
             "projects" => self.tool_projects(args),
@@ -564,7 +608,61 @@ impl McpServer {
             .and_then(|v| v.as_str())
             .ok_or_else(|| MemoryError::Config("Missing project parameter".into()))?;
 
-        self.read_project_context(project)
+        // Selective fetch: only return requested session blocks
+        if let Some(ids_val) = args.get("session_ids").and_then(|v| v.as_array()) {
+            let ids: Vec<&str> = ids_val.iter().filter_map(|v| v.as_str()).collect();
+            if !ids.is_empty() {
+                return self.fetch_session_blocks(project, &ids);
+            }
+        }
+
+        // Full context (backward-compatible default)
+        let content = self.read_project_context(project)?;
+        Ok(crate::extractor::knowledge::strip_private_tags(&content))
+    }
+
+    /// Fetch specific session blocks by ID across all knowledge categories.
+    fn fetch_session_blocks(&self, project: &str, session_ids: &[&str]) -> Result<String> {
+        use crate::extractor::knowledge::{parse_session_blocks, partition_by_expiry};
+
+        let knowledge_dir = self.config.memory_dir.join("knowledge").join(project);
+        let categories = [
+            "decisions",
+            "solutions",
+            "patterns",
+            "bugs",
+            "insights",
+            "questions",
+        ];
+        let mut out = format!("## {} — selected entries\n\n", project);
+        let mut found = 0;
+
+        for cat in &categories {
+            let path = knowledge_dir.join(format!("{}.md", cat));
+            if !path.exists() {
+                continue;
+            }
+            let content = std::fs::read_to_string(&path)?;
+            let (_preamble, blocks) = parse_session_blocks(&content);
+            let (active, _) = partition_by_expiry(blocks);
+            for block in active {
+                if session_ids.contains(&block.session_id.as_str()) {
+                    out.push_str(&format!("### [{}] {}\n\n", cat, block.session_id));
+                    out.push_str(block.content.trim());
+                    out.push_str("\n\n");
+                    found += 1;
+                }
+            }
+        }
+
+        if found == 0 {
+            return Ok(format!(
+                "No entries found for the requested session IDs in '{}'.\nUse `index` to list available IDs.",
+                project
+            ));
+        }
+
+        Ok(crate::extractor::knowledge::strip_private_tags(&out))
     }
 
     fn tool_search(&self, args: serde_json::Value) -> Result<String> {
@@ -631,7 +729,7 @@ impl McpServer {
         if results.is_empty() {
             Ok(format!("No matches found for '{}'", query))
         } else {
-            Ok(results)
+            Ok(crate::extractor::knowledge::strip_private_tags(&results))
         }
     }
 
@@ -684,7 +782,7 @@ impl McpServer {
                 query, project
             ))
         } else {
-            Ok(results)
+            Ok(crate::extractor::knowledge::strip_private_tags(&results))
         }
     }
 
@@ -1230,6 +1328,145 @@ impl McpServer {
             "context.md rebuilt for '{}'. Use `recall` to read the updated summary.",
             project
         ))
+    }
+
+    /// Compact knowledge index — one line per active entry across all categories.
+    fn tool_index(&self, args: serde_json::Value) -> Result<String> {
+        use crate::extractor::knowledge::{parse_session_blocks, partition_by_expiry};
+        use std::collections::BTreeMap;
+
+        let project = args["project"]
+            .as_str()
+            .ok_or_else(|| MemoryError::Config("Missing project".into()))?;
+
+        let knowledge_dir = self.config.memory_dir.join("knowledge").join(project);
+        if !knowledge_dir.exists() {
+            return Ok(format!(
+                "No knowledge found for '{}'. Run `engram ingest` first.",
+                project
+            ));
+        }
+
+        let categories = [
+            "decisions",
+            "solutions",
+            "patterns",
+            "bugs",
+            "insights",
+            "questions",
+        ];
+        // BTreeMap keeps categories in alphabetical order
+        let mut by_cat: BTreeMap<&str, Vec<(String, String, String)>> = BTreeMap::new();
+
+        for cat in &categories {
+            let path = knowledge_dir.join(format!("{}.md", cat));
+            if !path.exists() {
+                continue;
+            }
+            let content = std::fs::read_to_string(&path)?;
+            let (_preamble, blocks) = parse_session_blocks(&content);
+            let (mut active, _) = partition_by_expiry(blocks);
+            // Most-recent first within each category
+            active.sort_by(|a, b| b.timestamp.cmp(&a.timestamp));
+            let entries: Vec<(String, String, String)> = active
+                .into_iter()
+                .map(|b| {
+                    let date = b.timestamp.get(..10).unwrap_or(&b.timestamp).to_string();
+                    (b.session_id, date, b.preview)
+                })
+                .collect();
+            if !entries.is_empty() {
+                by_cat.insert(cat, entries);
+            }
+        }
+
+        if by_cat.is_empty() {
+            return Ok(format!("No active knowledge entries for '{}'.", project));
+        }
+
+        let total: usize = by_cat.values().map(|v| v.len()).sum();
+        let mut out = format!("## {} knowledge index ({} entries)\n", project, total);
+        out.push_str("Use recall(session_ids=[...]) to fetch specific entries.\n\n");
+
+        for (cat, entries) in &by_cat {
+            out.push_str(&format!("### {} ({})\n", cat, entries.len()));
+            for (sid, date, preview) in entries {
+                let p: String = preview.chars().take(70).collect();
+                out.push_str(&format!("  {} ({}) — \"{}\"\n", sid, date, p));
+            }
+            out.push('\n');
+        }
+
+        Ok(out)
+    }
+
+    /// Chronological window around a session — shows what came before/after.
+    fn tool_timeline(&self, args: serde_json::Value) -> Result<String> {
+        use crate::extractor::knowledge::{parse_session_blocks, partition_by_expiry};
+
+        let project = args["project"]
+            .as_str()
+            .ok_or_else(|| MemoryError::Config("Missing project".into()))?;
+        let session_id = args["session_id"]
+            .as_str()
+            .ok_or_else(|| MemoryError::Config("Missing session_id".into()))?;
+        let window = args["window"].as_u64().unwrap_or(3) as usize;
+
+        let knowledge_dir = self.config.memory_dir.join("knowledge").join(project);
+        let categories = [
+            "decisions",
+            "solutions",
+            "patterns",
+            "bugs",
+            "insights",
+            "questions",
+        ];
+
+        // Collect all active entries across categories
+        let mut all: Vec<(String, String, String, String)> = Vec::new(); // (ts, sid, cat, preview)
+        for cat in &categories {
+            let path = knowledge_dir.join(format!("{}.md", cat));
+            if !path.exists() {
+                continue;
+            }
+            let content = std::fs::read_to_string(&path)?;
+            let (_preamble, blocks) = parse_session_blocks(&content);
+            let (active, _) = partition_by_expiry(blocks);
+            for b in active {
+                all.push((b.timestamp, b.session_id, cat.to_string(), b.preview));
+            }
+        }
+
+        // Sort chronologically
+        all.sort_by(|a, b| a.0.cmp(&b.0));
+
+        let pos = all.iter().position(|(_, sid, _, _)| sid == session_id);
+        let Some(pos) = pos else {
+            return Ok(format!(
+                "Session '{}' not found in '{}'. Use `index` to list available IDs.",
+                session_id, project
+            ));
+        };
+
+        let start = pos.saturating_sub(window);
+        let end = (pos + window + 1).min(all.len());
+
+        let mut out = format!("## Timeline: '{}' (±{} sessions)\n\n", session_id, window);
+
+        for (i, (ts, sid, cat, preview)) in all[start..end].iter().enumerate() {
+            let date = ts.get(..10).unwrap_or(ts.as_str());
+            let marker = if start + i == pos { "► " } else { "  " };
+            let p: String = preview.chars().take(60).collect();
+            out.push_str(&format!(
+                "{}{} [{}] ({}) — \"{}\"\n",
+                marker, sid, cat, date, p
+            ));
+        }
+
+        out.push_str(
+            "\nUse recall(session_ids=[...]) to fetch full content for any of these sessions.",
+        );
+        Ok(out)
     }
 
     /// Remove stale (old, no-TTL) entries — delegates to `engram forget --stale --auto`.

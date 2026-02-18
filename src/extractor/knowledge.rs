@@ -203,6 +203,20 @@ pub fn replace_session_block(
     Some(result)
 }
 
+/// Strip `<private>…</private>` blocks from text before storage or injection.
+/// Matching is case-insensitive and supports multi-line content.
+pub fn strip_private_tags(text: &str) -> String {
+    use std::sync::OnceLock;
+    static RE: OnceLock<regex::Regex> = OnceLock::new();
+    let re =
+        RE.get_or_init(|| regex::Regex::new(r"(?is)<private>.*?</private>").expect("static regex"));
+    let result = re.replace_all(text, "");
+    // Collapse runs of blank lines left behind by removal
+    static BLANK_RE: OnceLock<regex::Regex> = OnceLock::new();
+    let blank_re = BLANK_RE.get_or_init(|| regex::Regex::new(r"\n{3,}").expect("static regex"));
+    blank_re.replace_all(&result, "\n\n").to_string()
+}
+
 /// Extract session ID from a header string like "\n\n## Session: abc-123 (2025-01-01)\n\n"
 fn extract_session_id_from_header(header: &str) -> Option<String> {
     let re = Regex::new(r"## Session: (\S+) \(").unwrap();
@@ -577,7 +591,8 @@ fn conversation_to_text(conv: &Conversation) -> String {
         text.push('\n');
     }
 
-    text
+    // Strip private blocks before the LLM ever sees the text
+    strip_private_tags(&text)
 }
 
 fn append_knowledge(path: &Path, header: &str, content: &str) -> Result<()> {
@@ -799,4 +814,52 @@ fn atomic_write(target: &Path, content: &str) -> crate::Result<()> {
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod private_tag_tests {
+    use super::strip_private_tags;
+
+    #[test]
+    fn test_strip_inline() {
+        let input = "Keep this. <private>secret token</private> Keep this too.";
+        let out = strip_private_tags(input);
+        assert!(!out.contains("secret token"));
+        assert!(out.contains("Keep this."));
+        assert!(out.contains("Keep this too."));
+    }
+
+    #[test]
+    fn test_strip_multiline() {
+        let input = "Before\n<private>\nline1\nline2\n</private>\nAfter";
+        let out = strip_private_tags(input);
+        assert!(!out.contains("line1"));
+        assert!(out.contains("Before"));
+        assert!(out.contains("After"));
+    }
+
+    #[test]
+    fn test_strip_case_insensitive() {
+        let out = strip_private_tags("x <PRIVATE>secret</PRIVATE> y");
+        assert!(!out.contains("secret"));
+        assert!(out.contains("x"));
+        assert!(out.contains("y"));
+    }
+
+    #[test]
+    fn test_no_private_tags_unchanged() {
+        let input = "Normal text with no private blocks.";
+        assert_eq!(strip_private_tags(input), input);
+    }
+
+    #[test]
+    fn test_multiple_blocks_stripped() {
+        let input = "A <private>one</private> B <private>two</private> C";
+        let out = strip_private_tags(input);
+        assert!(!out.contains("one"));
+        assert!(!out.contains("two"));
+        assert!(out.contains("A"));
+        assert!(out.contains("B"));
+        assert!(out.contains("C"));
+    }
 }
