@@ -1,0 +1,12 @@
+pub mod auth;
+pub mod consolidate;
+pub mod core;
+pub mod diff;
+pub mod embeddings;
+pub mod graph;
+pub mod hive;
+pub mod hooks;
+pub mod knowledge;
+pub mod learning;
+pub mod manual;
+pub mod sync;
