@@ -12,7 +12,6 @@ set -e
 REPO="${REPO:-Algiras/engram}"
 BINARY="engram"
 INSTALL_DIR="${INSTALL_DIR:-/usr/local/bin}"
-RELEASES_API_URL="${RELEASES_API_URL:-https://api.github.com/repos/${REPO}/releases}"
 RELEASE_BASE_URL="${RELEASE_BASE_URL:-https://github.com/${REPO}/releases/download}"
 
 require_cmd() {
@@ -109,10 +108,12 @@ get_latest_version() {
         return
     fi
 
-    VERSION="$(curl -fsSL "${RELEASES_API_URL}/latest" \
-        | grep '"tag_name"' \
-        | head -1 \
-        | sed 's/.*"tag_name": *"\([^"]*\)".*/\1/')"
+    # Follow the GitHub releases/latest redirect to get the version tag.
+    # This avoids the unauthenticated API rate limit (60 req/hour).
+    # Override LATEST_REDIRECT_URL for testing.
+    LATEST_URL="${LATEST_REDIRECT_URL:-https://github.com/${REPO}/releases/latest}"
+    VERSION="$(curl -fsSL -o /dev/null -w "%{url_effective}" -L "$LATEST_URL" \
+        | sed 's|.*/tag/||')"
 
     if [ -z "$VERSION" ]; then
         echo "Error: could not determine latest version." >&2
