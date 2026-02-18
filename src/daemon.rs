@@ -104,7 +104,10 @@ pub fn cmd_daemon_stop(config: &Config) -> Result<()> {
         return Ok(());
     }
 
-    unsafe { libc::kill(pid as i32, libc::SIGTERM) };
+    // Kill the entire process group (daemon + any running ingest child)
+    unsafe {
+        libc::kill(-(pid as i32), libc::SIGTERM);
+    };
 
     // Wait up to 5s for it to exit
     for _ in 0..50 {
@@ -115,7 +118,7 @@ pub fn cmd_daemon_stop(config: &Config) -> Result<()> {
     }
 
     if is_running(pid) {
-        unsafe { libc::kill(pid as i32, libc::SIGKILL) };
+        unsafe { libc::kill(-(pid as i32), libc::SIGKILL) };
     }
 
     let _ = fs::remove_file(pid_file(config));
@@ -215,6 +218,9 @@ pub fn cmd_daemon_run(config: &Config, interval_mins: u64, provider: Option<&str
     let log = |msg: &str| {
         println!("[{}] {}", Local::now().format("%Y-%m-%d %H:%M:%S"), msg);
     };
+
+    // Create a new process group so SIGTERM to -pgid kills daemon + children
+    unsafe { libc::setpgid(0, 0) };
 
     log("Engram daemon started");
     log(&format!("  Interval: {} minutes", interval_mins));

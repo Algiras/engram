@@ -1,5 +1,18 @@
 use crate::parser::conversation::Conversation;
 
+/// Truncate a string to at most `max_bytes` bytes, respecting UTF-8 char boundaries.
+fn truncate_str(s: &str, max_bytes: usize) -> &str {
+    if s.len() <= max_bytes {
+        return s;
+    }
+    // Walk back from max_bytes to find a valid char boundary
+    let mut end = max_bytes;
+    while !s.is_char_boundary(end) {
+        end -= 1;
+    }
+    &s[..end]
+}
+
 /// Render a conversation to clean markdown
 pub fn render_conversation(conv: &Conversation) -> String {
     let mut out = String::with_capacity(8192);
@@ -31,7 +44,7 @@ pub fn render_conversation(conv: &Conversation) -> String {
         out.push_str("### User\n\n");
         let user_text = turn.user_text.trim();
         if user_text.len() > 2000 {
-            out.push_str(&user_text[..2000]);
+            out.push_str(truncate_str(user_text, 2000));
             out.push_str("\n\n*[truncated]*\n\n");
         } else {
             out.push_str(user_text);
@@ -67,7 +80,7 @@ pub fn render_conversation(conv: &Conversation) -> String {
         if !assistant_text.is_empty() {
             out.push_str("### Assistant\n\n");
             if assistant_text.len() > 5000 {
-                out.push_str(&assistant_text[..5000]);
+                out.push_str(truncate_str(assistant_text, 5000));
                 out.push_str("\n\n*[truncated]*\n\n");
             } else {
                 out.push_str(assistant_text);
@@ -119,7 +132,7 @@ pub fn render_summary(conv: &Conversation) -> String {
     if let Some(first_turn) = conv.turns.first() {
         let topic = first_turn.user_text.trim();
         let topic = if topic.len() > 500 {
-            &topic[..500]
+            truncate_str(topic, 500)
         } else {
             topic
         };

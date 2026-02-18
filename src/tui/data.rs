@@ -365,9 +365,14 @@ pub fn render_pack_detail(pack: &PackEntry, memory_dir: &Path) -> String {
                     category.replace(".md", "").to_uppercase()
                 ));
 
-                // Show first 500 characters
+                // Show first 500 bytes (clamped to char boundary)
                 let preview = if content.len() > 500 {
-                    format!("{}...\n\n(Use 'v' to view full content)", &content[..500])
+                    let end = {
+                        let mut e = 500;
+                        while !content.is_char_boundary(e) { e -= 1; }
+                        e
+                    };
+                    format!("{}...\n\n(Use 'v' to view full content)", &content[..end])
                 } else {
                     content
                 };
