@@ -17,6 +17,7 @@ pub fn cmd_ask(
     top_k: usize,
     threshold: f32,
     verbose: bool,
+    use_graph: bool,
 ) -> Result<()> {
     // 1. Semantic search (graceful error → empty)
     let mut entries: Vec<SmartEntry> =
@@ -24,17 +25,66 @@ pub fn cmd_ask(
             .unwrap_or_else(|_| vec![]);
     let used_semantic = !entries.is_empty();
 
+    // 1b. Graph-augmented retrieval (opt-in via --use-graph)
+    // For each concept in the knowledge graph that matches the query, retrieve
+    // semantically similar entries for its 2-hop graph neighbors.
+    if use_graph {
+        let graph_path = config.memory_dir
+            .join("knowledge")
+            .join(project)
+            .join("graph.json");
+        if graph_path.exists() {
+            if let Ok(graph) = crate::graph::KnowledgeGraph::load(&graph_path) {
+                let query_lower = query.to_lowercase();
+                let mut augmented_queries: Vec<String> = Vec::new();
+
+                // Find concepts mentioned in the query
+                for concept in graph.concepts.values() {
+                    if query_lower.contains(&concept.name.to_lowercase()) {
+                        // BFS 2-hop neighbors
+                        let related = crate::graph::query::find_related(&graph, &concept.id, 2);
+                        for (related_id, depth) in related {
+                            if let Some(rel_concept) = graph.concepts.get(&related_id) {
+                                // Use neighbor name as an additional search query
+                                augmented_queries.push(rel_concept.name.clone());
+                                if verbose {
+                                    eprintln!(
+                                        "{} graph: {} →[{}]→ {}",
+                                        "Ask:".cyan(), concept.name, depth, rel_concept.name
+                                    );
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // Fetch entries for each augmented query (dedup by session_id)
+                for aug_query in augmented_queries.iter().take(4) {
+                    let aug_entries = smart_search_sync(
+                        project, &config.memory_dir, aug_query, 2, threshold,
+                    ).unwrap_or_default();
+                    for entry in aug_entries {
+                        if !entries.iter().any(|e| e.session_id == entry.session_id) {
+                            entries.push(SmartEntry {
+                                score: entry.score * 0.85, // slight discount for graph-sourced
+                                ..entry
+                            });
+                        }
+                    }
+                }
+            }
+        } else if verbose {
+            eprintln!(
+                "{} No graph.json found. Run 'engram graph build {}' first.",
+                "Ask:".yellow(), project
+            );
+        }
+    }
+
     // 2. Lexical fallback if semantic returned fewer than 2 results
     if entries.len() < 2 {
         let knowledge_dir = config.memory_dir.join("knowledge").join(project);
-        for cat in &[
-            "decisions",
-            "solutions",
-            "patterns",
-            "bugs",
-            "insights",
-            "questions",
-        ] {
+        for cat in crate::config::CATEGORIES {
             let path = knowledge_dir.join(format!("{}.md", cat));
             if !path.exists() {
                 continue;

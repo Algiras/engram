@@ -107,6 +107,9 @@ pub enum Commands {
         /// Token budget for smart inject (default: 1500)
         #[arg(long, default_value = "1500")]
         budget: usize,
+        /// Measure and report token efficiency vs. full-context baseline
+        #[arg(long)]
+        measure_tokens: bool,
     },
 
     /// Manage Claude Code hooks for automatic memory integration
@@ -438,6 +441,10 @@ pub enum Commands {
         /// LLM provider override (anthropic, openai, ollama)
         #[arg(long)]
         provider: Option<String>,
+
+        /// Use graph-augmented retrieval (traverses 2-hop entity neighbors for multi-hop QA)
+        #[arg(long)]
+        use_graph: bool,
     },
 
     /// Show named entity cards for a project (libraries, tools, APIs extracted from sessions)

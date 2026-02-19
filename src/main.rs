@@ -102,9 +102,10 @@ fn main() -> Result<()> {
         no_auto_clean,
         smart,
         budget,
+        measure_tokens,
     } = cli.command
     {
-        return cmd_inject(project, full, no_auto_clean, smart, budget);
+        return cmd_inject(project, full, no_auto_clean, smart, budget, measure_tokens);
     }
 
     // Lookup operates on knowledge files — no Config/LLM auth needed
@@ -495,6 +496,7 @@ fn main() -> Result<()> {
         project,
         top_k,
         threshold,
+        use_graph,
         ..
     } = &cli.command
     {
@@ -511,6 +513,7 @@ fn main() -> Result<()> {
             *top_k,
             *threshold,
             cli.verbose,
+            *use_graph,
         );
     }
 
@@ -644,6 +647,7 @@ fn cmd_inject(
     no_auto_clean: bool,
     smart: bool,
     budget: usize,
+    measure_tokens: bool,
 ) -> Result<()> {
     let home = dirs::home_dir()
         .ok_or_else(|| error::MemoryError::Config("Could not determine home directory".into()))?;
@@ -807,6 +811,38 @@ fn cmd_inject(
         line_count,
         memory_file.display()
     );
+
+    // Track 3: Token efficiency measurement
+    if measure_tokens {
+        let injected_tokens = combined.len() / 4;
+        let knowledge_dir = memory_dir.join("knowledge").join(&project_name);
+        let full_tokens: usize = crate::config::CATEGORY_FILES
+            .iter()
+            .filter_map(|f| std::fs::read_to_string(knowledge_dir.join(f)).ok())
+            .map(|s| s.len() / 4)
+            .sum::<usize>()
+            + std::fs::read_to_string(knowledge_dir.join("context.md"))
+                .map(|s| s.len() / 4)
+                .unwrap_or(0);
+
+        let savings_pct = if full_tokens > 0 {
+            (1.0 - injected_tokens as f64 / full_tokens as f64) * 100.0
+        } else {
+            0.0
+        };
+
+        eprintln!(
+            "\n{} Token efficiency report:",
+            "Measure:".cyan().bold()
+        );
+        eprintln!("  Injected tokens (est.): {:>7}", injected_tokens);
+        eprintln!("  Full context (est.):    {:>7}", full_tokens);
+        eprintln!("  Token savings:          {:>6.1}%", savings_pct.max(0.0));
+        eprintln!("  Mem0 claimed savings:   {:>6.1}%", 90.0_f64);
+        if savings_pct >= 90.0 {
+            eprintln!("  {} Matches Mem0 token efficiency claim!", "✓".green());
+        }
+    }
 
     Ok(())
 }
