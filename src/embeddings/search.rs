@@ -17,16 +17,14 @@ impl SemanticSearch {
 
         let mut store = EmbeddingStore::new(index_path);
 
-        // Read knowledge files
-        let files = [
-            ("context", "context.md"),
-            ("decisions", "decisions.md"),
-            ("solutions", "solutions.md"),
-            ("patterns", "patterns.md"),
-            ("bugs", "bugs.md"),
-            ("insights", "insights.md"),
-            ("questions", "questions.md"),
-        ];
+        // Read knowledge files — context.md first, then all canonical categories
+        let mut files: Vec<(&str, &str)> = vec![("context", "context.md")];
+        for (cat, file) in crate::config::CATEGORIES
+            .iter()
+            .zip(crate::config::CATEGORY_FILES.iter())
+        {
+            files.push((cat, file));
+        }
 
         for (category, filename) in &files {
             let path = knowledge_dir.join(filename);
