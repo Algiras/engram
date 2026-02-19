@@ -231,6 +231,10 @@ pub enum Commands {
         /// Skip confirmation prompt when used with --stale
         #[arg(long)]
         auto: bool,
+
+        /// Summarize stale entries with LLM instead of deleting (requires --stale)
+        #[arg(long)]
+        summarize: bool,
     },
 
     /// Manage LLM provider authentication
@@ -402,6 +406,34 @@ pub enum Commands {
         /// Project name (defaults to CWD basename)
         #[arg(long)]
         project: Option<String>,
+    },
+
+    /// Git-like versioning for project knowledge (VCS)
+    Mem {
+        #[command(subcommand)]
+        command: MemCommand,
+    },
+
+    /// Answer a question using RAG over project knowledge
+    Ask {
+        /// The question to answer
+        query: String,
+
+        /// Project name (defaults to basename of current directory)
+        #[arg(long)]
+        project: Option<String>,
+
+        /// Maximum knowledge entries to retrieve (default: 5)
+        #[arg(long, default_value = "5")]
+        top_k: usize,
+
+        /// Minimum similarity threshold for semantic search 0.0–1.0 (default: 0.4)
+        #[arg(long, default_value = "0.4")]
+        threshold: f32,
+
+        /// LLM provider override (anthropic, openai, ollama)
+        #[arg(long)]
+        provider: Option<String>,
     },
 }
 
@@ -859,6 +891,133 @@ pub enum RegistryCommand {
     Update {
         /// Registry name (updates all if not specified)
         name: Option<String>,
+    },
+}
+
+#[derive(Subcommand)]
+pub enum MemCommand {
+    /// Initialize VCS for a project
+    Init {
+        /// Project name (defaults to basename of current directory)
+        #[arg(long)]
+        project: Option<String>,
+    },
+
+    /// Show staged / unstaged sessions
+    Status {
+        /// Project name (defaults to basename of current directory)
+        #[arg(long)]
+        project: Option<String>,
+    },
+
+    /// Stage specific session IDs for the next commit
+    Stage {
+        /// Project name
+        project: String,
+
+        /// Session IDs to stage
+        #[arg(value_name = "SESSION_ID")]
+        sessions: Vec<String>,
+
+        /// Stage all new (not-yet-committed) sessions
+        #[arg(short = 'a', long)]
+        all: bool,
+    },
+
+    /// Create a commit from staged (or specified) sessions
+    Commit {
+        /// Project name
+        project: String,
+
+        /// Commit message
+        #[arg(short, long)]
+        message: String,
+
+        /// Stage and commit all new sessions
+        #[arg(short = 'a', long)]
+        all: bool,
+
+        /// Commit a specific session ID directly (skips staging)
+        #[arg(long)]
+        session: Option<String>,
+    },
+
+    /// Show commit log
+    Log {
+        /// Project name
+        project: String,
+
+        /// Maximum number of commits to show
+        #[arg(long, default_value = "10")]
+        limit: usize,
+
+        /// Show full session lists and category hashes
+        #[arg(long)]
+        verbose: bool,
+
+        /// Filter commits whose message or session IDs match this pattern
+        #[arg(long)]
+        grep: Option<String>,
+    },
+
+    /// Inspect snapshot content for a commit or branch (no checkout)
+    Show {
+        /// Project name
+        project: String,
+
+        /// Branch name or commit hash (default: HEAD)
+        target: Option<String>,
+
+        /// Limit to a single category
+        #[arg(long)]
+        category: Option<String>,
+    },
+
+    /// List or manage branches
+    Branch {
+        /// Project name
+        project: String,
+
+        /// Create a new branch from HEAD
+        #[arg(short = 'c', long, value_name = "NAME")]
+        create: Option<String>,
+
+        /// Delete a branch
+        #[arg(short = 'd', long, value_name = "NAME")]
+        delete: Option<String>,
+    },
+
+    /// Checkout a branch or commit (restores knowledge files)
+    Checkout {
+        /// Project name
+        project: String,
+
+        /// Branch name or commit hash to check out
+        target: String,
+
+        /// Preview changes without applying them
+        #[arg(long)]
+        dry_run: bool,
+
+        /// Force checkout even with uncommitted changes (preserves uncommitted sessions)
+        #[arg(long)]
+        force: bool,
+    },
+
+    /// Show diff between two commits or between HEAD and working state
+    Diff {
+        /// Project name
+        project: String,
+
+        /// From ref (default: HEAD)
+        from: Option<String>,
+
+        /// To ref (default: working state)
+        to: Option<String>,
+
+        /// Limit diff to a single category
+        #[arg(long)]
+        category: Option<String>,
     },
 }
 

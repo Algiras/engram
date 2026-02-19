@@ -8,12 +8,15 @@ The `engram` TUI provides an interactive interface for browsing and managing you
 engram tui
 ```
 
-## What's New in v0.3.0 ⭐
+## What's New in v0.3.4 ⭐
 
-Three major features added to the TUI:
+- **Ask Screen** (`A` key) - Interactive RAG Q&A: type a question, get an answer from your knowledge base, scroll with j/k, clear with C
+- **Analytics key** changed from `A` → `N` to free up `A` for the Ask screen
+
+## What's New in v0.3.3
 
 1. **Learning Dashboard** (`L` key) - View reinforcement learning metrics, health scores, and adaptation success rates
-2. **Analytics Viewer** (`A` key) - Usage insights, event distribution, top/stale knowledge tracking with configurable time windows
+2. **Analytics Viewer** (`N` key) - Usage insights, event distribution, top/stale knowledge tracking with configurable time windows
 3. **Health Check** (`H` key) - Project diagnostics with issue severity, auto-fix commands, and recommendations
 4. **Help Screen** (`?` key) - Complete keyboard shortcuts reference
 

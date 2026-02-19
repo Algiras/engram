@@ -28,6 +28,9 @@ pub enum MemoryError {
 
     #[error("Auth error: {0}")]
     Auth(String),
+
+    #[error("VCS error: {0}")]
+    Vcs(String),
 }
 
 pub type Result<T> = std::result::Result<T, MemoryError>;

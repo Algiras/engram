@@ -21,18 +21,20 @@ mod renderer;
 mod state;
 mod sync;
 mod tui;
+mod vcs;
 
 use std::path::{Path, PathBuf};
 
 use clap::Parser;
 use cli::{
     AuthCommand, Cli, Commands, DaemonCommand, GraphCommand, HooksCommand, LearnCommand,
-    SyncCommand,
+    MemCommand, SyncCommand,
 };
 use colored::Colorize;
 use config::Config;
 use error::Result;
 
+use commands::ask::cmd_ask;
 use commands::auth::{
     cmd_auth_embed, cmd_auth_embed_model, cmd_auth_list, cmd_auth_login, cmd_auth_logout,
     cmd_auth_model, cmd_auth_models, cmd_auth_status, cmd_auth_test,
@@ -58,6 +60,10 @@ use commands::observe::cmd_observe;
 use commands::sync::{
     cmd_sync_clone, cmd_sync_history, cmd_sync_init_repo, cmd_sync_list, cmd_sync_pull,
     cmd_sync_pull_repo, cmd_sync_push, cmd_sync_push_repo,
+};
+use commands::vcs::{
+    cmd_mem_branch, cmd_mem_checkout, cmd_mem_commit, cmd_mem_diff, cmd_mem_init, cmd_mem_log,
+    cmd_mem_show, cmd_mem_stage, cmd_mem_status,
 };
 
 fn main() -> Result<()> {
@@ -155,6 +161,7 @@ fn main() -> Result<()> {
         expired,
         stale,
         auto: auto_approve,
+        summarize,
     } = cli.command
     {
         return cmd_forget(
@@ -166,6 +173,7 @@ fn main() -> Result<()> {
             expired,
             stale,
             auto_approve,
+            summarize,
         );
     }
 
@@ -193,11 +201,64 @@ fn main() -> Result<()> {
         return cmd_observe(project.as_deref());
     }
 
+    // Mem (VCS) - filesystem only, no Config/LLM needed
+    if let Commands::Mem { command } = cli.command {
+        return match command {
+            MemCommand::Init { project } => cmd_mem_init(project.as_deref()),
+            MemCommand::Status { project } => cmd_mem_status(project.as_deref()),
+            MemCommand::Stage {
+                project,
+                sessions,
+                all,
+            } => cmd_mem_stage(&project, &sessions, all),
+            MemCommand::Commit {
+                project,
+                message,
+                all,
+                session,
+            } => cmd_mem_commit(&project, &message, all, session.as_deref()),
+            MemCommand::Log {
+                project,
+                limit,
+                verbose,
+                grep,
+            } => cmd_mem_log(&project, limit, verbose, grep.as_deref()),
+            MemCommand::Show {
+                project,
+                target,
+                category,
+            } => cmd_mem_show(&project, target.as_deref(), category.as_deref()),
+            MemCommand::Branch {
+                project,
+                create,
+                delete,
+            } => cmd_mem_branch(&project, create.as_deref(), delete.as_deref()),
+            MemCommand::Checkout {
+                project,
+                target,
+                dry_run,
+                force,
+            } => cmd_mem_checkout(&project, &target, dry_run, force),
+            MemCommand::Diff {
+                project,
+                from,
+                to,
+                category,
+            } => cmd_mem_diff(
+                &project,
+                from.as_deref(),
+                to.as_deref(),
+                category.as_deref(),
+            ),
+        };
+    }
+
     // Extract provider override for commands that support it
     let provider_override = match &cli.command {
         Commands::Ingest { provider, .. }
         | Commands::Regen { provider, .. }
         | Commands::Mcp { provider, .. }
+        | Commands::Ask { provider, .. }
         | Commands::Graph {
             command: GraphCommand::Build { provider, .. },
         } => provider.as_deref(),
@@ -400,6 +461,31 @@ fn main() -> Result<()> {
         };
     }
 
+    // Ask command
+    if let Commands::Ask {
+        query,
+        project,
+        top_k,
+        threshold,
+        ..
+    } = &cli.command
+    {
+        let project_name = project.clone().unwrap_or_else(|| {
+            std::env::current_dir()
+                .ok()
+                .and_then(|p| p.file_name().map(|n| n.to_string_lossy().to_string()))
+                .unwrap_or_else(|| "default".to_string())
+        });
+        return cmd_ask(
+            &config,
+            query,
+            &project_name,
+            *top_k,
+            *threshold,
+            cli.verbose,
+        );
+    }
+
     match cli.command {
         Commands::Ingest {
             force,
@@ -470,7 +556,9 @@ fn main() -> Result<()> {
         | Commands::Learn { .. }
         | Commands::Hive { .. }
         | Commands::Daemon { .. }
-        | Commands::Observe { .. } => {
+        | Commands::Observe { .. }
+        | Commands::Mem { .. }
+        | Commands::Ask { .. } => {
             unreachable!()
         }
     }

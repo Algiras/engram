@@ -4,9 +4,29 @@ All notable changes to claude-memory will be documented in this file.
 
 ## [Unreleased]
 
+## [0.3.5] - 2026-02-19
+
+### Fixed
+- **inject: `build_raw_context` and `format_smart_memory` now include bugs/insights/questions** — all 6 knowledge categories are injected into MEMORY.md (previously only decisions/solutions/patterns were visible to Claude)
+- **panic: empty category guard in `mcp/server.rs`** — `cat.chars().next().unwrap()` replaced with safe guard for empty strings
+- **panic: empty category guard in `cmd_add()`** — same fix applied to `commands/manual.rs`
+- **panic: `history.first().unwrap()` in `sync.rs`** — replaced with `.map().unwrap_or("(unknown)")`
+- **dedup: `cmd_add()` now replaces instead of appends on duplicate session labels** — matches extractor behaviour via `replace_session_block`
+- **Gemini embeddings endpoint changed from `v1beta` to `v1`** — correct stable API endpoint
+
+## [0.3.4] - 2026-02-19
+
+### Added
+- **Two-phase reflect** - After storing knowledge, a second LLM call checks new entries against existing ones for contradictions; warnings appended to `reflect` response (advisory only, never blocks storage)
+- **`forget --stale --summarize`** - Condenses stale entries into a concise LLM summary block before removing originals instead of deleting outright (MemGPT pattern)
+- **Ask screen in TUI** (`A` key) - Interactive RAG Q&A inside the terminal UI: type a question, see the answer, scroll with j/k, clear with C
+- **Analytics key changed** from `A` to `N` to free up `A` for the Ask screen
+
+## [0.3.3] - 2026-02-18
+
 ### Added (TUI Enhancements)
 - **Learning Dashboard** (`L` key) - Interactive view of reinforcement learning metrics, health scores, adaptation success rates, and convergence status
-- **Analytics Viewer** (`A` key) - Usage insights with configurable time windows (±7 days), event distribution, top/stale knowledge tracking, and recent event log  
+- **Analytics Viewer** (`N` key) - Usage insights with configurable time windows (±7 days), event distribution, top/stale knowledge tracking, and recent event log
 - **Health Check** (`H` key) - Project diagnostics with severity-grouped issues, auto-fix commands, and recommendations
 - **Help Screen** (`?` key) - Complete keyboard shortcuts reference accessible from any screen
 - Lazy loading for all new screens to avoid startup delays

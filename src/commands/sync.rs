@@ -215,7 +215,10 @@ pub fn cmd_sync_history(gist_id: &str, version: Option<&str>) -> Result<()> {
                 "  {}",
                 format!(
                     "engram sync pull <project> {}",
-                    history.first().unwrap().version
+                    history
+                        .first()
+                        .map(|v| v.version.as_str())
+                        .unwrap_or("(unknown)")
                 )
                 .cyan()
             );

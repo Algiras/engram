@@ -103,6 +103,9 @@ pub fn cmd_regen(
 
         (d, s, p)
     };
+    let bugs = read_or_empty(&knowledge_dir.join("bugs.md"));
+    let insights = read_or_empty(&knowledge_dir.join("insights.md"));
+    let questions = read_or_empty(&knowledge_dir.join("questions.md"));
     let summaries = collect_summary_dir(&summary_dir)?;
 
     if decisions.is_empty() && solutions.is_empty() && patterns.is_empty() {
@@ -131,7 +134,8 @@ pub fn cmd_regen(
             .chat(
                 llm::prompts::SYSTEM_KNOWLEDGE_EXTRACTOR,
                 &llm::prompts::context_prompt(
-                    project, &decisions, &solutions, &patterns, &summaries,
+                    project, &decisions, &solutions, &patterns, &bugs, &insights, &questions,
+                    &summaries,
                 ),
             )
             .await
@@ -186,6 +190,7 @@ pub fn cmd_forget(
     expired: bool,
     stale: Option<String>,
     auto_approve: bool,
+    summarize: bool,
 ) -> Result<()> {
     use extractor::knowledge::{
         find_sessions_by_topic, parse_session_blocks, parse_ttl, partition_by_expiry,
@@ -202,7 +207,14 @@ pub fn cmd_forget(
         .join("_global")
         .join("preferences.md");
 
-    let knowledge_files = ["decisions.md", "solutions.md", "patterns.md"];
+    let knowledge_files = [
+        "decisions.md",
+        "solutions.md",
+        "patterns.md",
+        "bugs.md",
+        "insights.md",
+        "questions.md",
+    ];
 
     // Helper: collect all project knowledge files that exist
     let existing_files = || -> Vec<std::path::PathBuf> {
@@ -238,6 +250,7 @@ pub fn cmd_forget(
             category: String,
             timestamp: String,
             preview: String,
+            content: String,
         }
         let mut stale_entries: Vec<StaleEntry> = Vec::new();
         let mut seen_ids: BTreeSet<String> = BTreeSet::new();
@@ -264,6 +277,7 @@ pub fn cmd_forget(
                             category: cat.to_string(),
                             timestamp: block.timestamp,
                             preview: block.preview,
+                            content: block.content,
                         });
                     }
                 }
@@ -314,6 +328,62 @@ pub fn cmd_forget(
         if !should_remove {
             println!("Aborted.");
             return Ok(());
+        }
+
+        if summarize {
+            use crate::llm::{client::LlmClient, prompts};
+            let config = Config::load(None)?;
+            let rt = tokio::runtime::Builder::new_current_thread()
+                .enable_all()
+                .build()
+                .map_err(|e| error::MemoryError::Config(format!("tokio runtime: {}", e)))?;
+
+            // Group stale entries by category
+            let mut by_cat: std::collections::HashMap<&str, Vec<&StaleEntry>> = Default::default();
+            for e in &stale_entries {
+                by_cat.entry(e.category.as_str()).or_default().push(e);
+            }
+
+            let client = LlmClient::new(&config.llm);
+            let now = chrono::Utc::now().format("%Y-%m-%d").to_string();
+            let summary_id = format!("summary-{}", now);
+
+            for (cat, entries) in &by_cat {
+                let entries_text = entries
+                    .iter()
+                    .map(|e| e.content.as_str())
+                    .collect::<Vec<_>>()
+                    .join("\n\n---\n\n");
+
+                let summary_content = rt.block_on(async {
+                    client
+                        .chat(
+                            prompts::SYSTEM_KNOWLEDGE_EXTRACTOR,
+                            &prompts::summarize_stale_prompt(cat, &entries_text),
+                        )
+                        .await
+                })?;
+
+                // Append new summary block
+                let path = knowledge_dir.join(format!("{}.md", cat));
+                if path.exists() {
+                    let header = format!(
+                        "\n\n## Session: {} ({})\n\n",
+                        summary_id,
+                        chrono::Utc::now().to_rfc3339()
+                    );
+                    let mut file = std::fs::OpenOptions::new().append(true).open(&path)?;
+                    use std::io::Write as IoWrite;
+                    writeln!(file, "{}{}", header, summary_content)?;
+                }
+            }
+
+            println!(
+                "{} Summarized {} entries into {} block(s)",
+                "Summarized:".green(),
+                stale_entries.len(),
+                by_cat.len()
+            );
         }
 
         let ids_to_remove: Vec<&str> = stale_entries

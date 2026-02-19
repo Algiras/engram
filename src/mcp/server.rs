@@ -14,6 +14,7 @@ struct SessionStats {
     updated: u32,
     forgotten: u32,
     synthesized: u32,
+    asked: u32,
     started_at: Option<chrono::DateTime<chrono::Utc>>,
 }
 
@@ -446,6 +447,21 @@ impl McpServer {
                     "required": ["project"]
                 }),
             },
+            Tool {
+                name: "ask".to_string(),
+                description: "Answer a question using RAG over project knowledge. Retrieves the most \
+                    relevant entries semantically then synthesizes a precise answer with source citations. \
+                    More focused than recall — use when you have a specific question.".to_string(),
+                input_schema: json!({
+                    "type": "object",
+                    "properties": {
+                        "project": { "type": "string", "description": "Project name" },
+                        "query":   { "type": "string", "description": "The question to answer" },
+                        "top_k":   { "type": "number", "description": "Max entries to retrieve (default: 5)", "default": 5 }
+                    },
+                    "required": ["project", "query"]
+                }),
+            },
         ];
 
         Response::success(id, json!({ "tools": tools }))
@@ -511,6 +527,15 @@ impl McpServer {
                 if r.is_ok() {
                     if let Ok(mut s) = self.session.lock() {
                         s.synthesized += 1;
+                    }
+                }
+                r
+            }
+            "ask" => {
+                let r = self.tool_ask(args);
+                if r.is_ok() {
+                    if let Ok(mut s) = self.session.lock() {
+                        s.asked += 1;
                     }
                 }
                 r
@@ -1004,7 +1029,9 @@ impl McpServer {
     /// Extract structured knowledge from provided text using the LLM pipeline.
     fn tool_reflect(&self, args: serde_json::Value) -> Result<String> {
         use crate::auth::resolve_provider;
-        use crate::extractor::knowledge::{parse_session_blocks, reconstruct_blocks};
+        use crate::extractor::knowledge::{
+            parse_session_blocks, partition_by_expiry, reconstruct_blocks,
+        };
         use crate::llm::{client::LlmClient, prompts};
         use std::io::Write as IoWrite;
 
@@ -1086,6 +1113,61 @@ impl McpServer {
             return Ok("No significant knowledge extracted from the provided text.".to_string());
         }
 
+        // Phase 2: contradiction check (advisory — errors are swallowed)
+        let contradiction_warning: Option<String> = (|| {
+            let new_text = stored
+                .iter()
+                .map(|(cat, content)| format!("[{}]\n{}", cat, content))
+                .collect::<Vec<_>>()
+                .join("\n\n---\n\n");
+
+            let mut existing_parts: Vec<String> = Vec::new();
+            for cat in &categories {
+                let path = knowledge_dir.join(format!("{}.md", cat));
+                if !path.exists() {
+                    continue;
+                }
+                let text = std::fs::read_to_string(&path).ok()?;
+                let (_, blocks) = parse_session_blocks(&text);
+                let (active, _) = partition_by_expiry(blocks);
+                let prior: Vec<_> = active.iter().filter(|b| b.session_id != label).collect();
+                if prior.is_empty() {
+                    continue;
+                }
+                let snippet = prior
+                    .iter()
+                    .take(10)
+                    .map(|b| format!("[{}:{}]\n{}", cat, b.session_id, b.content.trim()))
+                    .collect::<Vec<_>>()
+                    .join("\n---\n");
+                existing_parts.push(snippet);
+            }
+            if existing_parts.is_empty() {
+                return None;
+            }
+
+            let existing_text = existing_parts.join("\n\n===\n\n");
+            let check = rt.block_on(async {
+                let env_endpoint = std::env::var("ENGRAM_LLM_ENDPOINT").ok();
+                let env_model = std::env::var("ENGRAM_LLM_MODEL").ok();
+                let resolved = resolve_provider(None, env_endpoint, env_model).ok()?;
+                let client = LlmClient::new(&resolved);
+                client
+                    .chat(
+                        prompts::SYSTEM_CONTRADICTION_CHECKER,
+                        &prompts::contradiction_check_prompt(&new_text, &existing_text),
+                    )
+                    .await
+                    .ok()
+            })?;
+
+            if check.trim() == "No contradictions detected." {
+                None
+            } else {
+                Some(check)
+            }
+        })();
+
         let mut summary = format!(
             "Reflected on text for '{}'. Stored {} category/-ies:\n",
             project,
@@ -1098,7 +1180,13 @@ impl McpServer {
 
             // Initialise file if needed
             if !path.exists() {
-                let title = cat.chars().next().unwrap().to_uppercase().to_string() + &cat[1..];
+                let title = if cat.is_empty() {
+                    String::new()
+                } else {
+                    let mut t = cat.chars().next().unwrap().to_uppercase().to_string();
+                    t.push_str(&cat[1..]);
+                    t
+                };
                 std::fs::write(&path, format!("# {}\n", title))?;
             }
 
@@ -1135,6 +1223,12 @@ impl McpServer {
             "\nLabel: {} — use `update`/`forget` to correct.",
             label
         ));
+        if let Some(warn) = contradiction_warning {
+            summary.push_str(&format!(
+                "\n\n\u{26a0}\u{fe0f}  Contradiction check:\n{}",
+                warn
+            ));
+        }
         Ok(summary)
     }
 
@@ -1588,5 +1682,112 @@ impl McpServer {
         ));
 
         Ok(out)
+    }
+
+    /// Answer a question using RAG over project knowledge.
+    fn tool_ask(&self, args: serde_json::Value) -> Result<String> {
+        use crate::auth::resolve_provider;
+        use crate::extractor::knowledge::{
+            find_sessions_by_topic, parse_session_blocks, partition_by_expiry, strip_private_tags,
+        };
+        use crate::inject::{build_raw_context, smart_search_sync, SmartEntry};
+        use crate::llm::{
+            client::LlmClient,
+            prompts::{ask_prompt, SYSTEM_QA_ASSISTANT},
+        };
+
+        let project = args["project"]
+            .as_str()
+            .ok_or_else(|| MemoryError::Config("Missing project parameter".into()))?;
+        let query = args["query"]
+            .as_str()
+            .ok_or_else(|| MemoryError::Config("Missing query parameter".into()))?;
+        let top_k = args["top_k"].as_u64().unwrap_or(5) as usize;
+        let threshold = 0.4_f32;
+
+        // 1. Semantic search (graceful error → empty)
+        let mut entries: Vec<SmartEntry> =
+            smart_search_sync(project, &self.config.memory_dir, query, top_k, threshold)
+                .unwrap_or_else(|_| vec![]);
+
+        // 2. Lexical fallback if semantic returned fewer than 2 results
+        if entries.len() < 2 {
+            let knowledge_dir = self.config.memory_dir.join("knowledge").join(project);
+            for cat in &[
+                "decisions",
+                "solutions",
+                "patterns",
+                "bugs",
+                "insights",
+                "questions",
+            ] {
+                let path = knowledge_dir.join(format!("{}.md", cat));
+                if !path.exists() {
+                    continue;
+                }
+                let content = std::fs::read_to_string(&path)?;
+                let matching_ids = find_sessions_by_topic(&content, query);
+                if matching_ids.is_empty() {
+                    continue;
+                }
+                let (_preamble, blocks) = parse_session_blocks(&content);
+                let (active, _) = partition_by_expiry(blocks);
+                for block in active {
+                    if matching_ids.contains(&block.session_id)
+                        && !entries.iter().any(|e| e.session_id == block.session_id)
+                    {
+                        entries.push(SmartEntry {
+                            category: cat.to_string(),
+                            session_id: block.session_id,
+                            preview: block.preview,
+                            content: block.content,
+                            score: 0.5,
+                            selected: true,
+                        });
+                    }
+                }
+            }
+        }
+
+        // 3. Build context string (raw fallback if still empty)
+        let context_str = if !entries.is_empty() {
+            entries
+                .iter()
+                .take(top_k)
+                .map(|e| format!("[{}:{}]\n{}", e.category, e.session_id, e.content.trim()))
+                .collect::<Vec<_>>()
+                .join("\n\n---\n\n")
+        } else {
+            let knowledge_dir = self.config.memory_dir.join("knowledge").join(project);
+            match build_raw_context(project, &knowledge_dir) {
+                Some(ctx) => ctx,
+                None => {
+                    return Ok(format!(
+                        "No knowledge found for '{}'. Run 'engram ingest --project {}' first.",
+                        project, project
+                    ));
+                }
+            }
+        };
+
+        let context_str = strip_private_tags(&context_str);
+
+        // 4. LLM synthesis
+        let rt = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .map_err(|e| MemoryError::Config(format!("tokio runtime: {}", e)))?;
+
+        let answer = rt.block_on(async {
+            let env_endpoint = std::env::var("ENGRAM_LLM_ENDPOINT").ok();
+            let env_model = std::env::var("ENGRAM_LLM_MODEL").ok();
+            let resolved = resolve_provider(None, env_endpoint, env_model)?;
+            let client = LlmClient::new(&resolved);
+            client
+                .chat(SYSTEM_QA_ASSISTANT, &ask_prompt(query, &context_str))
+                .await
+        })?;
+
+        Ok(answer)
     }
 }

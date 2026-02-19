@@ -298,12 +298,17 @@ async fn regenerate_context(config: &crate::config::Config, project: &str) -> Re
     let decisions = read_and_filter(&knowledge_dir.join("decisions.md"));
     let solutions = read_and_filter(&knowledge_dir.join("solutions.md"));
     let patterns = read_and_filter(&knowledge_dir.join("patterns.md"));
+    let bugs = read_and_filter(&knowledge_dir.join("bugs.md"));
+    let insights = read_and_filter(&knowledge_dir.join("insights.md"));
+    let questions = read_and_filter(&knowledge_dir.join("questions.md"));
 
     let client = LlmClient::new(&config.llm);
     let context = client
         .chat(
             crate::llm::prompts::SYSTEM_KNOWLEDGE_EXTRACTOR,
-            &crate::llm::prompts::context_prompt(project, &decisions, &solutions, &patterns, ""),
+            &crate::llm::prompts::context_prompt(
+                project, &decisions, &solutions, &patterns, &bugs, &insights, &questions, "",
+            ),
         )
         .await?;
 

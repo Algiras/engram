@@ -524,6 +524,9 @@ pub async fn extract_and_merge_knowledge(
     let all_decisions = read_or_default(&knowledge_dir.join("decisions.md"));
     let all_solutions = read_or_default(&knowledge_dir.join("solutions.md"));
     let all_patterns = read_or_default(&knowledge_dir.join("patterns.md"));
+    let all_bugs = read_or_default(&knowledge_dir.join("bugs.md"));
+    let all_insights = read_or_default(&knowledge_dir.join("insights.md"));
+    let all_questions = read_or_default(&knowledge_dir.join("questions.md"));
     let all_summaries = collect_summaries(&summary_dir)?;
 
     let context = client
@@ -534,6 +537,9 @@ pub async fn extract_and_merge_knowledge(
                 &all_decisions,
                 &all_solutions,
                 &all_patterns,
+                &all_bugs,
+                &all_insights,
+                &all_questions,
                 &all_summaries,
             ),
         )

@@ -22,6 +22,7 @@ pub mod renderer;
 pub mod state;
 pub mod sync;
 pub mod tui;
+pub mod vcs;
 
 // Re-export commonly used types
 pub use config::Config;

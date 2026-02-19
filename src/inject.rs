@@ -25,8 +25,17 @@ pub fn build_raw_context(project: &str, project_knowledge_dir: &Path) -> Option<
     let decisions = read_and_filter(&project_knowledge_dir.join("decisions.md"));
     let solutions = read_and_filter(&project_knowledge_dir.join("solutions.md"));
     let patterns = read_and_filter(&project_knowledge_dir.join("patterns.md"));
+    let bugs = read_and_filter(&project_knowledge_dir.join("bugs.md"));
+    let insights = read_and_filter(&project_knowledge_dir.join("insights.md"));
+    let questions = read_and_filter(&project_knowledge_dir.join("questions.md"));
 
-    if decisions.trim().is_empty() && solutions.trim().is_empty() && patterns.trim().is_empty() {
+    if decisions.trim().is_empty()
+        && solutions.trim().is_empty()
+        && patterns.trim().is_empty()
+        && bugs.trim().is_empty()
+        && insights.trim().is_empty()
+        && questions.trim().is_empty()
+    {
         return None;
     }
 
@@ -42,6 +51,21 @@ pub fn build_raw_context(project: &str, project_knowledge_dir: &Path) -> Option<
     }
     if !patterns.trim().is_empty() {
         out.push_str(&patterns);
+        out.push_str("\n\n");
+    }
+    if !bugs.trim().is_empty() {
+        out.push_str("## Known Bugs\n\n");
+        out.push_str(&bugs);
+        out.push_str("\n\n");
+    }
+    if !insights.trim().is_empty() {
+        out.push_str("## Insights\n\n");
+        out.push_str(&insights);
+        out.push_str("\n\n");
+    }
+    if !questions.trim().is_empty() {
+        out.push_str("## Open Questions\n\n");
+        out.push_str(&questions);
         out.push_str("\n\n");
     }
 
@@ -627,7 +651,15 @@ pub fn format_smart_memory(
     out.push_str(&format!("## Project: {}\n\n", project));
 
     // Grouped by category
-    let categories = ["decisions", "solutions", "patterns", "context"];
+    let categories = [
+        "decisions",
+        "solutions",
+        "patterns",
+        "bugs",
+        "insights",
+        "questions",
+        "context",
+    ];
     for cat in &categories {
         let cat_entries: Vec<&&SmartEntry> =
             selected.iter().filter(|e| e.category == *cat).collect();

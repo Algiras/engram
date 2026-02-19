@@ -187,7 +187,7 @@ impl EmbeddingProvider {
         for text in texts {
             let response = client
                 .post(format!(
-                    "https://generativelanguage.googleapis.com/v1beta/models/{}:embedContent?key={}",
+                    "https://generativelanguage.googleapis.com/v1/models/{}:embedContent?key={}",
                     model, api_key
                 ))
                 .json(&serde_json::json!({

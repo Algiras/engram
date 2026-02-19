@@ -31,7 +31,7 @@
   - Adaptation success rate
   - Convergence status
 
-#### 2. Analytics Viewer (`A` key)
+#### 2. Analytics Viewer (`N` key)
 **Why**: Usage insights exist but only accessible via CLI
 - **Data**: `UsageEvent` from `src/analytics/tracker.rs`
 - **Functions**: `generate_insights()` in `src/analytics/insights.rs`
@@ -119,8 +119,9 @@ Browser (main) ←→ Viewer
 Packs ←→ PackDetail
     ↓
 [NEW] Learning (L)
-[NEW] Analytics (A)  
+[NEW] Analytics (N)
 [NEW] Health (H)
+[NEW] Ask (A)
 [NEW] Graph (G)
 [NEW] Help (?)
 ```
@@ -193,7 +194,8 @@ Packs ←→ PackDetail
 ### On-Demand vs Cached
 - **Browser tree**: Load on startup, cache in `App`
 - **Learning state**: Load on `L` key press
-- **Analytics events**: Load on `A` key press (configurable days)
+- **Analytics events**: Load on `N` key press (configurable days)
+- **Ask results**: Load after question submission (`A` key → Ask screen)
 - **Health report**: Load on `H` key press (can be slow)
 - **Graph**: Load on `G` key press (expensive)
 

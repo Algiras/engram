@@ -1,4 +1,4 @@
-# TUI Features (v0.3.0)
+# TUI Features (v0.3.4)
 
 ## Overview
 
@@ -61,8 +61,8 @@ View reinforcement learning metrics:
 **Actions**:
 - `r` - Reload dashboard
 
-### 6. Analytics Viewer ⭐ NEW
-**Access**: `A` from Browser
+### 6. Analytics Viewer
+**Access**: `N` from any screen
 
 Usage analytics and insights:
 - Total events (configurable days)
@@ -77,8 +77,8 @@ Usage analytics and insights:
 - `+` / `-` - Increase/decrease time window (±7 days)
 - `r` - Reload analytics
 
-### 7. Health Check ⭐ NEW
-**Access**: `H` from Browser
+### 7. Health Check
+**Access**: `H` from any screen
 
 Project health diagnostics:
 - Health score (0-100)
@@ -93,8 +93,25 @@ Project health diagnostics:
 **Actions**:
 - `r` - Reload health check
 
-### 8. Help ⭐ NEW
-**Access**: `?` from anywhere
+### 8. Help
+**Access**: `?` from any screen
+
+### 9. Ask Screen ⭐ NEW (v0.3.4)
+**Access**: `A` from any screen
+
+Interactive RAG Q&A — ask questions about your knowledge base without leaving the TUI:
+- Type a question (`i` or `/` to enter input mode)
+- Submit with `Enter` — runs `engram ask` for the current project
+- Answer appears in the panel below
+- Scroll long answers with `j` / `k`
+- Clear everything with `C`
+
+**Actions**:
+- `i` or `/` - Enter question input mode
+- `Enter` - Submit question
+- `Esc` - Cancel input
+- `j` / `k` - Scroll answer
+- `C` - Clear question and answer
 
 Keyboard shortcuts reference:
 - All available key bindings
@@ -124,8 +141,13 @@ Keyboard shortcuts reference:
 - `d` - Delete selected item (confirms before deletion)
 - `p` - Go to Packs screen
 - `L` - Go to Learning Dashboard
-- `A` - Go to Analytics Viewer
+- `N` - Go to Analytics Viewer
 - `H` - Go to Health Check
+- `A` - Go to Ask Screen
+- `W` - Go to Timeline
+- `D` - Go to Daemon
+- `C` - Go to Config
+- `I` - Go to Inject Preview
 
 ### Viewer/Detail Screens
 **Scrolling**:
@@ -153,10 +175,17 @@ Keyboard shortcuts reference:
 - `r` - Reload pack list
 - `Esc` - Return to Browser
 
-### Analytics Screen
+### Analytics Screen (`N`)
 - `+` - Increase time window by 7 days
 - `-` - Decrease time window by 7 days
 - `r` - Reload analytics data
+
+### Ask Screen (`A`)
+- `i` or `/` - Enter question input mode
+- `Enter` - Submit question
+- `Esc` - Cancel input
+- `j` / `k` - Scroll answer up/down
+- `C` - Clear question and answer
 
 ### Learning/Health Screens
 - `r` - Reload data
@@ -168,8 +197,9 @@ Keyboard shortcuts reference:
 Most screens load data only when accessed:
 - **Browser**: Loaded on startup, cached in memory
 - **Learning**: Loaded when pressing `L`
-- **Analytics**: Loaded when pressing `A`
+- **Analytics**: Loaded when pressing `N`
 - **Health**: Loaded when pressing `H`
+- **Ask**: Result loaded after question submission
 
 ### Refresh
 - Press `r` in any data screen to reload
@@ -181,7 +211,7 @@ Most screens load data only when accessed:
 ### Efficient Navigation
 1. Use `/` to search across projects quickly
 2. Press `n` repeatedly to jump through matches
-3. Use `L`/`A`/`H` from Browser for instant insights
+3. Use `L`/`N`/`H` from Browser for instant insights; `A` for interactive Q&A
 4. Press `?` anytime if you forget shortcuts
 
 ### Search Patterns
@@ -232,6 +262,8 @@ TUI calls the same underlying functions as CLI:
 - [ ] Diff Viewer (knowledge evolution)
 - [ ] Semantic Search (embeddings-based)
 - [ ] Inbox Review (promote extracted knowledge)
+- [ ] Ask screen cursor (visible text cursor in input box)
+- [ ] Live tail mode (follow new sessions)
 
 ### Under Consideration
 - [ ] Live tail mode (follow new sessions)
@@ -243,6 +275,6 @@ TUI calls the same underlying functions as CLI:
 
 ---
 
-**Version**: 0.3.0  
+**Version**: 0.3.4
 **Documentation**: See [TUI_GUIDE.md](TUI_GUIDE.md) for detailed usage  
 **Enhancement Plan**: See [TUI_ENHANCEMENT.md](TUI_ENHANCEMENT.md) for roadmap

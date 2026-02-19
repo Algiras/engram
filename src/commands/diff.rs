@@ -175,6 +175,7 @@ pub fn cmd_analytics(
                 analytics::EventType::Context => "📄",
                 analytics::EventType::Inject => "💉",
                 analytics::EventType::Ingest => "📥",
+                analytics::EventType::Ask => "❓",
             };
 
             println!(

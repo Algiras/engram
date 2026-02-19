@@ -15,11 +15,14 @@ fn render_screen_tabs(f: &mut Frame, active: &str, area: Rect) {
         ("Browser", "B"),
         ("Packs", "p"),
         ("Learning", "L"),
-        ("Analytics", "A"),
+        ("Analytics", "N"),
         ("Health", "H"),
         ("Daemon", "D"),
         ("Config", "C"),
         ("Inject", "I"),
+        ("Timeline", "W"),
+        ("Ask", "A"),
+        ("Vcs", "V"),
         ("Help", "?"),
     ];
 
@@ -982,8 +985,28 @@ pub fn render_help(f: &mut Frame, _app: &App) {
         Line::from("  g/Home        - Go to top"),
         Line::from("  G/End         - Go to bottom"),
         Line::from(""),
-        Line::from("Analytics Screen:"),
+        Line::from("Ask Screen (A):"),
+        Line::from("  i or /        - Enter question"),
+        Line::from("  Enter         - Submit question (runs engram ask)"),
+        Line::from("  Esc           - Cancel input"),
+        Line::from("  j/k           - Scroll answer"),
+        Line::from("  C             - Clear question and answer"),
+        Line::from(""),
+        Line::from("Analytics Screen (N):"),
         Line::from("  +/-           - Increase/decrease days"),
+        Line::from(""),
+        Line::from("Tab Shortcuts (any screen):"),
+        Line::from("  B             - Browser"),
+        Line::from("  p             - Packs"),
+        Line::from("  L             - Learning"),
+        Line::from("  N             - Analytics"),
+        Line::from("  H             - Health"),
+        Line::from("  D             - Daemon"),
+        Line::from("  C             - Config"),
+        Line::from("  I             - Inject preview"),
+        Line::from("  W             - Timeline"),
+        Line::from("  A             - Ask"),
+        Line::from("  ?             - Help"),
         Line::from(""),
         Line::from(Span::styled(
             format!("engram v{}", env!("CARGO_PKG_VERSION")),
@@ -1539,4 +1562,286 @@ fn render_action_message(f: &mut Frame, message: &str, is_error: bool) {
 
     f.render_widget(Clear, popup_area);
     f.render_widget(paragraph, popup_area);
+}
+
+/// Render the Timeline screen — knowledge entries grouped by date, newest first.
+pub fn render_timeline(f: &mut Frame, app: &App) {
+    use crate::tui::data::date_from_ts;
+
+    let layout = Layout::vertical([
+        Constraint::Length(1), // tab bar
+        Constraint::Min(3),    // content
+        Constraint::Length(1), // footer
+    ])
+    .split(f.area());
+
+    render_screen_tabs(f, "Timeline", layout[0]);
+
+    let block = Block::default()
+        .borders(Borders::ALL)
+        .title(" Timeline — Work Log (newest first) ")
+        .border_style(Style::default().fg(Color::Cyan));
+
+    let inner = block.inner(layout[1]);
+    f.render_widget(block, layout[1]);
+
+    if app.timeline_items.is_empty() {
+        let msg = Paragraph::new("No knowledge entries found. Run 'engram ingest' to populate.")
+            .style(Style::default().fg(Color::DarkGray));
+        f.render_widget(msg, inner);
+    } else {
+        let mut lines: Vec<Line> = Vec::new();
+        let mut last_date = String::new();
+        let mut last_project = String::new();
+
+        for (i, entry) in app
+            .timeline_items
+            .iter()
+            .enumerate()
+            .skip(app.timeline_scroll)
+        {
+            let date = date_from_ts(&entry.timestamp);
+            let is_selected = i == app.timeline_index;
+
+            // Date header when date or project changes
+            if date != last_date || entry.project != last_project {
+                if !lines.is_empty() {
+                    lines.push(Line::from(""));
+                }
+                lines.push(Line::from(vec![
+                    Span::styled(
+                        format!("  {}  ", date),
+                        Style::default()
+                            .fg(Color::Yellow)
+                            .add_modifier(Modifier::BOLD),
+                    ),
+                    Span::styled(entry.project.clone(), Style::default().fg(Color::Cyan)),
+                ]));
+                last_date = date;
+                last_project = entry.project.clone();
+            }
+
+            // Entry row
+            let connector = if is_selected { "▶ " } else { "  " };
+            let cat_style = if is_selected {
+                Style::default().fg(Color::Black).bg(Color::Cyan)
+            } else {
+                Style::default().fg(Color::Green)
+            };
+
+            lines.push(Line::from(vec![
+                Span::raw(format!("    {}", connector)),
+                Span::styled(format!("[{}]", entry.category), cat_style),
+                Span::raw("  "),
+                Span::styled(
+                    entry.session_id.chars().take(40).collect::<String>(),
+                    Style::default().fg(Color::DarkGray),
+                ),
+            ]));
+            if !entry.preview.is_empty() {
+                lines.push(Line::from(vec![
+                    Span::raw("           "),
+                    Span::styled(
+                        entry.preview.chars().take(70).collect::<String>(),
+                        Style::default().fg(Color::Gray),
+                    ),
+                ]));
+            }
+
+            // Stop filling if we've passed the visible area
+            if lines.len() > inner.height as usize + 10 {
+                break;
+            }
+        }
+
+        let text_widget = Paragraph::new(lines);
+        f.render_widget(text_widget, inner);
+    }
+
+    // Footer
+    let footer = Paragraph::new(" j/k: navigate  Enter: view  r: refresh  Esc/q: back ")
+        .style(Style::default().fg(Color::DarkGray).bg(Color::Black));
+    f.render_widget(footer, layout[2]);
+}
+
+pub fn render_vcs(f: &mut Frame, app: &App) {
+    use ratatui::layout::Direction;
+
+    let area = f.area();
+    let layout = Layout::vertical([
+        Constraint::Length(1),
+        Constraint::Min(3),
+        Constraint::Length(1),
+    ])
+    .split(area);
+
+    render_screen_tabs(f, "Vcs", layout[0]);
+
+    // Split content into left (commit list) and right (snapshot)
+    let content_layout = Layout::new(
+        Direction::Horizontal,
+        [Constraint::Percentage(35), Constraint::Percentage(65)],
+    )
+    .split(layout[1]);
+
+    // ── Left: commit list ─────────────────────────────────────────────────
+    let left_block = Block::default()
+        .title(" Commits ")
+        .borders(Borders::ALL)
+        .border_style(Style::default().fg(Color::Cyan));
+    let inner_left = left_block.inner(content_layout[0]);
+    f.render_widget(left_block, content_layout[0]);
+
+    if app.vcs_commits.is_empty() {
+        let msg = Paragraph::new("No commits yet.\n\nPress 'c' to make\nthe first commit.")
+            .style(Style::default().fg(Color::DarkGray));
+        f.render_widget(msg, inner_left);
+    } else {
+        let visible = inner_left.height as usize;
+        let mut lines: Vec<Line> = Vec::new();
+        for (i, commit) in app
+            .vcs_commits
+            .iter()
+            .enumerate()
+            .skip(app.vcs_commit_scroll)
+        {
+            if lines.len() >= visible {
+                break;
+            }
+            let is_selected = i == app.vcs_commit_index;
+            let date = commit.timestamp.format("%m-%d %H:%M").to_string();
+            let hash = &commit.hash[..commit.hash.len().min(8)];
+            let msg: String = commit.message.chars().take(25).collect();
+            let sessions = commit.session_ids.len();
+            let line_text = format!("{} {} ({}) {}", hash, msg, sessions, date);
+            let style = if is_selected {
+                Style::default()
+                    .fg(Color::Yellow)
+                    .add_modifier(Modifier::BOLD)
+            } else {
+                Style::default()
+            };
+            let prefix = if is_selected { "▶ " } else { "  " };
+            lines.push(Line::styled(format!("{}{}", prefix, line_text), style));
+        }
+        f.render_widget(Paragraph::new(lines), inner_left);
+    }
+
+    // ── Right: snapshot overview ──────────────────────────────────────────
+    let right_title = if let Some(commit) = app.vcs_commits.get(app.vcs_commit_index) {
+        format!(
+            " Snapshot: {} — {} ",
+            &commit.hash[..commit.hash.len().min(8)],
+            commit.message.chars().take(30).collect::<String>()
+        )
+    } else {
+        " Snapshot ".to_string()
+    };
+    let right_block = Block::default()
+        .title(right_title)
+        .borders(Borders::ALL)
+        .border_style(Style::default().fg(Color::Green));
+    let inner_right = right_block.inner(content_layout[1]);
+    f.render_widget(right_block, content_layout[1]);
+
+    let visible_right = inner_right.height as usize;
+    let lines: Vec<Line> = app
+        .vcs_snapshot_content
+        .lines()
+        .skip(app.vcs_snapshot_scroll as usize)
+        .take(visible_right)
+        .map(|line| {
+            if line.starts_with("──") {
+                Line::styled(
+                    line.to_string(),
+                    Style::default()
+                        .fg(Color::Green)
+                        .add_modifier(Modifier::BOLD),
+                )
+            } else if line.starts_with("commit ") {
+                Line::styled(line.to_string(), Style::default().fg(Color::Yellow))
+            } else if line.starts_with("  [") {
+                Line::styled(line.to_string(), Style::default().fg(Color::Cyan))
+            } else {
+                Line::from(line.to_string())
+            }
+        })
+        .collect();
+    f.render_widget(Paragraph::new(lines), inner_right);
+
+    // ── Footer ────────────────────────────────────────────────────────────
+    let status = Line::from(vec![
+        Span::raw(" "),
+        Span::styled(&app.vcs_status_line, Style::default().fg(Color::White)),
+        Span::raw("  ["),
+        Span::styled("j/k", Style::default().fg(Color::Cyan)),
+        Span::raw("] Select commit  ["),
+        Span::styled("J/K", Style::default().fg(Color::Cyan)),
+        Span::raw("] Scroll preview  ["),
+        Span::styled("c", Style::default().fg(Color::Yellow)),
+        Span::raw("] Commit  ["),
+        Span::styled("r", Style::default().fg(Color::Cyan)),
+        Span::raw("] Reload  ["),
+        Span::styled("Esc", Style::default().fg(Color::Cyan)),
+        Span::raw("] Back"),
+    ]);
+    f.render_widget(
+        Paragraph::new(status).style(Style::default().bg(Color::DarkGray)),
+        layout[2],
+    );
+
+    render_action_overlays(f, app);
+}
+
+pub fn render_ask(f: &mut Frame, app: &App) {
+    let area = f.area();
+    let chunks = Layout::vertical([
+        Constraint::Length(1),
+        Constraint::Length(3),
+        Constraint::Min(3),
+        Constraint::Length(1),
+    ])
+    .split(area);
+
+    render_screen_tabs(f, "Ask", chunks[0]);
+
+    let input_style = if app.ask_input_mode {
+        Style::default().fg(Color::Yellow)
+    } else {
+        Style::default().fg(Color::Cyan)
+    };
+    let input_title = if app.ask_input_mode {
+        " Question (Enter to search \u{b7} Esc to cancel) "
+    } else {
+        " Question (i or / to type) "
+    };
+    f.render_widget(
+        Paragraph::new(app.ask_query.as_str()).block(
+            Block::default()
+                .title(input_title)
+                .borders(Borders::ALL)
+                .border_style(input_style),
+        ),
+        chunks[1],
+    );
+
+    f.render_widget(
+        Paragraph::new(app.ask_result.as_str())
+            .block(Block::default().title(" Answer ").borders(Borders::ALL))
+            .wrap(Wrap { trim: false })
+            .scroll((app.ask_scroll, 0)),
+        chunks[2],
+    );
+
+    let hint = if app.ask_loading {
+        " \u{23f3} Querying LLM\u{2026}"
+    } else if app.ask_result.is_empty() {
+        " i / /  = type question   j/k = scroll   A = Ask screen   ? = help"
+    } else {
+        " j/k = scroll   C = clear   i = new question"
+    };
+    f.render_widget(
+        Paragraph::new(hint).style(Style::default().fg(Color::DarkGray)),
+        chunks[3],
+    );
 }

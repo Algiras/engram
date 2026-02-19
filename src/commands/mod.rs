@@ -1,3 +1,4 @@
+pub mod ask;
 pub mod auth;
 pub mod consolidate;
 pub mod core;
@@ -9,5 +10,7 @@ pub mod hooks;
 pub mod knowledge;
 pub mod learning;
 pub mod manual;
+pub mod observe;
 pub mod provider_test;
 pub mod sync;
+pub mod vcs;

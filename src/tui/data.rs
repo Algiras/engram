@@ -659,3 +659,95 @@ pub fn load_daemon_status(memory_dir: &Path) -> String {
 
     output
 }
+
+// ── Timeline types ───────────────────────────────────────────────────────────
+
+/// A single knowledge entry for the timeline view
+#[derive(Clone)]
+pub struct TimelineEntry {
+    pub category: String, // "decisions" / "bugs" / "insights" / etc.
+    pub session_id: String,
+    pub timestamp: String, // ISO-8601 from session block
+    pub preview: String,   // First non-empty line, truncated to 80 chars
+    pub content: String,   // Full block content for viewer
+    pub project: String,
+}
+
+/// All entries from one calendar day
+#[derive(Clone)]
+pub struct TimelineDay {
+    pub date: String, // "2026-02-18"
+    pub project: String,
+    pub entries: Vec<TimelineEntry>,
+}
+
+/// Load timeline data: scan all knowledge/*.md files, group entries by date.
+/// Returns entries sorted newest-first.
+pub fn load_timeline(memory_dir: &Path) -> Vec<TimelineEntry> {
+    use crate::extractor::knowledge::parse_session_blocks;
+
+    let knowledge_dir = memory_dir.join("knowledge");
+    if !knowledge_dir.exists() {
+        return Vec::new();
+    }
+
+    let categories = [
+        "decisions",
+        "solutions",
+        "patterns",
+        "bugs",
+        "insights",
+        "questions",
+    ];
+
+    let mut all_entries: Vec<TimelineEntry> = Vec::new();
+
+    if let Ok(project_dirs) = fs::read_dir(&knowledge_dir) {
+        for project_dir in project_dirs.flatten() {
+            if !project_dir.file_type().map(|t| t.is_dir()).unwrap_or(false) {
+                continue;
+            }
+            let project = project_dir.file_name().to_string_lossy().to_string();
+            if project == "_global" {
+                continue;
+            }
+
+            for cat in &categories {
+                let path = project_dir.path().join(format!("{}.md", cat));
+                if !path.exists() {
+                    continue;
+                }
+                let content = match fs::read_to_string(&path) {
+                    Ok(c) => c,
+                    Err(_) => continue,
+                };
+
+                let (_preamble, blocks) = parse_session_blocks(&content);
+                for block in blocks {
+                    all_entries.push(TimelineEntry {
+                        category: cat.to_string(),
+                        session_id: block.session_id.clone(),
+                        timestamp: block.timestamp.clone(),
+                        preview: block.preview.clone(),
+                        content: block.content.clone(),
+                        project: project.clone(),
+                    });
+                }
+            }
+        }
+    }
+
+    // Sort newest-first by timestamp
+    all_entries.sort_by(|a, b| b.timestamp.cmp(&a.timestamp));
+
+    all_entries
+}
+
+/// Extract date portion (YYYY-MM-DD) from an ISO-8601 timestamp string.
+pub fn date_from_ts(ts: &str) -> String {
+    if ts.len() >= 10 {
+        ts[..10].to_string()
+    } else {
+        ts.to_string()
+    }
+}

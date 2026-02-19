@@ -18,6 +18,7 @@ pub enum EventType {
     Context,
     Inject,
     Ingest,
+    Ask,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

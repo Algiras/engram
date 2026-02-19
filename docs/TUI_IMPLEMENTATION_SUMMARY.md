@@ -1,15 +1,16 @@
-# TUI Enhancement Summary (v0.3.0)
+# TUI Enhancement Summary (v0.3.4)
 
 ## What Was Done
 
 ### 1. Architecture Changes
 
 #### Screen Enum Extension
-Added 4 new screen variants to `src/tui/mod.rs`:
-- `Screen::Learning` - Reinforcement learning dashboard
-- `Screen::Analytics` - Usage analytics and insights
-- `Screen::Health` - Project health diagnostics
-- `Screen::Help` - Keyboard shortcuts reference
+Screen variants in `src/tui/mod.rs` (v0.3.4):
+- `Screen::Learning` - Reinforcement learning dashboard (`L`)
+- `Screen::Analytics` - Usage analytics and insights (`N`)
+- `Screen::Health` - Project health diagnostics (`H`)
+- `Screen::Help` - Keyboard shortcuts reference (`?`)
+- `Screen::Ask` - Interactive RAG Q&A (`A`) — added v0.3.4
 
 #### App State Additions
 New state fields in `App` struct:
@@ -44,7 +45,7 @@ health_scroll: u16,
 
 **Data Source**: `src/learning/progress.rs::LearningState`
 
-#### Analytics Viewer (`A` key)
+#### Analytics Viewer (`N` key)
 **File**: `src/tui/data.rs::load_analytics()`
 
 **Shows**:
@@ -119,8 +120,9 @@ Added to `src/tui/mod.rs`:
 #### New Keyboard Shortcuts
 From Browser screen:
 - `L` - Open Learning Dashboard
-- `A` - Open Analytics Viewer
+- `N` - Open Analytics Viewer
 - `H` - Open Health Check
+- `A` - Open Ask Screen (v0.3.4)
 - `?` - Show Help (from any screen)
 
 All new screens accessible via single keypress from main Browser.
@@ -178,7 +180,8 @@ All new screens accessible via single keypress from main Browser.
 
 ### Manual Tests
 - [ ] Browser → `L` → Learning dashboard loads
-- [ ] Browser → `A` → Analytics loads
+- [ ] Browser → `N` → Analytics loads
+- [ ] Browser → `A` → Ask screen loads
 - [ ] Browser → `H` → Health check loads
 - [ ] Browser → `?` → Help displays
 - [ ] Analytics → `+` increases days → data reloads
@@ -268,8 +271,8 @@ None. Used existing:
 
 - **Files Changed**: 4 (mod.rs, ui.rs, data.rs, + docs)
 - **Lines Added**: ~600 (excluding docs)
-- **New Screens**: 4 (Learning, Analytics, Health, Help)
-- **New Keyboard Shortcuts**: 4 (`L`, `A`, `H`, `?`)
+- **New Screens**: 5 (Learning, Analytics, Health, Help, Ask)
+- **New Keyboard Shortcuts**: 5 (`L`, `N`, `H`, `?`, `A`)
 - **Documentation**: 3 files, 800+ lines
 
 ---
@@ -279,7 +282,8 @@ None. Used existing:
 **PR Description**:
 Adds 4 new interactive screens to the TUI, making CLI-only features accessible:
 - Learning Dashboard (`L` key) - RL metrics and convergence
-- Analytics Viewer (`A` key) - usage insights with configurable time window
+- Analytics Viewer (`N` key) - usage insights with configurable time window
+- Ask Screen (`A` key) - interactive RAG Q&A (v0.3.4)
 - Health Check (`H` key) - project diagnostics
 - Help Screen (`?` key) - keyboard shortcuts reference
 

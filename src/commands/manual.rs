@@ -488,7 +488,13 @@ pub fn cmd_add(
                 "decisions" => "decisions.md",
                 "solutions" => "solutions.md",
                 "patterns" => "patterns.md",
-                _ => unreachable!(),
+                "bugs" => "bugs.md",
+                "insights" => "insights.md",
+                "questions" => "questions.md",
+                _ => return Err(error::MemoryError::Config(format!(
+                    "Unknown category: '{}'. Use: decisions, solutions, patterns, bugs, insights, questions, preferences",
+                    category
+                ))),
             },
         )
     };
@@ -498,7 +504,13 @@ pub fn cmd_add(
 
     // Initialize file if needed
     if !path.exists() {
-        let title = category.chars().next().unwrap().to_uppercase().to_string() + &category[1..];
+        let title = if category.is_empty() {
+            String::new()
+        } else {
+            let mut t = category.chars().next().unwrap().to_uppercase().to_string();
+            t.push_str(&category[1..]);
+            t
+        };
         std::fs::write(&path, format!("# {}\n", title))?;
     }
 
@@ -510,10 +522,16 @@ pub fn cmd_add(
         format!("\n\n## Session: {} ({})\n\n", label, now)
     };
 
-    // Append
+    // Dedup: replace existing session if same label already present
+    use crate::extractor::knowledge::replace_session_block;
     use std::io::Write;
-    let mut file = std::fs::OpenOptions::new().append(true).open(&path)?;
-    writeln!(file, "{}{}", header, content)?;
+    let existing = std::fs::read_to_string(&path).unwrap_or_default();
+    if let Some(replaced) = replace_session_block(&existing, label, &header, content) {
+        std::fs::write(&path, replaced)?;
+    } else {
+        let mut file = std::fs::OpenOptions::new().append(true).open(&path)?;
+        writeln!(file, "{}{}", header, content)?;
+    }
 
     // Delete stale context.md (manual entries change the knowledge base)
     let context_path = memory_dir

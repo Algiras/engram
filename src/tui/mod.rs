@@ -26,7 +26,10 @@ enum Screen {
     Daemon,
     Config,
     InjectPreview,
+    Timeline,
+    Ask,
     Help,
+    Vcs,
 }
 
 #[derive(Clone, PartialEq)]
@@ -123,6 +126,27 @@ pub struct App {
     inject_preview_budget: usize,
     inject_preview_status: String,
     pending_inject_preview: bool,
+
+    // Timeline state
+    pub timeline_items: Vec<crate::tui::data::TimelineEntry>,
+    timeline_index: usize,
+    timeline_scroll: usize,
+
+    // Ask screen state
+    ask_query: String,
+    ask_result: String,
+    ask_loading: bool,
+    ask_input_mode: bool,
+    pending_ask: Option<(String, String)>, // (project, query)
+    ask_scroll: u16,
+
+    // VCS state
+    vcs_commits: Vec<crate::vcs::CommitObject>,
+    vcs_commit_index: usize,
+    vcs_commit_scroll: usize,
+    vcs_snapshot_content: String,
+    vcs_snapshot_scroll: u16,
+    vcs_status_line: String,
 }
 
 impl App {
@@ -186,6 +210,21 @@ impl App {
             inject_preview_budget: 1500,
             inject_preview_status: String::new(),
             pending_inject_preview: false,
+            timeline_items: Vec::new(),
+            timeline_index: 0,
+            timeline_scroll: 0,
+            ask_query: String::new(),
+            ask_result: String::new(),
+            ask_loading: false,
+            ask_input_mode: false,
+            pending_ask: None,
+            ask_scroll: 0,
+            vcs_commits: Vec::new(),
+            vcs_commit_index: 0,
+            vcs_commit_scroll: 0,
+            vcs_snapshot_content: String::new(),
+            vcs_snapshot_scroll: 0,
+            vcs_status_line: String::new(),
         }
     }
 
@@ -202,6 +241,76 @@ impl App {
             .get(self.project_index)
             .map(|p| p.items.len())
             .unwrap_or(0)
+    }
+
+    fn load_timeline_data(&mut self) {
+        self.timeline_items = data::load_timeline(&self.memory_dir);
+        self.timeline_index = 0;
+        self.timeline_scroll = 0;
+    }
+
+    fn load_vcs_data(&mut self) {
+        let project = match self.tree.projects.get(self.project_index) {
+            Some(p) => p.name.clone(),
+            None => {
+                self.vcs_status_line = "No project selected".to_string();
+                self.vcs_commits.clear();
+                return;
+            }
+        };
+        let vcs = crate::vcs::MemoryVcs::new(&self.memory_dir, &project);
+        if !vcs.is_initialized() {
+            self.vcs_status_line = format!(
+                "VCS not initialized — run: engram mem init --project {}",
+                project
+            );
+            self.vcs_commits.clear();
+            return;
+        }
+        // Load status line
+        self.vcs_status_line = match vcs.status() {
+            Ok(s) => {
+                let head = s
+                    .head_hash
+                    .as_deref()
+                    .map(|h| &h[..h.len().min(8)])
+                    .unwrap_or("(none)");
+                format!(
+                    "branch: {}  HEAD: {}  +{} unstaged  {} staged  {} deleted",
+                    s.current_branch,
+                    head,
+                    s.unstaged_new.len(),
+                    s.staged.len(),
+                    s.unstaged_removed.len()
+                )
+            }
+            Err(e) => format!("Error: {}", e),
+        };
+        // Load commit log
+        self.vcs_commits = vcs.log(None, 50, None).unwrap_or_default();
+        self.vcs_commit_index = 0;
+        self.vcs_commit_scroll = 0;
+        self.vcs_snapshot_scroll = 0;
+        self.load_vcs_snapshot();
+    }
+
+    fn load_vcs_snapshot(&mut self) {
+        let project = match self.tree.projects.get(self.project_index) {
+            Some(p) => p.name.clone(),
+            None => return,
+        };
+        let commit = match self.vcs_commits.get(self.vcs_commit_index) {
+            Some(c) => c.hash.clone(),
+            None => {
+                self.vcs_snapshot_content = "(no commits yet)".to_string();
+                return;
+            }
+        };
+        let vcs = crate::vcs::MemoryVcs::new(&self.memory_dir, &project);
+        self.vcs_snapshot_content = vcs
+            .show(&commit, None)
+            .unwrap_or_else(|e| format!("Error: {}", e));
+        self.vcs_snapshot_scroll = 0;
     }
 
     fn reload_tree(&mut self) {
@@ -317,6 +426,7 @@ impl App {
                     Screen::Analytics => self.load_analytics_data(),
                     Screen::Health => self.load_health_data(),
                     Screen::Daemon => self.load_daemon_data(),
+                    Screen::Vcs => self.load_vcs_data(),
                     _ => {}
                 }
             }
@@ -332,7 +442,10 @@ impl App {
                 Screen::Daemon => ui::render_daemon(f, self),
                 Screen::Config => ui::render_config(f, self),
                 Screen::InjectPreview => ui::render_inject_preview(f, self),
+                Screen::Timeline => ui::render_timeline(f, self),
+                Screen::Ask => ui::render_ask(f, self),
                 Screen::Help => ui::render_help(f, self),
+                Screen::Vcs => ui::render_vcs(f, self),
             })?;
 
             // Execute pending config test (blocking HTTP call)
@@ -375,6 +488,14 @@ impl App {
                         self.config_status = format!("Fetch failed ({}) — enter name manually", e);
                     }
                 }
+            }
+
+            // Execute pending ask query
+            if let Some((project, query)) = self.pending_ask.take() {
+                let args = vec!["ask", query.as_str(), "--project", project.as_str()];
+                let (output, _) = self.run_cli_command(terminal, &args)?;
+                self.ask_result = output;
+                self.ask_loading = false;
             }
 
             // Execute pending smart inject preview load
@@ -490,8 +611,19 @@ impl App {
                     Screen::InjectPreview => {
                         self.handle_inject_preview_keys(key.code);
                     }
+                    Screen::Timeline => {
+                        if self.handle_timeline_keys(key.code) {
+                            return Ok(());
+                        }
+                    }
+                    Screen::Ask => {
+                        self.handle_ask_keys(key.code);
+                    }
                     Screen::Help => {
                         self.handle_help_keys(key.code)?;
+                    }
+                    Screen::Vcs => {
+                        self.handle_vcs_keys(key.code);
                     }
                 }
             }
@@ -617,11 +749,10 @@ impl App {
                 self.learning_scroll = 0;
             }
 
-            // Switch to Analytics screen
+            // Switch to Ask screen
             KeyCode::Char('A') => {
-                self.load_analytics_data();
-                self.screen = Screen::Analytics;
-                self.analytics_scroll = 0;
+                self.ask_scroll = 0;
+                self.screen = Screen::Ask;
             }
 
             // Switch to Health screen
@@ -638,9 +769,21 @@ impl App {
                 self.daemon_scroll = 0;
             }
 
+            // Switch to Timeline screen (Work log)
+            KeyCode::Char('W') => {
+                self.load_timeline_data();
+                self.screen = Screen::Timeline;
+            }
+
             // Show Help
             KeyCode::Char('?') => {
                 self.screen = Screen::Help;
+            }
+
+            // Switch to VCS screen
+            KeyCode::Char('V') => {
+                self.load_vcs_data();
+                self.screen = Screen::Vcs;
             }
 
             // Actions
@@ -1019,6 +1162,11 @@ impl App {
                 true
             }
             KeyCode::Char('A') => {
+                self.ask_scroll = 0;
+                self.screen = Screen::Ask;
+                true
+            }
+            KeyCode::Char('N') => {
                 self.load_analytics_data();
                 self.screen = Screen::Analytics;
                 self.analytics_scroll = 0;
@@ -1040,7 +1188,60 @@ impl App {
                 self.screen = Screen::Help;
                 true
             }
+            KeyCode::Char('V') => {
+                self.load_vcs_data();
+                self.screen = Screen::Vcs;
+                true
+            }
             _ => false,
+        }
+    }
+
+    fn handle_ask_keys(&mut self, code: KeyCode) {
+        if self.ask_input_mode {
+            match code {
+                KeyCode::Enter => {
+                    if !self.ask_query.is_empty() {
+                        self.ask_result = "Querying\u{2026}".to_string();
+                        self.ask_loading = true;
+                        let project = self
+                            .current_project_name()
+                            .unwrap_or_else(|| "default".to_string());
+                        self.pending_ask = Some((project, self.ask_query.clone()));
+                        self.ask_input_mode = false;
+                    }
+                }
+                KeyCode::Esc => {
+                    self.ask_input_mode = false;
+                }
+                KeyCode::Backspace => {
+                    self.ask_query.pop();
+                }
+                KeyCode::Char(c) => {
+                    self.ask_query.push(c);
+                }
+                _ => {}
+            }
+            return;
+        }
+        match code {
+            KeyCode::Char('i') | KeyCode::Char('/') => {
+                self.ask_input_mode = true;
+            }
+            KeyCode::Char('j') | KeyCode::Down => {
+                self.ask_scroll = self.ask_scroll.saturating_add(1);
+            }
+            KeyCode::Char('k') | KeyCode::Up => {
+                self.ask_scroll = self.ask_scroll.saturating_sub(1);
+            }
+            KeyCode::Char('C') => {
+                self.ask_query.clear();
+                self.ask_result.clear();
+                self.ask_scroll = 0;
+            }
+            _ => {
+                self.handle_tab_switch(code);
+            }
         }
     }
 
@@ -1654,6 +1855,62 @@ impl App {
         Ok(())
     }
 
+    fn handle_vcs_keys(&mut self, code: KeyCode) {
+        match code {
+            KeyCode::Char('q') | KeyCode::Esc => {
+                self.screen = Screen::Browser;
+            }
+            KeyCode::Char('r') => {
+                self.load_vcs_data();
+            }
+            KeyCode::Char('j') | KeyCode::Down => {
+                if self.vcs_commit_index + 1 < self.vcs_commits.len() {
+                    self.vcs_commit_index += 1;
+                    if self.vcs_commit_index >= self.vcs_commit_scroll + 20 {
+                        self.vcs_commit_scroll += 1;
+                    }
+                    self.load_vcs_snapshot();
+                }
+            }
+            KeyCode::Char('k') | KeyCode::Up => {
+                if self.vcs_commit_index > 0 {
+                    self.vcs_commit_index -= 1;
+                    if self.vcs_commit_index < self.vcs_commit_scroll {
+                        self.vcs_commit_scroll = self.vcs_commit_scroll.saturating_sub(1);
+                    }
+                    self.load_vcs_snapshot();
+                }
+            }
+            KeyCode::Char('J') => {
+                self.vcs_snapshot_scroll = self.vcs_snapshot_scroll.saturating_add(3);
+            }
+            KeyCode::Char('K') => {
+                self.vcs_snapshot_scroll = self.vcs_snapshot_scroll.saturating_sub(3);
+            }
+            KeyCode::Char('c') => {
+                // Commit all new sessions
+                let project = match self.tree.projects.get(self.project_index) {
+                    Some(p) => p.name.clone(),
+                    None => return,
+                };
+                self.pending_action = Some((
+                    "VCS Commit".to_string(),
+                    vec![
+                        "mem".to_string(),
+                        "commit".to_string(),
+                        project,
+                        "-a".to_string(),
+                        "-m".to_string(),
+                        "snapshot from TUI".to_string(),
+                    ],
+                ));
+            }
+            _ => {
+                self.handle_tab_switch(code);
+            }
+        }
+    }
+
     fn handle_help_keys(&mut self, code: KeyCode) -> io::Result<()> {
         match code {
             KeyCode::Esc | KeyCode::Char('q') => {
@@ -1797,6 +2054,49 @@ impl App {
         // Store the action details temporarily - actual execution happens in run() loop
         // where we have access to the terminal
         self.pending_action = Some((label.to_string(), args));
+    }
+
+    /// Handle key input on the Timeline screen. Returns true if the app should quit.
+    fn handle_timeline_keys(&mut self, code: KeyCode) -> bool {
+        match code {
+            KeyCode::Char('q') => return true,
+            KeyCode::Esc => {
+                self.screen = Screen::Browser;
+            }
+            KeyCode::Char('j') | KeyCode::Down => {
+                if self.timeline_index + 1 < self.timeline_items.len() {
+                    self.timeline_index += 1;
+                    // Auto-scroll
+                    if self.timeline_index >= self.timeline_scroll + 20 {
+                        self.timeline_scroll += 1;
+                    }
+                }
+            }
+            KeyCode::Char('k') | KeyCode::Up => {
+                if self.timeline_index > 0 {
+                    self.timeline_index -= 1;
+                    if self.timeline_index < self.timeline_scroll {
+                        self.timeline_scroll = self.timeline_index;
+                    }
+                }
+            }
+            KeyCode::Enter => {
+                // Open viewer for current entry
+                if let Some(entry) = self.timeline_items.get(self.timeline_index) {
+                    self.viewer_content = format!(
+                        "# {} / {} — {}\n\n{}\n",
+                        entry.project, entry.category, entry.session_id, entry.content
+                    );
+                    self.scroll_offset = 0;
+                    self.screen = Screen::Viewer;
+                }
+            }
+            KeyCode::Char('r') => {
+                self.load_timeline_data();
+            }
+            _ => {}
+        }
+        false
     }
 }
 

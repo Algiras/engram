@@ -23,6 +23,9 @@ impl SemanticSearch {
             ("decisions", "decisions.md"),
             ("solutions", "solutions.md"),
             ("patterns", "patterns.md"),
+            ("bugs", "bugs.md"),
+            ("insights", "insights.md"),
+            ("questions", "questions.md"),
         ];
 
         for (category, filename) in &files {

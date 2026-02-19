@@ -2,7 +2,7 @@
 
 **[Website](https://algiras.github.io/engram/)** | **[Docs](https://algiras.github.io/engram/docs.html)** | **[llms.txt](https://algiras.github.io/engram/llms.txt)**
 
-Conversation memory system for Claude Code. Archives conversation sessions, extracts structured knowledge using LLMs, and enables full-text search and recall of project context.
+Conversation memory system for Claude Code. Archives conversation sessions, extracts structured knowledge using LLMs, and enables full-text search, semantic recall, RAG-powered Q&A, and VCS-style versioning of project context.
 
 ## Install
 
@@ -17,7 +17,7 @@ The installer auto-detects your OS/architecture and downloads the matching relea
 **Manual checksum verification (optional):**
 
 ```bash
-VERSION=v0.3.0
+VERSION=v0.3.5
 ASSET=engram-aarch64-apple-darwin.tar.gz   # choose your platform asset
 
 curl -fsSLO https://github.com/Algiras/engram/releases/download/${VERSION}/${ASSET}
@@ -58,11 +58,29 @@ engram search "authentication"
 # Show project context
 engram recall my-project
 
+# Ask a question using RAG over your knowledge
+engram ask "how did we solve the auth bug?"
+
 # List projects
 engram projects
 
 # Interactive TUI with fuzzy search
 engram tui
+
+# Inject knowledge into Claude Code MEMORY.md (compact, smart, or full)
+engram inject my-project
+engram inject my-project --smart   # semantic, git-context-aware
+engram inject my-project --full    # untruncated dump
+
+# Add knowledge manually (7 categories)
+engram add my-project decisions "Use Postgres for persistence" --label db-decision
+engram add my-project bugs "Login fails on Safari when cookies are blocked" --label safari-bug
+
+# Knowledge VCS
+engram mem init my-project
+engram mem commit my-project -m "stable auth implementation" -a
+engram mem log my-project
+engram mem checkout my-project v1.0
 
 # View reinforcement learning progress
 engram learn dashboard
@@ -93,7 +111,7 @@ Claude can now directly access your memory during conversations! See [MCP_SETUP.
 
 ## LLM Providers
 
-Supports Anthropic, OpenAI, and Ollama for knowledge extraction. Defaults to Ollama (local) if nothing is configured.
+Supports Anthropic, OpenAI, Gemini, OpenRouter, VSCode Copilot, and Ollama for knowledge extraction and embeddings. Defaults to Ollama (local) if nothing is configured.
 
 **Precedence:** environment variables > `auth.json` > Ollama fallback
 
@@ -124,50 +142,107 @@ Credentials are stored in `~/.config/engram/auth.json` with `0600` permissions.
 
 ## Commands
 
+### Core
 | Command | Description |
 |---------|-------------|
 | `ingest` | Parse JSONL conversations, archive as markdown, extract knowledge |
 | `search <query>` | Full-text regex search across all memory |
+| `search-semantic <query>` | Semantic vector search using embeddings |
 | `recall <project>` | Display project knowledge context (includes installed packs) |
 | `lookup <project> <query>` | Search knowledge entries by content |
 | `context <project>` | Output context.md to stdout (for piping) |
-| `inject [project]` | Write combined knowledge to Claude Code MEMORY.md |
-| `add <project> <category> <content>` | Manually add a knowledge entry |
-| `forget <project> <session-id>` | Remove a specific knowledge entry |
+| `ask <query>` | Answer a question using RAG over project knowledge |
 | `status` | Show memory statistics |
 | `projects` | List all discovered projects |
-| `doctor [--fix]` | Health check for knowledge files and packs |
+| `regen <project>` | Regenerate context.md from knowledge files (no re-ingestion) |
+
+### Knowledge Management
+| Command | Description |
+|---------|-------------|
+| `inject [project]` | Write knowledge to Claude Code MEMORY.md (`--smart`, `--full`) |
+| `add <project> <category> <content>` | Manually add a knowledge entry (deduplicates by `--label`) |
+| `forget <project> <session-id>` | Remove a specific knowledge entry |
+| `consolidate <project>` | Detect and merge duplicate/similar knowledge |
+| `diff <project> <category>` | Show knowledge changes over time |
+| `embed <project>` | Generate embeddings index for semantic search |
 | `export <project> [markdown\|json\|html]` | Export project knowledge to various formats |
-| `tui` | Interactive terminal UI (browse, search, packs, analytics, health, learning) |
-| `auth login` | Configure LLM provider credentials |
-| `auth list` | Show configured providers |
-| `auth logout <provider>` | Remove provider credentials |
-| `auth status` | Show active provider |
-| `learn dashboard [project]` | View reinforcement learning progress and metrics |
-| `learn optimize <project>` | Apply learned parameter optimizations |
-| `learn simulate <project>` | Run learning simulation |
-| `learn feedback <project>` | Provide explicit feedback signal |
-| `learn reset <project>` | Reset learning state to defaults |
+
+### Knowledge VCS (`mem`)
+| Command | Description |
+|---------|-------------|
+| `mem init <project>` | Initialize VCS for a project |
+| `mem commit <project> -m <msg>` | Snapshot current knowledge (`-a` for all categories) |
+| `mem log <project>` | Show commit history |
+| `mem status <project>` | Show staged/unstaged sessions |
+| `mem diff <project>` | Diff HEAD vs working state |
+| `mem checkout <project> <ref>` | Restore knowledge to a previous commit or branch |
+| `mem branch <project>` | List or manage branches |
+
+### Inbox & Promotion
+| Command | Description |
+|---------|-------------|
+| `review <project>` | Review extracted candidates before promotion |
+| `promote <project> <id> <category>` | Promote an inbox entry to long-term memory |
+
+### Sync & Sharing
+| Command | Description |
+|---------|-------------|
+| `sync push <project>` | Push knowledge to a private GitHub Gist |
+| `sync pull <project> <gist-id>` | Pull knowledge from a Gist |
+| `sync list <project>` | List your Gists |
+| `sync history <gist-id>` | View Gist version history |
+| `sync push-repo <project> <repo>` | Push to a local Git repo |
+| `sync pull-repo <project> <repo>` | Pull from a local Git repo |
+
+### Hive Mind (Knowledge Packs)
+| Command | Description |
+|---------|-------------|
 | `hive browse` | Browse available knowledge packs |
 | `hive search <query>` | Search for packs across registries |
 | `hive install <pack>` | Install a knowledge pack |
 | `hive list` | List installed packs |
 | `hive registry add <url>` | Add a pack registry |
-| `daemon start [--interval N]` | Start background ingest daemon (polls every N minutes, default 15) |
+| `hive update` | Update installed packs |
+
+### Analytics & Learning
+| Command | Description |
+|---------|-------------|
+| `analytics [project]` | Show usage analytics and insights (`--days`, `--detailed`) |
+| `learn dashboard [project]` | View reinforcement learning progress and metrics |
+| `learn optimize <project>` | Apply learned parameter optimizations |
+| `learn simulate <project>` | Run learning simulation |
+| `learn feedback <project>` | Provide explicit feedback signal |
+| `learn reset <project>` | Reset learning state to defaults |
+
+### Infrastructure
+| Command | Description |
+|---------|-------------|
+| `auth login` | Configure LLM provider credentials |
+| `auth list` | Show configured providers |
+| `auth logout <provider>` | Remove provider credentials |
+| `auth status` | Show active provider |
+| `doctor [--fix]` | Health check for knowledge files and packs |
+| `hooks setup` | Install Claude Code hooks for automatic ingest |
+| `tui` | Interactive terminal UI (browse, search, packs, analytics, health, learning, ask) |
+| `daemon start [--interval N]` | Start background ingest daemon (default 15 min) |
 | `daemon stop` | Stop the running daemon |
 | `daemon status` | Show daemon status and PID |
-| `daemon logs [-f]` | View daemon log output (use `-f` to follow) |
+| `daemon logs [-f]` | View daemon log output |
+| `mcp` | Run as MCP server (Model Context Protocol) |
 
-See [HIVE_GUIDE.md](docs/HIVE_GUIDE.md) for full hive commands. See [LEARNING_GUIDE.md](docs/LEARNING_GUIDE.md) for the learning system. See [DAEMON_GUIDE.md](docs/DAEMON_GUIDE.md) for background ingest.
+See [HIVE_GUIDE.md](docs/HIVE_GUIDE.md) for full hive commands. See [LEARNING_GUIDE.md](docs/LEARNING_GUIDE.md) for the learning system. See [DAEMON_GUIDE.md](docs/DAEMON_GUIDE.md) for background ingest. See [GIST_SHARING.md](docs/GIST_SHARING.md) for sync/sharing.
 
 ## How It Works
 
 1. **Discovery** - Scans `~/.claude/projects/` for JSONL conversation files
 2. **Parsing** - Extracts user/assistant turns, tool calls, and metadata
 3. **Archival** - Renders conversations as markdown with analytics
-4. **Knowledge Extraction** - Uses an LLM to extract decisions, solutions, patterns, and preferences
+4. **Knowledge Extraction** - Uses an LLM to extract decisions, solutions, patterns, bugs, insights, questions, and preferences (7 categories)
 5. **Synthesis** - Generates a `context.md` per project from accumulated knowledge
-6. **Reinforcement Learning** - Automatically optimizes knowledge importance, TTLs, and consolidation strategies based on usage patterns
+6. **Injection** - Writes compact/smart/full knowledge into Claude Code's `MEMORY.md` so it's visible at session start
+7. **RAG Q&A** - `engram ask` retrieves relevant entries and synthesizes answers with source citations
+8. **VCS** - `engram mem` snapshots knowledge state so you can diff, branch, and restore
+9. **Reinforcement Learning** - Automatically optimizes knowledge importance, TTLs, and consolidation strategies based on usage patterns
 
 **Detailed Guides:**
 - [HIVE_GUIDE.md](docs/HIVE_GUIDE.md) - Distributed knowledge sharing
@@ -185,11 +260,15 @@ See [HIVE_GUIDE.md](docs/HIVE_GUIDE.md) for full hive commands. See [LEARNING_GU
 ~/memory/
 ├── conversations/{project}/{session}/   # Full markdown + metadata
 ├── summaries/{project}/                 # Brief session summaries
-├── knowledge/{project}/                 # Decisions, solutions, patterns, context.md
-├── knowledge/_global/                   # Cross-project preferences
-├── analytics/                           # Usage and activity data
+├── knowledge/{project}/                 # decisions, solutions, patterns, bugs,
+│                                        #   insights, questions, context.md
+├── knowledge/_global/                   # Cross-project preferences & shared notes
+├── analytics/                           # Usage events and activity data
+├── observations/{project}/              # File-edit observations (JSONL, per day)
+├── vcs/{project}/                       # Knowledge VCS commits and branches
 ├── packs/installed/                     # Installed hive knowledge packs
 ├── hive/registries/                     # Registry clones
+├── learning/{project}/                  # RL learning state
 ├── daemon.pid                           # Daemon PID (present when running)
 └── daemon.log                           # Daemon output log
 ```

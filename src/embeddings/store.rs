@@ -2,6 +2,57 @@ use super::{cosine_similarity, EmbeddedChunk};
 use crate::error::Result;
 use std::path::Path;
 
+/// Optional pre-filters applied before cosine scoring
+pub struct SearchFilter {
+    /// Only include chunks with timestamp >= this value
+    pub since: Option<chrono::DateTime<chrono::Utc>>,
+    /// Only include chunks whose category exactly matches this string
+    pub category: Option<String>,
+    /// Only include chunks whose session_id contains this substring
+    pub file_hint: Option<String>,
+}
+
+impl SearchFilter {
+    pub fn empty() -> Self {
+        SearchFilter {
+            since: None,
+            category: None,
+            file_hint: None,
+        }
+    }
+
+    fn matches(&self, chunk: &EmbeddedChunk) -> bool {
+        if let Some(ref since) = self.since {
+            // Parse chunk timestamp; skip chunk if parse fails (treat as old)
+            let ts = chrono::DateTime::parse_from_rfc3339(&chunk.metadata.timestamp)
+                .map(|t| t.with_timezone(&chrono::Utc))
+                .unwrap_or(chrono::DateTime::<chrono::Utc>::MIN_UTC);
+            if ts < *since {
+                return false;
+            }
+        }
+        if let Some(ref cat) = self.category {
+            if &chunk.metadata.category != cat {
+                return false;
+            }
+        }
+        if let Some(ref hint) = self.file_hint {
+            let matches_session = chunk
+                .metadata
+                .session_id
+                .as_deref()
+                .map(|s| s.contains(hint.as_str()))
+                .unwrap_or(false);
+            // Also check text content for file path hints
+            let matches_text = chunk.text.contains(hint.as_str());
+            if !matches_session && !matches_text {
+                return false;
+            }
+        }
+        true
+    }
+}
+
 /// In-memory embedding store with persistence
 pub struct EmbeddingStore {
     pub chunks: Vec<EmbeddedChunk>,
@@ -65,6 +116,27 @@ impl EmbeddingStore {
         // Sort by similarity (descending)
         results.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(std::cmp::Ordering::Equal));
 
+        results.into_iter().take(top_k).collect()
+    }
+
+    /// Find most similar chunks matching the filter pre-conditions
+    pub fn search_filtered(
+        &self,
+        query_embedding: &[f32],
+        top_k: usize,
+        filter: &SearchFilter,
+    ) -> Vec<(f32, &EmbeddedChunk)> {
+        let mut results: Vec<(f32, &EmbeddedChunk)> = self
+            .chunks
+            .iter()
+            .filter(|chunk| filter.matches(chunk))
+            .map(|chunk| {
+                let similarity = cosine_similarity(query_embedding, &chunk.embedding);
+                (similarity, chunk)
+            })
+            .collect();
+
+        results.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(std::cmp::Ordering::Equal));
         results.into_iter().take(top_k).collect()
     }
 
