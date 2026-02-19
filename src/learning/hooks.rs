@@ -15,12 +15,17 @@ pub fn post_ingest_hook(config: &Config, project: &str) -> Result<()> {
     // Extract signals from recent events
     let learning_signals = signals::extract_signals_from_events(&events);
 
+    // Update learning state
+    let mut state = progress::load_state(&config.memory_dir, project)?;
+
+    // Always train the TTL Q-table from current knowledge state (even if no
+    // usage signals yet) so the policy is warm-started from the first ingest.
+    train_ttl_q_table_from_knowledge(config, project, &mut state);
+
     if learning_signals.is_empty() {
+        progress::save_state(&config.memory_dir, &state)?;
         return Ok(());
     }
-
-    // Update learning state with new signals
-    let mut state = progress::load_state(&config.memory_dir, project)?;
 
     // Track metrics snapshot using real data
     let health_score = crate::health::check_project_health(&config.memory_dir, project)
@@ -207,6 +212,79 @@ pub fn post_doctor_fix_hook(
     }
 
     Ok(())
+}
+
+/// Train the TTL Q-table from observed knowledge state.
+///
+/// For each active block we compute its TTLState and derive a reward signal
+/// from the existing importance boost + recency tier:
+///
+/// | Situation                        | Preferred action | Reward |
+/// |----------------------------------|------------------|--------|
+/// | High boost + Recent              | Extend30d        |  0.8   |
+/// | Medium boost + Normal            | Extend7d         |  0.5   |
+/// | Low boost + Stale                | Reduce7d         |  0.7   |
+/// | Low boost + Recent (new entry)   | Extend7d         |  0.3   |
+/// | Any + Stale (no boost)           | Reduce3d         |  0.6   |
+fn train_ttl_q_table_from_knowledge(
+    config: &Config,
+    project: &str,
+    state: &mut crate::learning::progress::LearningState,
+) {
+    use crate::extractor::knowledge::{parse_session_blocks, partition_by_expiry};
+    use crate::learning::adaptation::compute_ttl_state;
+    use crate::learning::algorithms::{ImportanceTier, RecencyTier, TTLAction};
+    use chrono::Utc;
+
+    let knowledge_dir = config.memory_dir.join("knowledge").join(project);
+    let now = Utc::now();
+    let categories = [
+        "decisions",
+        "solutions",
+        "patterns",
+        "bugs",
+        "insights",
+        "questions",
+    ];
+
+    for cat in &categories {
+        let path = knowledge_dir.join(format!("{}.md", cat));
+        if let Ok(content) = std::fs::read_to_string(&path) {
+            let (_, blocks) = parse_session_blocks(&content);
+            let (active, _) = partition_by_expiry(blocks);
+
+            for block in &active {
+                let boost = state
+                    .learned_parameters
+                    .importance_boosts
+                    .get(&block.session_id)
+                    .copied()
+                    .unwrap_or(0.0);
+
+                let ttl_state = compute_ttl_state(boost, &block.timestamp, now);
+
+                // Choose a reward-action pair based on observed state
+                let (action, reward): (TTLAction, f32) =
+                    match (&ttl_state.importance_tier, &ttl_state.recency_tier) {
+                        (ImportanceTier::High, RecencyTier::Recent) => {
+                            (TTLAction::Extend30d, 0.8)
+                        }
+                        (ImportanceTier::High, _) => (TTLAction::Extend14d, 0.7),
+                        (ImportanceTier::Medium, RecencyTier::Stale) => (TTLAction::Extend7d, 0.4),
+                        (ImportanceTier::Medium, _) => (TTLAction::Extend7d, 0.5),
+                        (ImportanceTier::Low, RecencyTier::Stale) => (TTLAction::Reduce7d, 0.7),
+                        (ImportanceTier::Low, RecencyTier::Normal) => (TTLAction::Reduce3d, 0.5),
+                        (ImportanceTier::Low, RecencyTier::Recent) => (TTLAction::Extend7d, 0.3),
+                    };
+
+                // Update Q-table: treat current state as both current and next state
+                // (steady-state approximation — reward is the signal we care about)
+                state
+                    .ttl_q_learning
+                    .update(ttl_state.clone(), action, reward, ttl_state);
+            }
+        }
+    }
 }
 
 /// Compute the percentage of knowledge entries older than 30 days (stale).

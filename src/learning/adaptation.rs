@@ -212,7 +212,7 @@ fn build_block_header(
 }
 
 /// Map a block's importance boost + timestamp age into a TTLState.
-fn compute_ttl_state(boost: f32, timestamp: &str, now: DateTime<Utc>) -> TTLState {
+pub fn compute_ttl_state(boost: f32, timestamp: &str, now: DateTime<Utc>) -> TTLState {
     let importance_tier = if boost >= 0.7 {
         ImportanceTier::High
     } else if boost >= 0.4 {

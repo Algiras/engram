@@ -67,7 +67,9 @@ impl TTLAction {
 /// Q-Learning for TTL policy optimization
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TTLQLearning {
-    pub q_table: HashMap<(TTLState, TTLAction), f32>,
+    /// Q-table serialized with string keys `"<state_key>|<action_key>"`.
+    /// JSON requires string map keys, so we encode TTLState+TTLAction as strings.
+    pub q_table: HashMap<String, f32>,
     pub learning_rate: f32,
     pub discount_factor: f32,
     pub epsilon: f32, // Exploration rate
@@ -121,9 +123,15 @@ impl TTLQLearning {
             .unwrap_or(TTLAction::Extend7d)
     }
 
+    /// Encode a (state, action) pair as a string key for the HashMap.
+    fn q_key(state: &TTLState, action: &TTLAction) -> String {
+        format!("{:?}:{:?}:{:?}|{:?}",
+            state.importance_tier, state.usage_frequency_tier, state.recency_tier, action)
+    }
+
     /// Get Q-value for state-action pair
     fn get_q_value(&self, state: &TTLState, action: &TTLAction) -> f32 {
-        *self.q_table.get(&(state.clone(), *action)).unwrap_or(&0.0)
+        *self.q_table.get(&Self::q_key(state, action)).unwrap_or(&0.0)
     }
 
     /// Random action for exploration
@@ -159,7 +167,7 @@ impl TTLQLearning {
         let new_q = current_q
             + self.learning_rate * (reward + self.discount_factor * max_next_q - current_q);
 
-        self.q_table.insert((state, action), new_q);
+        self.q_table.insert(Self::q_key(&state, &action), new_q);
     }
 
     /// Get the maximum Q-value for a state (over all actions)
@@ -337,7 +345,7 @@ mod tests {
         q.update(state.clone(), action, reward, next_state);
 
         let q_value = q.get_q_value(&state, &action);
-        assert!(q_value > 0.0);
+        assert!(q_value > 0.0, "Q-value should be positive after positive reward update");
     }
 
     #[test]
