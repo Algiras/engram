@@ -603,6 +603,146 @@ pub fn load_health_report(memory_dir: &Path, project: &str) -> String {
     }
 }
 
+/// Build the reflect report string (same data as `engram reflect`, for TUI display).
+pub fn load_reflect_report(memory_dir: &Path, project: &str) -> String {
+    use chrono::{DateTime, Utc};
+    use crate::extractor::knowledge::{parse_session_blocks, parse_ttl, partition_by_expiry};
+
+    let knowledge_dir = memory_dir.join("knowledge").join(project);
+    if !knowledge_dir.exists() {
+        return format!("No knowledge found for '{}'.", project);
+    }
+
+    let now = Utc::now();
+    let categories = ["decisions", "solutions", "patterns", "bugs", "insights", "questions"];
+
+    struct CatStats {
+        total: usize, high: usize, medium: usize, low: usize, unknown: usize,
+        with_ttl: usize, expiring_soon: usize, stale: usize, recent: usize,
+    }
+
+    let mut total_expired = 0usize;
+    let mut cat_stats: Vec<(String, CatStats)> = Vec::new();
+
+    for cat in &categories {
+        let path = knowledge_dir.join(format!("{}.md", cat));
+        if !path.exists() { continue; }
+        let content = std::fs::read_to_string(&path).unwrap_or_default();
+        let (_, blocks) = parse_session_blocks(&content);
+        let (active, expired) = partition_by_expiry(blocks);
+        total_expired += expired.len();
+
+        let mut s = CatStats { total: active.len(), high: 0, medium: 0, low: 0,
+            unknown: 0, with_ttl: 0, expiring_soon: 0, stale: 0, recent: 0 };
+
+        for b in &active {
+            match b.confidence.as_deref() {
+                Some("high") => s.high += 1,
+                Some("medium") => s.medium += 1,
+                Some("low") => s.low += 1,
+                _ => s.unknown += 1,
+            }
+            if let Some(ref ttl_str) = b.ttl {
+                if ttl_str != "never" {
+                    s.with_ttl += 1;
+                    if let (Ok(ts), Some(dur)) = (
+                        DateTime::parse_from_rfc3339(&b.timestamp),
+                        parse_ttl(ttl_str),
+                    ) {
+                        let days_left = (ts.with_timezone(&Utc) + dur - now).num_days();
+                        if days_left >= 0 && days_left <= 7 { s.expiring_soon += 1; }
+                    }
+                }
+            }
+            if let Ok(ts) = DateTime::parse_from_rfc3339(&b.timestamp) {
+                let age = (now - ts.with_timezone(&Utc)).num_days();
+                if age > 30 { s.stale += 1; }
+                if age <= 7 { s.recent += 1; }
+            }
+        }
+        if s.total > 0 { cat_stats.push((cat.to_string(), s)); }
+    }
+
+    let total: usize = cat_stats.iter().map(|(_, s)| s.total).sum();
+    if total == 0 { return format!("No active knowledge entries for '{}'.", project); }
+
+    let stale_total: usize = cat_stats.iter().map(|(_, s)| s.stale).sum();
+    let low_total: usize = cat_stats.iter().map(|(_, s)| s.low).sum();
+    let unk_total: usize = cat_stats.iter().map(|(_, s)| s.unknown).sum();
+    let high_total: usize = cat_stats.iter().map(|(_, s)| s.high).sum();
+    let med_total: usize = cat_stats.iter().map(|(_, s)| s.medium).sum();
+    let recent_total: usize = cat_stats.iter().map(|(_, s)| s.recent).sum();
+    let expiring_total: usize = cat_stats.iter().map(|(_, s)| s.expiring_soon).sum();
+
+    let stale_pct = stale_total * 100 / total.max(1);
+    let low_pct = low_total * 100 / total.max(1);
+    let unk_pct = unk_total * 100 / total.max(1);
+
+    let mut quality: i32 = 100;
+    let mut recs: Vec<String> = Vec::new();
+
+    if stale_pct > 50 { quality -= 20; recs.push(format!("{}% stale — run: engram forget {} --stale 60d", stale_pct, project)); }
+    else if stale_pct > 25 { quality -= 10; recs.push(format!("{}% stale — review outdated entries", stale_pct)); }
+    if low_pct > 20 { quality -= 10; recs.push(format!("{}% low-confidence — validate or re-ingest", low_pct)); }
+    if unk_pct > 50 { quality -= 5; recs.push("Most entries lack confidence — re-run engram ingest".into()); }
+    if total_expired > 5 { quality -= 5; recs.push(format!("{} expired entries — run: engram forget {} --expired", total_expired, project)); }
+    if cat_stats.len() < 3 { quality -= 10; recs.push("Low category diversity".into()); }
+    if expiring_total > 0 { recs.push(format!("{} entries expiring within 7 days", expiring_total)); }
+    if recent_total == 0 { recs.push("No entries added in last 7 days".into()); }
+
+    let quality = quality.clamp(0, 100) as u8;
+    let quality_label = match quality { 90..=100 => "Excellent", 75..=89 => "Good", 50..=74 => "Fair", _ => "Poor" };
+
+    let pct = |n: usize| format!("{:.0}%", n as f32 / total as f32 * 100.0);
+
+    let mut out = String::new();
+    out.push_str(&format!("Memory Reflection: {}\n", project));
+    out.push_str(&"═".repeat(48));
+    out.push('\n');
+    out.push('\n');
+    out.push_str(&format!("  Quality Score   {}/100  ({})\n", quality, quality_label));
+    out.push_str(&format!("  Total entries   {}\n", total));
+    if total_expired > 0 { out.push_str(&format!("  Expired         {}\n", total_expired)); }
+    out.push('\n');
+
+    out.push_str("  Category Breakdown\n");
+    out.push_str(&format!("  {:<14} {:>6} {:>7} {:>8} {:>8} {:>8}\n",
+        "Category", "Total", "Recent", "Stale", "Lo-Conf", "w/TTL"));
+    out.push_str(&format!("  {}\n", "─".repeat(54)));
+    for (cat, s) in &cat_stats {
+        out.push_str(&format!("  {:<14} {:>6} {:>7} {:>8} {:>8} {:>8}\n",
+            cat, s.total, s.recent, s.stale, s.low, s.with_ttl));
+    }
+
+    out.push('\n');
+    out.push_str("  Confidence Distribution\n");
+    out.push_str(&format!("  High    {:>4}  ({})\n", high_total, pct(high_total)));
+    out.push_str(&format!("  Medium  {:>4}  ({})\n", med_total, pct(med_total)));
+    out.push_str(&format!("  Low     {:>4}  ({})\n", low_total, pct(low_total)));
+    out.push_str(&format!("  Unknown {:>4}  ({})\n", unk_total, pct(unk_total)));
+
+    out.push('\n');
+    out.push_str("  Activity\n");
+    out.push_str(&format!("  New last 7d    {}\n", recent_total));
+    out.push_str(&format!("  Stale >30d     {}  ({})\n", stale_total, pct(stale_total)));
+    if expiring_total > 0 {
+        out.push_str(&format!("  Expiring <=7d  {}\n", expiring_total));
+    }
+
+    if recs.is_empty() {
+        out.push('\n');
+        out.push_str("  ✓ Memory is in great shape!\n");
+    } else {
+        out.push('\n');
+        out.push_str("  Recommendations\n");
+        for rec in &recs {
+            out.push_str(&format!("  → {}\n", rec));
+        }
+    }
+
+    out
+}
+
 pub fn load_daemon_status(memory_dir: &Path) -> String {
     let pid_file = memory_dir.join("daemon.pid");
     let log_file = memory_dir.join("daemon.log");

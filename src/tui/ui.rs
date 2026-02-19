@@ -23,6 +23,7 @@ fn render_screen_tabs(f: &mut Frame, active: &str, area: Rect) {
         ("Timeline", "W"),
         ("Ask", "A"),
         ("Vcs", "V"),
+        ("Reflect", "F"),
         ("Help", "?"),
     ];
 
@@ -809,6 +810,63 @@ pub fn render_health(f: &mut Frame, app: &App) {
         Span::raw("] Doctor  ["),
         Span::styled("c", Style::default().fg(Color::Yellow)),
         Span::raw("] Cleanup  ["),
+        Span::styled("j/k", Style::default().fg(Color::Cyan)),
+        Span::raw("] Scroll"),
+    ]);
+
+    f.render_widget(
+        Paragraph::new(status).style(Style::default().bg(Color::DarkGray)),
+        layout[2],
+    );
+
+    render_action_overlays(f, app);
+}
+
+/// Render Reflect screen
+pub fn render_reflect(f: &mut Frame, app: &App) {
+    let area = f.area();
+
+    let layout = Layout::vertical([
+        Constraint::Length(1),
+        Constraint::Min(3),
+        Constraint::Length(1),
+    ])
+    .split(area);
+
+    render_screen_tabs(f, "Reflect", layout[0]);
+    let main_area = layout[1];
+
+    let lines: Vec<Line> = app
+        .reflect_content
+        .lines()
+        .skip(app.reflect_scroll as usize)
+        .take(main_area.height.saturating_sub(2) as usize)
+        .map(|line| Line::from(line.to_string()))
+        .collect();
+
+    let title = if let Some(project) = app.tree.projects.get(app.project_index) {
+        format!(" Memory Reflection: {} ", project.name)
+    } else {
+        " Memory Reflection ".to_string()
+    };
+
+    let block = Block::default()
+        .title(title)
+        .borders(Borders::ALL)
+        .border_style(Style::default().fg(Color::Magenta));
+
+    let paragraph = Paragraph::new(lines)
+        .block(block)
+        .wrap(Wrap { trim: false });
+
+    f.render_widget(paragraph, main_area);
+
+    let status = Line::from(vec![
+        Span::raw(" ["),
+        Span::styled("q/Esc", Style::default().fg(Color::Magenta)),
+        Span::raw("] Back  ["),
+        Span::styled("r", Style::default().fg(Color::Cyan)),
+        Span::raw("] Reload  ["),
         Span::styled("j/k", Style::default().fg(Color::Cyan)),
         Span::raw("] Scroll"),
     ]);

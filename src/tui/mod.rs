@@ -30,6 +30,7 @@ enum Screen {
     Ask,
     Help,
     Vcs,
+    Reflect,
 }
 
 #[derive(Clone, PartialEq)]
@@ -147,6 +148,10 @@ pub struct App {
     vcs_snapshot_content: String,
     vcs_snapshot_scroll: u16,
     vcs_status_line: String,
+
+    // Reflect state
+    reflect_content: String,
+    reflect_scroll: u16,
 }
 
 impl App {
@@ -225,6 +230,8 @@ impl App {
             vcs_snapshot_content: String::new(),
             vcs_snapshot_scroll: 0,
             vcs_status_line: String::new(),
+            reflect_content: String::new(),
+            reflect_scroll: 0,
         }
     }
 
@@ -446,6 +453,7 @@ impl App {
                 Screen::Ask => ui::render_ask(f, self),
                 Screen::Help => ui::render_help(f, self),
                 Screen::Vcs => ui::render_vcs(f, self),
+                Screen::Reflect => ui::render_reflect(f, self),
             })?;
 
             // Execute pending config test (blocking HTTP call)
@@ -625,6 +633,9 @@ impl App {
                     Screen::Vcs => {
                         self.handle_vcs_keys(key.code);
                     }
+                    Screen::Reflect => {
+                        self.handle_reflect_keys(key.code, terminal)?;
+                    }
                 }
             }
         }
@@ -784,6 +795,13 @@ impl App {
             KeyCode::Char('V') => {
                 self.load_vcs_data();
                 self.screen = Screen::Vcs;
+            }
+
+            // Switch to Reflect screen
+            KeyCode::Char('F') => {
+                self.load_reflect_data();
+                self.screen = Screen::Reflect;
+                self.reflect_scroll = 0;
             }
 
             // Actions
@@ -1191,6 +1209,12 @@ impl App {
             KeyCode::Char('V') => {
                 self.load_vcs_data();
                 self.screen = Screen::Vcs;
+                true
+            }
+            KeyCode::Char('F') => {
+                self.load_reflect_data();
+                self.screen = Screen::Reflect;
+                self.reflect_scroll = 0;
                 true
             }
             _ => false,
@@ -1622,6 +1646,60 @@ impl App {
         } else {
             self.health_content = "No project selected".to_string();
         }
+    }
+
+    fn load_reflect_data(&mut self) {
+        if let Some(project) = self.tree.projects.get(self.project_index) {
+            self.reflect_content = data::load_reflect_report(&self.memory_dir, &project.name);
+        } else {
+            self.reflect_content = "No project selected".to_string();
+        }
+    }
+
+    fn handle_reflect_keys(
+        &mut self,
+        code: KeyCode,
+        terminal: &Terminal<CrosstermBackend<io::Stdout>>,
+    ) -> io::Result<()> {
+        let page_size = terminal.size()?.height.saturating_sub(4);
+        let total_lines = self.reflect_content.lines().count() as u16;
+
+        match code {
+            KeyCode::Esc | KeyCode::Char('q') => {
+                self.screen = Screen::Browser;
+            }
+            KeyCode::Char('r') => {
+                self.load_reflect_data();
+                self.reflect_scroll = 0;
+            }
+            KeyCode::Char('j') | KeyCode::Down => {
+                if self.reflect_scroll < total_lines {
+                    self.reflect_scroll += 1;
+                }
+            }
+            KeyCode::Char('k') | KeyCode::Up => {
+                self.reflect_scroll = self.reflect_scroll.saturating_sub(1);
+            }
+            KeyCode::PageDown | KeyCode::Char(' ') => {
+                self.reflect_scroll = self
+                    .reflect_scroll
+                    .saturating_add(page_size)
+                    .min(total_lines);
+            }
+            KeyCode::PageUp => {
+                self.reflect_scroll = self.reflect_scroll.saturating_sub(page_size);
+            }
+            KeyCode::Home | KeyCode::Char('g') => {
+                self.reflect_scroll = 0;
+            }
+            KeyCode::End | KeyCode::Char('G') => {
+                self.reflect_scroll = total_lines;
+            }
+            _ => {
+                self.handle_tab_switch(code);
+            }
+        }
+        Ok(())
     }
 
     fn load_daemon_data(&mut self) {

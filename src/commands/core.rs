@@ -461,12 +461,42 @@ pub fn cmd_recall(config: &Config, project: &str, verbose: bool) -> Result<()> {
         tokens_consumed: None,
     });
 
-    // Track learning signals from recall
-    if let Err(e) = learning::post_recall_hook(config, project, &[]) {
+    // Track learning signals from recall — pass actual session IDs so importance boosts apply
+    let recalled_ids = collect_active_session_ids(&knowledge_dir);
+    let id_refs: Vec<String> = recalled_ids;
+    if let Err(e) = learning::post_recall_hook(config, project, &id_refs) {
         eprintln!("Learning hook failed (non-fatal): {}", e);
     }
 
     Ok(())
+}
+
+/// Collect all active (non-expired) session IDs from a project's knowledge files.
+fn collect_active_session_ids(knowledge_dir: &Path) -> Vec<String> {
+    use crate::extractor::knowledge::{parse_session_blocks, partition_by_expiry};
+
+    let categories = [
+        "decisions",
+        "solutions",
+        "patterns",
+        "bugs",
+        "insights",
+        "questions",
+    ];
+    let mut ids = Vec::new();
+
+    for cat in &categories {
+        let path = knowledge_dir.join(format!("{}.md", cat));
+        if let Ok(content) = std::fs::read_to_string(&path) {
+            let (_, blocks) = parse_session_blocks(&content);
+            let (active, _) = partition_by_expiry(blocks);
+            for block in active {
+                ids.push(block.session_id);
+            }
+        }
+    }
+
+    ids
 }
 
 pub fn cmd_context(config: &Config, project: &str, verbose: bool) -> Result<()> {
