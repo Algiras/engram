@@ -72,10 +72,15 @@ CATEGORY_NAMES = {
 
 def gemini_call(prompt: str, api_key: str, model: str = "gemini-2.5-pro",
                 max_tokens: int = 2048, temperature: float = 0.1) -> str:
-    """Direct Gemini API call — bypasses engram for higher-quality extraction & judging."""
+    """Direct Gemini API call — bypasses engram for higher-quality extraction & judging.
+    Handles both standard and thinking (2.5-pro) response formats.
+    """
+    # Thinking models need enough tokens for reasoning + output
+    effective_max = max(max_tokens, 500) if "2.5-pro" in model else max_tokens
+
     payload = json.dumps({
         "contents": [{"parts": [{"text": prompt}]}],
-        "generationConfig": {"temperature": temperature, "maxOutputTokens": max_tokens},
+        "generationConfig": {"temperature": temperature, "maxOutputTokens": effective_max},
     }).encode()
     url = (
         f"https://generativelanguage.googleapis.com/v1beta/models/"
@@ -87,9 +92,16 @@ def gemini_call(prompt: str, api_key: str, model: str = "gemini-2.5-pro",
         method="POST",
     )
     try:
-        with urllib.request.urlopen(req, timeout=60) as resp:
+        with urllib.request.urlopen(req, timeout=120) as resp:
             result = json.loads(resp.read())
-        return result["candidates"][0]["content"]["parts"][0]["text"].strip()
+        candidate = result["candidates"][0]
+        content = candidate.get("content", {})
+        parts = content.get("parts", [])
+        # Thinking models may return parts with role but no text if tokens ran out
+        for part in parts:
+            if "text" in part and part["text"].strip():
+                return part["text"].strip()
+        return ""
     except Exception as e:
         return f"[error: {e}]"
 
@@ -444,8 +456,8 @@ def main():
                     help="Gemini model for fact extraction (default: gemini-2.5-pro)")
     ap.add_argument("--qa-model", default="gemini-2.5-pro",
                     help="Model for engram ask synthesis (default: gemini-2.5-pro)")
-    ap.add_argument("--judge-model", default="gemini-2.5-pro",
-                    help="Model for LLM-as-a-Judge (default: gemini-2.5-pro)")
+    ap.add_argument("--judge-model", default="gemini-2.5-flash",
+                    help="Model for LLM-as-a-Judge (default: gemini-2.5-flash — fast)")
     ap.add_argument("--strategy", default="atomic",
                     choices=["atomic", "raw"],
                     help="atomic=entity-tagged facts (v3), raw=session text (v1)")
