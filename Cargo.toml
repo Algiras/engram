@@ -1,6 +1,6 @@
 [package]
 name = "engram"
-version = "0.3.5"
+version = "0.3.6"
 edition = "2021"
 description = "Self-improving knowledge management for AI agents - learn from conversations, prioritize by importance, sync to gists"
 authors = ["Algiras"]
