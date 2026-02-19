@@ -22,11 +22,18 @@ pub fn post_ingest_hook(config: &Config, project: &str) -> Result<()> {
     // Update learning state with new signals
     let mut state = progress::load_state(&config.memory_dir, project)?;
 
-    // Track metrics snapshot
-    let health_score = 75; // Would call health::check_project_health
-    let avg_query_time = 100;
-    let stale_knowledge = 10.0;
-    let storage_size = 5.0;
+    // Track metrics snapshot using real data
+    let health_score = crate::health::check_project_health(&config.memory_dir, project)
+        .map(|r| r.score)
+        .unwrap_or(75);
+    let avg_query_time = 100; // Would need actual timing instrumentation
+    let stale_knowledge = compute_stale_percentage(&config.memory_dir, project);
+    let storage_size = compute_dir_size_mb(
+        &config
+            .memory_dir
+            .join("knowledge")
+            .join(project),
+    );
 
     progress::record_metrics(
         &mut state,
@@ -105,16 +112,42 @@ pub fn post_ingest_hook(config: &Config, project: &str) -> Result<()> {
     Ok(())
 }
 
-/// Hook called after recall to track successful knowledge access
+/// Hook called after recall to boost importance of accessed knowledge
 pub fn post_recall_hook(
     config: &Config,
     project: &str,
-    _knowledge_accessed: &[String],
+    knowledge_accessed: &[String],
 ) -> Result<()> {
-    // Track the recall event (already done by analytics)
-    // Future: Could boost importance of accessed knowledge here
-    let _state = progress::load_state(&config.memory_dir, project)?;
-    // For now, just ensure learning state exists
+    if knowledge_accessed.is_empty() {
+        return Ok(());
+    }
+
+    let mut state = progress::load_state(&config.memory_dir, project)?;
+
+    // Recall is a positive signal: knowledge that gets read is valuable
+    let recall_reward = 0.6;
+
+    for knowledge_id in knowledge_accessed {
+        let current = state
+            .learned_parameters
+            .importance_boosts
+            .get(knowledge_id)
+            .copied()
+            .unwrap_or(0.0);
+
+        let new_importance = crate::learning::algorithms::learn_importance(
+            current,
+            recall_reward,
+            state.hyperparameters.importance_learning_rate,
+        );
+
+        state
+            .learned_parameters
+            .importance_boosts
+            .insert(knowledge_id.clone(), new_importance);
+    }
+
+    progress::save_state(&config.memory_dir, &state)?;
     Ok(())
 }
 
@@ -174,6 +207,66 @@ pub fn post_doctor_fix_hook(
     }
 
     Ok(())
+}
+
+/// Compute the percentage of knowledge entries older than 30 days (stale).
+fn compute_stale_percentage(memory_dir: &std::path::Path, project: &str) -> f32 {
+    use crate::extractor::knowledge::{parse_session_blocks, partition_by_expiry};
+
+    let knowledge_dir = memory_dir.join("knowledge").join(project);
+    let categories = [
+        "decisions",
+        "solutions",
+        "patterns",
+        "bugs",
+        "insights",
+        "questions",
+    ];
+    let now = chrono::Utc::now();
+    let threshold = chrono::Duration::days(30);
+
+    let mut total = 0usize;
+    let mut stale = 0usize;
+
+    for cat in &categories {
+        let path = knowledge_dir.join(format!("{}.md", cat));
+        if let Ok(content) = std::fs::read_to_string(&path) {
+            let (_, blocks) = parse_session_blocks(&content);
+            let (active, _) = partition_by_expiry(blocks);
+            for block in &active {
+                total += 1;
+                if let Ok(ts) = chrono::DateTime::parse_from_rfc3339(&block.timestamp) {
+                    if now - ts.with_timezone(&chrono::Utc) > threshold {
+                        stale += 1;
+                    }
+                }
+            }
+        }
+    }
+
+    if total == 0 {
+        0.0
+    } else {
+        stale as f32 / total as f32 * 100.0
+    }
+}
+
+/// Compute total size of a directory in megabytes (shallow, files only).
+fn compute_dir_size_mb(dir: &std::path::Path) -> f32 {
+    if !dir.exists() {
+        return 0.0;
+    }
+    let mut total_bytes = 0u64;
+    if let Ok(entries) = std::fs::read_dir(dir) {
+        for entry in entries.flatten() {
+            if let Ok(meta) = entry.metadata() {
+                if meta.is_file() {
+                    total_bytes += meta.len();
+                }
+            }
+        }
+    }
+    total_bytes as f32 / 1_048_576.0
 }
 
 #[cfg(test)]

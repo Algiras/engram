@@ -452,6 +452,12 @@ pub enum Commands {
         #[arg(long)]
         check: bool,
     },
+
+    /// Reflect on memory quality: confidence, staleness, coverage, recommendations
+    Reflect {
+        /// Project name
+        project: String,
+    },
 }
 
 #[derive(Subcommand)]

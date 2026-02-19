@@ -50,6 +50,7 @@ use commands::graph::{
     cmd_graph_build, cmd_graph_hubs, cmd_graph_path, cmd_graph_query, cmd_graph_viz,
 };
 use commands::heal::cmd_heal;
+use commands::reflect::cmd_reflect;
 use commands::hive::cmd_hive;
 use commands::hooks::{cmd_hooks_install, cmd_hooks_status, cmd_hooks_uninstall};
 use commands::knowledge::{cmd_forget, cmd_regen};
@@ -404,6 +405,11 @@ fn main() -> Result<()> {
         return cmd_heal(&config, *check);
     }
 
+    // Reflect command (no LLM needed — pure filesystem analysis)
+    if let Commands::Reflect { project } = &cli.command {
+        return cmd_reflect(project);
+    }
+
     // Doctor command (no Config needed for basic checks)
     if let Commands::Doctor {
         project,
@@ -578,7 +584,8 @@ fn main() -> Result<()> {
         | Commands::Mem { .. }
         | Commands::Ask { .. }
         | Commands::Entities { .. }
-        | Commands::Heal { .. } => {
+        | Commands::Heal { .. }
+        | Commands::Reflect { .. } => {
             unreachable!()
         }
     }

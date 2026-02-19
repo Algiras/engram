@@ -13,5 +13,6 @@ pub mod learning;
 pub mod manual;
 pub mod observe;
 pub mod provider_test;
+pub mod reflect;
 pub mod sync;
 pub mod vcs;
