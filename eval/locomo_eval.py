@@ -2,47 +2,65 @@
 """
 LoCoMo Benchmark Evaluation for engram
 =======================================
-Measures RAG recall accuracy against the LoCoMo long-term conversational memory dataset.
+Runs engram against the official LoCoMo-10 dataset and scores with token-overlap F1,
+matching the Mem0 / MemoryOS evaluation protocol.
 
 Usage:
-    python eval/locomo_eval.py --engram ./target/release/engram --provider ollama
-    python eval/locomo_eval.py --engram ./target/release/engram --provider gemini --max-convs 5
+    # Quick smoke test (2 conversations, Gemini)
+    python eval/locomo_eval.py --provider gemini --max-convs 2
 
-Baseline comparison (from Mem0 paper):
-    GPT-4 (no memory):  32.1 F1
-    Mem0:               67.1 F1  (overall), 51.1 F1 (strict)
-    Human ceiling:      87.9 F1
+    # Full benchmark run
+    python eval/locomo_eval.py --provider gemini --workers 4
+
+    # With graph-augmented retrieval (Track 2)
+    python eval/locomo_eval.py --provider gemini --use-graph
+
+Data source: eval/locomo10.json (official LoCoMo-10 from snap-research/locomo)
+
+Category mapping (from the paper):
+    1 = single-hop     (factual recall from one session)
+    2 = temporal       (time/date-based)
+    3 = open-ended     (adversarial / requires inference)
+    4 = multi-hop      (cross-session reasoning, within speaker)
+    5 = multi-hop-cs   (cross-session, cross-speaker)
+
+Baselines (token-overlap F1 from Mem0 paper):
+    GPT-4 (no memory):  32.1
+    Mem0:               67.1  (overall), 26.7/51.1 by speaker split
+    Human ceiling:      87.9
 """
 
 import argparse
 import json
 import os
-import re
-import shutil
 import string
 import subprocess
 import sys
-import tempfile
 import time
+import unicodedata
 from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Optional
 
 # ---------------------------------------------------------------------------
-# F1 scoring (token-overlap, matching LoCoMo / Mem0 evaluation protocol)
+# Official LoCoMo F1 scoring (matches snap-research/locomo evaluation.py)
 # ---------------------------------------------------------------------------
 
-def normalize(text: str) -> list[str]:
-    """Lowercase, strip punctuation, tokenize on whitespace."""
-    text = text.lower()
-    text = text.translate(str.maketrans("", "", string.punctuation))
-    return text.split()
+def normalize_answer(s) -> str:
+    """Lower, remove punctuation, articles, extra whitespace."""
+    s = str(s).replace(",", "")
+    s = unicodedata.normalize("NFD", s)
+
+    import re
+    s = re.sub(r"\b(a|an|the|and)\b", " ", s.lower())
+    s = re.sub(r"[^a-z0-9 ]", " ", s)
+    return " ".join(s.split())
 
 
-def f1_score(prediction: str, gold: str) -> float:
-    pred_tokens = normalize(prediction)
-    gold_tokens = normalize(gold)
+def token_f1(prediction: str, gold: str) -> float:
+    pred_tokens = normalize_answer(prediction).split()
+    gold_tokens = normalize_answer(gold).split()
     if not pred_tokens or not gold_tokens:
         return float(pred_tokens == gold_tokens)
     common = set(pred_tokens) & set(gold_tokens)
@@ -54,147 +72,140 @@ def f1_score(prediction: str, gold: str) -> float:
 
 
 # ---------------------------------------------------------------------------
-# engram subprocess helpers
+# Category labels
+# ---------------------------------------------------------------------------
+
+CATEGORY_NAMES = {
+    1: "single_hop",
+    2: "temporal",
+    3: "open_ended",
+    4: "multi_hop",
+    5: "multi_hop_cs",
+}
+
+# ---------------------------------------------------------------------------
+# engram subprocess driver
 # ---------------------------------------------------------------------------
 
 class EngramRunner:
-    def __init__(self, binary: str, memory_dir: str, provider: str = "ollama"):
+    def __init__(self, binary: str, provider: str = "gemini"):
         self.binary = binary
-        self.memory_dir = memory_dir
         self.provider = provider
-        self.env = {**os.environ, "HOME": str(Path.home())}
 
-    def run(self, *args, timeout: int = 60) -> tuple[int, str, str]:
-        cmd = [self.binary, *args]
+    def _run(self, *args, timeout: int = 60, input_text: str | None = None) -> tuple[int, str, str]:
         result = subprocess.run(
-            cmd, capture_output=True, text=True, timeout=timeout, env=self.env
+            [self.binary, *args],
+            capture_output=True,
+            text=True,
+            timeout=timeout,
+            input=input_text,
         )
         return result.returncode, result.stdout, result.stderr
 
-    def add_knowledge(self, project: str, category: str, content: str, label: str) -> bool:
-        rc, _, err = self.run("add", project, category, content, "--label", label)
+    def add(self, project: str, category: str, content: str, label: str) -> bool:
+        rc, _, err = self._run("add", project, category, content, "--label", label)
         if rc != 0:
-            print(f"    [warn] engram add failed: {err.strip()[:80]}", file=sys.stderr)
+            print(f"    [warn] add failed: {err.strip()[:80]}", file=sys.stderr)
         return rc == 0
 
     def embed(self, project: str) -> bool:
-        rc, _, err = self.run("embed", project, "--provider", self.provider, timeout=120)
+        rc, _, err = self._run("embed", project, "--provider", self.provider, timeout=180)
         if rc != 0:
             print(f"    [warn] embed failed: {err.strip()[:80]}", file=sys.stderr)
         return rc == 0
 
-    def ask(self, project: str, question: str, threshold: float = 0.3) -> str:
-        rc, stdout, _ = self.run(
-            "ask", question, "--project", project,
-            "--threshold", str(threshold),
-            timeout=30,
-        )
+    def graph_build(self, project: str) -> bool:
+        rc, _, _ = self._run("graph", "build", project, timeout=120)
+        return rc == 0
+
+    def ask(self, project: str, question: str, threshold: float = 0.25, use_graph: bool = False) -> str:
+        args = ["ask", question, "--project", project, "--threshold", str(threshold)]
+        if use_graph:
+            args.append("--use-graph")
+        rc, stdout, _ = self._run(*args, timeout=30)
         if rc != 0 or "Not found in knowledge base" in stdout:
             return ""
-        return stdout.strip()
+        # Strip "Sources: ..." line
+        lines = [l for l in stdout.strip().splitlines() if not l.startswith("Sources:")]
+        return "\n".join(lines).strip()
 
     def forget(self, project: str):
-        """Clean up project knowledge after eval."""
-        self.run("forget", project, "--force")
+        self._run("forget", project, "--force", timeout=10)
 
 
 # ---------------------------------------------------------------------------
-# LoCoMo data loading
+# Dataset ingestion
 # ---------------------------------------------------------------------------
 
-def load_locomo_dataset(max_convs: Optional[int] = None):
-    """Load LoCoMo from HuggingFace datasets."""
-    try:
-        from datasets import load_dataset
-    except ImportError:
-        print("ERROR: Install requirements: pip install -r eval/requirements.txt", file=sys.stderr)
-        sys.exit(1)
-
-    print("Loading LoCoMo dataset from HuggingFace (snap-research/LoCoMo-dataset)...")
-    ds = load_dataset("snap-research/LoCoMo-dataset", split="test")
-    if max_convs:
-        ds = ds.select(range(min(max_convs, len(ds))))
-    print(f"  Loaded {len(ds)} conversations")
-    return ds
-
-
-def ingest_conversation(engram: EngramRunner, conv_id: str, conversation: dict) -> int:
+def ingest_conversation(engram: EngramRunner, project: str, conv: dict) -> int:
     """
-    Convert a LoCoMo conversation into engram knowledge entries.
-    Groups turns by session and ingests each session as one 'solutions' entry.
-    Returns the number of sessions ingested.
+    Ingest a LoCoMo conversation into an engram project.
+    Each session → one 'solutions' entry (all turns concatenated).
+    Returns number of sessions ingested.
     """
-    sessions = conversation.get("sessions", [])
-    if not sessions:
-        # Fallback: flat list of turns
-        turns = conversation.get("turns", conversation.get("messages", []))
-        text = " ".join(
-            f"{t.get('speaker', t.get('role', 'user'))}: {t.get('text', t.get('content', ''))}"
-            for t in turns
-            if t.get("text") or t.get("content")
-        )
-        if text.strip():
-            engram.add_knowledge(conv_id, "solutions", text[:3000], f"session-0")
-        return 1
-
     count = 0
-    for i, session in enumerate(sessions):
-        turns = session if isinstance(session, list) else session.get("turns", [])
-        text = " ".join(
-            f"{t.get('speaker', t.get('role', 'user'))}: {t.get('text', t.get('content', ''))}"
+    for i in range(1, 50):
+        key = f"session_{i}"
+        if key not in conv["conversation"] or not conv["conversation"][key]:
+            break
+        turns = conv["conversation"][key]
+        text = "\n".join(
+            f"{t['speaker']}: {t['text']}"
             for t in turns
-            if t.get("text") or t.get("content")
+            if t.get("text")
         )
         if text.strip():
-            label = f"session-{i}"
-            engram.add_knowledge(conv_id, "solutions", text[:3000], label)
+            engram.add(project, "solutions", text[:4000], f"session-{i}")
             count += 1
-
     return count
 
 
+# ---------------------------------------------------------------------------
+# Per-conversation evaluation
+# ---------------------------------------------------------------------------
+
 def eval_conversation(
     engram: EngramRunner,
-    conv_id: str,
-    conversation: dict,
+    conv: dict,
     use_graph: bool = False,
-) -> dict[str, list[float]]:
-    """
-    Run evaluation for one conversation.
-    Returns {question_type: [f1_scores]}.
-    """
-    project = f"locomo-eval-{conv_id}"
-    scores: dict[str, list[float]] = defaultdict(list)
+    verbose: bool = False,
+) -> dict[int, list[float]]:
+    """Returns {category_int: [f1_scores]}."""
+    sample_id = conv["sample_id"]
+    project = f"locomo-{sample_id}"
+    scores: dict[int, list[float]] = defaultdict(list)
 
     try:
-        # 1. Ingest conversation sessions
-        n_sessions = ingest_conversation(engram, project, conversation)
-        if n_sessions == 0:
+        # Ingest
+        n = ingest_conversation(engram, project, conv)
+        if n == 0:
             return scores
 
-        # 2. Build embedding index
+        # Build embedding index
         engram.embed(project)
 
-        # 3. Build graph if requested
+        # Optionally build graph
         if use_graph:
-            engram.run("graph", "build", project, timeout=120)
+            engram.graph_build(project)
 
-        # 4. Answer QA pairs
-        qa_pairs = conversation.get("qa_pairs", conversation.get("questions", []))
-        for qa in qa_pairs:
-            question = qa.get("question", qa.get("q", ""))
-            gold = qa.get("answer", qa.get("a", ""))
-            qtype = qa.get("question_type", qa.get("type", "unknown"))
+        # Answer QA pairs
+        for qa in conv["qa"]:
+            question = qa.get("question", "")
+            gold = qa.get("answer", "")
+            category = qa.get("category", 0)
 
             if not question or not gold:
                 continue
 
-            prediction = engram.ask(project, question)
-            score = f1_score(prediction, gold)
-            scores[qtype].append(score)
+            prediction = engram.ask(project, question, use_graph=use_graph)
+            f1 = token_f1(prediction, gold)
+            scores[category].append(f1)
+
+            if verbose:
+                cat_name = CATEGORY_NAMES.get(category, str(category))
+                print(f"    [{cat_name}] Q: {question[:60]}... F1={f1:.2f}")
 
     finally:
-        # Clean up
         engram.forget(project)
 
     return scores
@@ -205,53 +216,45 @@ def eval_conversation(
 # ---------------------------------------------------------------------------
 
 BASELINES = {
-    "GPT-4 (no memory)": {"overall": 32.1},
-    "Mem0":              {"overall": 67.1, "strict": 51.1},
-    "Human ceiling":     {"overall": 87.9},
+    "GPT-4 (no memory)": 32.1,
+    "Mem0":               67.1,
+    "Human ceiling":      87.9,
 }
 
-QUESTION_TYPES = ["single_hop", "multi_hop", "temporal_reasoning", "adversarial"]
 
+def print_report(all_scores: dict[int, list[float]], elapsed: float, n_convs: int, use_graph: bool):
+    flat = [s for vals in all_scores.values() for s in vals]
+    overall = sum(flat) / len(flat) * 100 if flat else 0.0
 
-def print_report(all_scores: dict[str, list[float]], elapsed: float, n_convs: int):
-    overall = [s for scores in all_scores.values() for s in scores]
-    overall_f1 = sum(overall) / len(overall) * 100 if overall else 0.0
-
-    print("\n" + "=" * 60)
-    print(f"  engram LoCoMo Evaluation Results")
-    print(f"  Conversations: {n_convs}  |  Total QA pairs: {len(overall)}")
-    print(f"  Time: {elapsed:.1f}s")
-    print("=" * 60)
-    print(f"\n  Overall F1:  {overall_f1:.1f}")
-
-    print("\n  By question type:")
-    for qtype in QUESTION_TYPES:
-        scores = all_scores.get(qtype, [])
-        if scores:
-            avg = sum(scores) / len(scores) * 100
-            print(f"    {qtype:<25} {avg:5.1f}  (n={len(scores)})")
-
-    unknown = all_scores.get("unknown", [])
-    if unknown:
-        avg = sum(unknown) / len(unknown) * 100
-        print(f"    {'unknown':<25} {avg:5.1f}  (n={len(unknown)})")
-
-    print("\n  Comparison:")
-    print(f"    {'System':<30} {'F1':>6}")
-    print(f"    {'-'*36}")
-    for name, baseline in BASELINES.items():
-        b_f1 = baseline["overall"]
+    print()
+    print("╔══════════════════════════════════════════════════════╗")
+    print(f"  engram LoCoMo-10 Results  |  {'+ Graph' if use_graph else 'No Graph'}")
+    print(f"  Conversations: {n_convs}  |  QA pairs: {len(flat)}  |  {elapsed:.0f}s")
+    print("╠══════════════════════════════════════════════════════╣")
+    print(f"  Overall F1:  {overall:.1f}")
+    print()
+    print("  By category:")
+    for cat_id in sorted(CATEGORY_NAMES):
+        vals = all_scores.get(cat_id, [])
+        if vals:
+            avg = sum(vals) / len(vals) * 100
+            bar = "█" * int(avg / 5)
+            print(f"    {CATEGORY_NAMES[cat_id]:<16} {avg:5.1f}  {bar}")
+    print()
+    print("  Comparison:")
+    for name, b in BASELINES.items():
         marker = " ◀ SOTA" if name == "Mem0" else ""
-        print(f"    {name:<30} {b_f1:>5.1f}{marker}")
-    marker = " ◀ engram" if overall_f1 > 0 else ""
-    print(f"    {'engram (this run)':<30} {overall_f1:>5.1f}{marker}")
+        print(f"    {name:<25} {b:5.1f}{marker}")
+    marker = " ◀ engram ✓" if overall >= 67.1 else f" (gap: {67.1 - overall:.1f})"
+    print(f"    {'engram (this run)':<25} {overall:5.1f}{marker}")
+    print("╚══════════════════════════════════════════════════════╝")
 
-    if overall_f1 >= 67.1:
-        print("\n  🎉 SOTA ACHIEVED: engram >= Mem0 (67.1 F1)")
-    elif overall_f1 >= 32.1:
-        delta = 67.1 - overall_f1
-        print(f"\n  Gap to Mem0 SOTA: {delta:.1f} F1 points")
-    print("=" * 60)
+    if overall >= 67.1:
+        print("\n  🎉  SOTA ACHIEVED: engram ≥ Mem0!")
+    elif overall >= 50.0:
+        print(f"\n  Strong result — {67.1 - overall:.1f} F1 points below Mem0")
+    else:
+        print(f"\n  Gap to Mem0: {67.1 - overall:.1f} F1 points")
 
 
 # ---------------------------------------------------------------------------
@@ -259,93 +262,75 @@ def print_report(all_scores: dict[str, list[float]], elapsed: float, n_convs: in
 # ---------------------------------------------------------------------------
 
 def main():
-    parser = argparse.ArgumentParser(description="LoCoMo benchmark eval for engram")
-    parser.add_argument(
-        "--engram",
-        default="./target/release/engram",
-        help="Path to engram binary (default: ./target/release/engram)",
-    )
-    parser.add_argument(
-        "--provider",
-        default="ollama",
-        choices=["ollama", "gemini", "openai"],
-        help="Embedding provider (default: ollama — free local)",
-    )
-    parser.add_argument(
-        "--max-convs",
-        type=int,
-        default=None,
-        help="Limit number of conversations (default: all ~25)",
-    )
-    parser.add_argument(
-        "--workers",
-        type=int,
-        default=4,
-        help="Parallel workers (default: 4)",
-    )
-    parser.add_argument(
-        "--use-graph",
-        action="store_true",
-        help="Enable graph-augmented retrieval (Track 2)",
-    )
-    parser.add_argument(
-        "--output",
-        default="eval/results.json",
-        help="Write raw scores to JSON file",
-    )
-    args = parser.parse_args()
+    ap = argparse.ArgumentParser(description="LoCoMo-10 benchmark for engram")
+    ap.add_argument("--engram", default="./target/release/engram")
+    ap.add_argument("--data", default="eval/locomo10.json")
+    ap.add_argument("--provider", default="gemini", choices=["gemini", "openai", "ollama"])
+    ap.add_argument("--max-convs", type=int, default=None)
+    ap.add_argument("--workers", type=int, default=4)
+    ap.add_argument("--use-graph", action="store_true")
+    ap.add_argument("--verbose", action="store_true")
+    ap.add_argument("--output", default="eval/results.json")
+    args = ap.parse_args()
 
-    # Validate binary
     binary = str(Path(args.engram).resolve())
     if not Path(binary).exists():
-        print(f"ERROR: engram binary not found at {binary}", file=sys.stderr)
-        print("Build first: cargo build --release", file=sys.stderr)
+        print(f"ERROR: {binary} not found. Run: cargo build --release", file=sys.stderr)
         sys.exit(1)
 
-    memory_dir = str(Path.home() / "memory")
-    engram = EngramRunner(binary, memory_dir, args.provider)
+    data_path = Path(args.data)
+    if not data_path.exists():
+        print(f"ERROR: {data_path} not found.", file=sys.stderr)
+        print("Download: curl -sL https://raw.githubusercontent.com/snap-research/locomo/main/data/locomo10.json -o eval/locomo10.json", file=sys.stderr)
+        sys.exit(1)
 
-    # Load dataset
-    dataset = load_locomo_dataset(args.max_convs)
+    with open(data_path) as f:
+        dataset = json.load(f)
 
-    # Run eval
-    all_scores: dict[str, list[float]] = defaultdict(list)
-    start = time.time()
+    if args.max_convs:
+        dataset = dataset[: args.max_convs]
 
-    print(f"\nRunning eval: {len(dataset)} conversations, {args.workers} workers")
-    print(f"  Provider: {args.provider}  |  Graph: {args.use_graph}")
+    engram = EngramRunner(binary, args.provider)
+
+    print(f"engram LoCoMo eval")
+    print(f"  Binary:    {binary}")
+    print(f"  Provider:  {args.provider}")
+    print(f"  Dataset:   {len(dataset)} conversations, {sum(len(d['qa']) for d in dataset)} QA pairs")
+    print(f"  Graph:     {args.use_graph}")
+    print(f"  Workers:   {args.workers}")
     print()
 
-    def process_conv(item):
-        conv_id = str(item.get("conversation_id", item.get("id", hash(str(item)))))
-        print(f"  [{conv_id[:12]}] ingesting...", flush=True)
-        scores = eval_conversation(engram, conv_id, item, use_graph=args.use_graph)
-        n_qa = sum(len(v) for v in scores.values())
-        overall = sum(s for v in scores.values() for s in v)
-        f1 = overall / n_qa * 100 if n_qa else 0.0
-        print(f"  [{conv_id[:12]}] done — {n_qa} QA pairs, F1={f1:.1f}", flush=True)
+    all_scores: dict[int, list[float]] = defaultdict(list)
+    start = time.time()
+
+    def process(conv):
+        sid = conv["sample_id"]
+        print(f"  [{sid}] starting ({len(conv['qa'])} QA pairs)...", flush=True)
+        scores = eval_conversation(engram, conv, use_graph=args.use_graph, verbose=args.verbose)
+        n = sum(len(v) for v in scores.values())
+        f1 = sum(s for v in scores.values() for s in v) / n * 100 if n else 0.0
+        print(f"  [{sid}] done — F1={f1:.1f} ({n} pairs)", flush=True)
         return scores
 
-    with ThreadPoolExecutor(max_workers=args.workers) as executor:
-        futures = {executor.submit(process_conv, item): i for i, item in enumerate(dataset)}
-        for future in as_completed(futures):
-            try:
-                scores = future.result()
-                for qtype, vals in scores.items():
-                    all_scores[qtype].extend(vals)
-            except Exception as e:
-                print(f"  [error] conversation failed: {e}", file=sys.stderr)
+    with ThreadPoolExecutor(max_workers=args.workers) as pool:
+        for scores in pool.map(process, dataset):
+            for cat, vals in scores.items():
+                all_scores[cat].extend(vals)
 
     elapsed = time.time() - start
 
-    # Save raw scores
+    # Save raw
     Path(args.output).parent.mkdir(parents=True, exist_ok=True)
     with open(args.output, "w") as f:
-        json.dump({"scores": dict(all_scores), "elapsed": elapsed, "n_convs": len(dataset)}, f, indent=2)
-    print(f"\nRaw scores saved to {args.output}")
+        json.dump(
+            {"scores": {str(k): v for k, v in all_scores.items()},
+             "elapsed": elapsed, "n_convs": len(dataset),
+             "use_graph": args.use_graph, "provider": args.provider},
+            f, indent=2,
+        )
+    print(f"\nRaw scores → {args.output}")
 
-    # Print report
-    print_report(all_scores, elapsed, len(dataset))
+    print_report(all_scores, elapsed, len(dataset), args.use_graph)
 
 
 if __name__ == "__main__":
