@@ -1,45 +1,27 @@
 #!/usr/bin/env python3
 """
-LoCoMo Benchmark Evaluation for engram
-=======================================
-Runs engram against the official LoCoMo-10 dataset and scores with token-overlap F1,
-matching the Mem0 / MemoryOS evaluation protocol.
+LoCoMo Benchmark Evaluation for engram — v3
+=============================================
+Key improvements vs v2:
+  - gemini-2.5-pro for extraction and QA (vs Flash)
+  - Atomic facts with entity tagging: [Person: X][Date: Y] fact text
+  - LLM-as-a-Judge metric (matches Mem0's headline 67.1 metric)
+  - Per-fact engram add (atomic, not grouped) + Update Resolver dedup
 
-Usage:
-    # Quick smoke test (2 conversations, Gemini)
-    python eval/locomo_eval.py --provider gemini --max-convs 2
+Correct metric comparison (from Mem0 paper):
+    Token-overlap F1:   Mem0=38.72   GPT-4-no-mem=32.1   Human=87.9
+    LLM-as-a-Judge:     Mem0=67.13   GPT-4-no-mem≈18      Human ceiling
+    ← We measure BOTH
 
-    # Full benchmark run
-    python eval/locomo_eval.py --provider gemini --workers 4
-
-    # With LLM extraction (recommended — +15-25 F1 expected)
-    python eval/locomo_eval.py --provider gemini --use-llm-ingest
-
-    # With graph-augmented retrieval
-    python eval/locomo_eval.py --provider gemini --use-llm-ingest --use-graph
-
-Data source: eval/locomo10.json (official LoCoMo-10 from snap-research/locomo)
-
-Category mapping (from the paper):
-    1 = single_hop    (factual recall from one session)
-    2 = temporal      (time/date-based)
-    3 = open_ended    (adversarial / requires inference)
-    4 = multi_hop     (cross-session reasoning, within speaker)
-    5 = multi_hop_cs  (cross-session, cross-speaker)
-
-Baselines (token-overlap F1 from Mem0 paper):
-    GPT-4 (no memory):  32.1
-    Mem0:               67.1
-    Human ceiling:      87.9
-
-Engram baseline (raw add):  18.0  (v1 run, 2026-02-19)
+engram history:
+    v1 raw add, verbose:           18.0 F1 token  (2026-02-19)
+    v2 fact extract + concise:     ~26  F1 token  (2026-02-20, full run pending)
 """
 
 import argparse
 import json
 import os
 import re
-import string
 import subprocess
 import sys
 import time
@@ -49,11 +31,10 @@ from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Optional
-
 import urllib.request
 
 # ---------------------------------------------------------------------------
-# Official LoCoMo F1 scoring
+# Scoring
 # ---------------------------------------------------------------------------
 
 def normalize_answer(s) -> str:
@@ -77,10 +58,6 @@ def token_f1(prediction: str, gold) -> float:
     return 2 * precision * recall / (precision + recall)
 
 
-# ---------------------------------------------------------------------------
-# Category labels
-# ---------------------------------------------------------------------------
-
 CATEGORY_NAMES = {
     1: "single_hop",
     2: "temporal",
@@ -90,40 +67,138 @@ CATEGORY_NAMES = {
 }
 
 # ---------------------------------------------------------------------------
+# Gemini API helper
+# ---------------------------------------------------------------------------
+
+def gemini_call(prompt: str, api_key: str, model: str = "gemini-2.5-pro",
+                max_tokens: int = 2048, temperature: float = 0.1) -> str:
+    """Direct Gemini API call — bypasses engram for higher-quality extraction & judging."""
+    payload = json.dumps({
+        "contents": [{"parts": [{"text": prompt}]}],
+        "generationConfig": {"temperature": temperature, "maxOutputTokens": max_tokens},
+    }).encode()
+    url = (
+        f"https://generativelanguage.googleapis.com/v1beta/models/"
+        f"{model}:generateContent?key={api_key}"
+    )
+    req = urllib.request.Request(
+        url, data=payload,
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=60) as resp:
+            result = json.loads(resp.read())
+        return result["candidates"][0]["content"]["parts"][0]["text"].strip()
+    except Exception as e:
+        return f"[error: {e}]"
+
+
+# ---------------------------------------------------------------------------
+# LLM-as-a-Judge
+# ---------------------------------------------------------------------------
+
+JUDGE_PROMPT = """You are evaluating a QA system answer.
+
+Question: {question}
+Gold answer: {gold}
+System answer: {prediction}
+
+Is the system answer correct or semantically equivalent to the gold answer?
+Answer with exactly one word: YES or NO"""
+
+
+def llm_judge(question: str, gold, prediction: str,
+              api_key: str, model: str) -> float:
+    """Returns 1.0 if judge says YES, 0.0 if NO."""
+    if not prediction or "Not found in knowledge base" in prediction:
+        return 0.0
+    response = gemini_call(
+        JUDGE_PROMPT.format(
+            question=question,
+            gold=str(gold),
+            prediction=prediction[:200],
+        ),
+        api_key=api_key,
+        model=model,
+        max_tokens=5,
+        temperature=0.0,
+    )
+    return 1.0 if response.strip().upper().startswith("YES") else 0.0
+
+
+# ---------------------------------------------------------------------------
+# Fact extraction (gemini-2.5-pro)
+# ---------------------------------------------------------------------------
+
+FACT_PROMPT = """Extract ALL factual statements from this conversation as a numbered list.
+
+Rules:
+- Include: names, dates, events, hobbies, emotions, locations, relationships, goals, achievements
+- For EACH fact: identify the person it's about and include the exact date if mentioned
+- Format: "[Person: NAME][Date: DATE if known] factual statement"
+  Example: "[Person: Caroline][Date: 7 May 2023] Caroline went to an LGBTQ support group."
+  Example: "[Person: Melanie] Melanie is working on a charity race for cancer awareness."
+- Include facts about BOTH speakers. Be specific, not vague.
+- Maximum 40 facts. One fact per line.
+
+CONVERSATION:
+{text}
+
+Facts:"""
+
+ENTITY_PATTERN = re.compile(r"\[Person:\s*([^\]]+)\]")
+DATE_PATTERN = re.compile(r"\[Date:\s*([^\]]+)\]")
+
+
+def extract_facts(text: str, api_key: str, model: str) -> list[str]:
+    """Extract atomic entity-tagged facts from a session."""
+    response = gemini_call(FACT_PROMPT.format(text=text[:6000]),
+                           api_key=api_key, model=model, max_tokens=2048)
+    facts = []
+    for line in response.splitlines():
+        line = re.sub(r"^\d+\.\s*", "", line).strip()
+        if len(line) > 15 and not line.startswith("[error"):
+            facts.append(line)
+    return facts
+
+
+# ---------------------------------------------------------------------------
 # engram subprocess driver
 # ---------------------------------------------------------------------------
 
 class EngramRunner:
-    def __init__(self, binary: str, provider: str = "gemini"):
+    def __init__(self, binary: str, embed_provider: str = "gemini",
+                 qa_model: str = "gemini-2.5-pro"):
         self.binary = binary
-        self.provider = provider
+        self.embed_provider = embed_provider
+        self.qa_model = qa_model
+        # Set env so engram ask uses the better model
+        self.env = {
+            **os.environ,
+            "ENGRAM_LLM_MODEL": qa_model,
+        }
 
     def _run(self, *args, timeout: int = 60) -> tuple[int, str, str]:
         result = subprocess.run(
             [self.binary, *args],
             capture_output=True, text=True, timeout=timeout,
+            env=self.env,
         )
         return result.returncode, result.stdout, result.stderr
 
     def add(self, project: str, category: str, content: str, label: str) -> bool:
         rc, _, err = self._run("add", project, category, content, "--label", label)
         if rc != 0:
-            print(f"    [warn] add failed: {err.strip()[:80]}", file=sys.stderr)
-        return rc == 0
-
-    def ingest(self, project: str, force: bool = True) -> bool:
-        args = ["ingest", "--project", project, "--provider", self.provider]
-        if force:
-            args.append("--force")
-        rc, out, err = self._run(*args, timeout=600)
-        if rc != 0:
-            print(f"    [warn] ingest failed: {err.strip()[:100]}", file=sys.stderr)
+            print(f"    [warn] add: {err.strip()[:80]}", file=sys.stderr)
         return rc == 0
 
     def embed(self, project: str) -> bool:
-        rc, _, err = self._run("embed", project, "--provider", self.provider, timeout=180)
+        rc, _, err = self._run(
+            "embed", project, "--provider", self.embed_provider, timeout=180
+        )
         if rc != 0:
-            print(f"    [warn] embed failed: {err.strip()[:80]}", file=sys.stderr)
+            print(f"    [warn] embed: {err.strip()[:80]}", file=sys.stderr)
         return rc == 0
 
     def graph_build(self, project: str) -> bool:
@@ -131,18 +206,17 @@ class EngramRunner:
         return rc == 0
 
     def ask(self, project: str, question: str,
-            threshold: float = 0.2, top_k: int = 8,
-            use_graph: bool = False, concise: bool = True) -> str:
+            threshold: float = 0.1, top_k: int = 10,
+            use_graph: bool = False) -> str:
         args = [
             "ask", question,
             "--project", project,
             "--threshold", str(threshold),
             "--top-k", str(top_k),
+            "--concise",
         ]
         if use_graph:
             args.append("--use-graph")
-        if concise:
-            args.append("--concise")
         rc, stdout, _ = self._run(*args, timeout=30)
         if rc != 0 or "Not found in knowledge base" in stdout:
             return ""
@@ -155,166 +229,15 @@ class EngramRunner:
 
 
 # ---------------------------------------------------------------------------
-# Improvement A: LLM-extracted ingestion via synthetic Claude JSONL
+# Ingestion strategies
 # ---------------------------------------------------------------------------
 
-def build_synthetic_jsonl(conv: dict) -> list[dict]:
+def ingest_atomic_facts(engram: EngramRunner, project: str, conv: dict,
+                        api_key: str, model: str) -> int:
     """
-    Convert a LoCoMo conversation into Claude-format JSONL entries.
-    Each session becomes one conversation turn-pair (user asks, assistant recaps).
-    Improvement B: prepend session date to each turn so LLM captures temporal facts.
-    """
-    entries = []
-    session_num = 1
-
-    while True:
-        key = f"session_{session_num}"
-        if key not in conv["conversation"] or not conv["conversation"][key]:
-            break
-
-        turns = conv["conversation"][key]
-        date_key = f"session_{session_num}_date_time"
-        date_str = conv["conversation"].get(date_key, "")
-
-        # Build turn text with date context (Improvement B)
-        date_prefix = f"[Date: {date_str}]\n" if date_str else ""
-        turn_text = date_prefix + "\n".join(
-            f"{t['speaker']}: {t['text']}"
-            for t in turns if t.get("text")
-        )
-
-        if not turn_text.strip():
-            session_num += 1
-            continue
-
-        session_id = str(uuid.uuid4())
-        ts = f"2024-01-{session_num:02d}T10:00:00.000Z"
-
-        # User turn: the raw conversation
-        entries.append({
-            "type": "user",
-            "uuid": str(uuid.uuid4()),
-            "parentUuid": None,
-            "sessionId": session_id,
-            "timestamp": ts,
-            "isSidechain": False,
-            "cwd": "/tmp",
-            "message": {
-                "role": "user",
-                "content": turn_text[:6000],
-            },
-        })
-
-        # Assistant turn: brief recap to help LLM extract facts
-        # Including both speakers' names helps cross-speaker multi-hop
-        speakers = list({t["speaker"] for t in turns if t.get("speaker")})
-        speaker_note = f"Participants: {', '.join(speakers)}. " if speakers else ""
-        recap = f"{speaker_note}Above is session {session_num} of a long-term conversation."
-        if date_str:
-            recap += f" This session took place on {date_str}."
-
-        entries.append({
-            "type": "assistant",
-            "uuid": str(uuid.uuid4()),
-            "parentUuid": None,
-            "sessionId": session_id,
-            "timestamp": ts,
-            "isSidechain": False,
-            "message": {
-                "role": "assistant",
-                "content": recap,
-                "model": "claude-sonnet-4-6",
-                "usage": {"input_tokens": 100, "output_tokens": 20},
-            },
-        })
-
-        session_num += 1
-
-    return entries
-
-
-def write_synthetic_project(project: str, entries: list[dict]) -> Path:
-    """Write synthetic JSONL to ~/.claude/projects/<project>/."""
-    home = Path.home()
-    project_dir = home / ".claude" / "projects" / f"-locomo-{project}"
-    project_dir.mkdir(parents=True, exist_ok=True)
-
-    jsonl_path = project_dir / "locomo.jsonl"
-    with open(jsonl_path, "w") as f:
-        for entry in entries:
-            f.write(json.dumps(entry) + "\n")
-
-    return project_dir
-
-
-def cleanup_synthetic_project(project: str):
-    """Remove the synthetic JSONL directory."""
-    home = Path.home()
-    project_dir = home / ".claude" / "projects" / f"-locomo-{project}"
-    if project_dir.exists():
-        import shutil
-        shutil.rmtree(project_dir, ignore_errors=True)
-
-
-# ---------------------------------------------------------------------------
-# Improvement A2: Direct fact extraction via Gemini API
-# ---------------------------------------------------------------------------
-
-FACT_EXTRACTION_PROMPT = """Extract ALL factual statements from this conversation as a numbered list.
-
-Rules:
-- Include: names, events, dates, preferences, relationships, locations, achievements
-- For each fact include the person it's about and the date/time if mentioned
-- Be precise: "Caroline went to the LGBTQ support group on 7 May 2023" not "Caroline went somewhere"
-- Include facts from BOTH speakers
-- Maximum 30 facts. If fewer are present, extract fewer.
-- Format each fact as one sentence.
-
-CONVERSATION:
-{text}
-
-Facts:"""
-
-
-def call_gemini_extract(session_text: str, api_key: str) -> list[str]:
-    """Call Gemini directly to extract personal facts with dates."""
-    prompt = FACT_EXTRACTION_PROMPT.format(text=session_text[:6000])
-
-    payload = json.dumps({
-        "contents": [{"parts": [{"text": prompt}]}],
-        "generationConfig": {"temperature": 0.1, "maxOutputTokens": 1024},
-    }).encode()
-
-    url = (
-        f"https://generativelanguage.googleapis.com/v1beta/models/"
-        f"gemini-2.0-flash:generateContent?key={api_key}"
-    )
-    req = urllib.request.Request(
-        url, data=payload,
-        headers={"Content-Type": "application/json"},
-        method="POST",
-    )
-    try:
-        with urllib.request.urlopen(req, timeout=30) as resp:
-            result = json.loads(resp.read())
-        text = result["candidates"][0]["content"]["parts"][0]["text"]
-        # Parse numbered/bulleted list
-        facts = []
-        for line in text.splitlines():
-            line = re.sub(r"^[\d\.\-\*\•]+\s*", "", line).strip()
-            if len(line) > 10:
-                facts.append(line)
-        return facts
-    except Exception as e:
-        print(f"    [warn] gemini fact extract: {e}", file=sys.stderr)
-        return []
-
-
-def ingest_facts(engram: EngramRunner, project: str, conv: dict, api_key: str) -> int:
-    """
-    Improvement A2: extract personal facts per session via Gemini, store as grouped blocks.
-    Groups all facts from one session into one entry — better embedding density than atomic facts,
-    while still capturing dates, names, events precisely.
+    v3 strategy: atomic facts with entity+date tags, stored individually.
+    Entity tags ([Person: X][Date: Y]) anchor embeddings for precise retrieval.
+    The Update Resolver in engram deduplicates cross-session redundancy.
     """
     total = 0
     for i in range(1, 50):
@@ -330,40 +253,39 @@ def ingest_facts(engram: EngramRunner, project: str, conv: dict, api_key: str) -
             f"{t['speaker']}: {t['text']}" for t in turns if t.get("text")
         )
 
-        facts = call_gemini_extract(raw_text, api_key)
+        facts = extract_facts(raw_text, api_key, model)
         if not facts:
-            # Fallback: store raw text with date prefix
+            # Fallback: store raw session with date
             engram.add(project, "solutions", raw_text[:4000], f"session-{i}-raw")
             total += 1
             continue
 
-        # Store all facts from this session as ONE grouped entry (better embedding density)
-        date_header = f"Session date: {date_str}\n\n" if date_str else ""
-        grouped = date_header + "\n".join(f"- {f}" for f in facts)
-        engram.add(project, "solutions", grouped[:4000], f"session-{i}-facts")
-        total += 1
+        # Store each fact atomically — entity tags improve embedding precision
+        for j, fact in enumerate(facts):
+            label = f"s{i}f{j}"
+            # Route by content: temporal facts → decisions, rest → solutions
+            has_date = bool(DATE_PATTERN.search(fact)) or any(
+                kw in fact.lower() for kw in [" on ", " in 20", " in 19", "date:"]
+            )
+            category = "decisions" if has_date else "solutions"
+            engram.add(project, category, fact, label)
+            total += 1
 
     return total
 
 
-# ---------------------------------------------------------------------------
-# Raw ingestion (baseline strategy)
-# ---------------------------------------------------------------------------
-
-def ingest_raw(engram: EngramRunner, project: str, conv: dict) -> int:
-    """Original strategy: dump raw session text via engram add."""
+def ingest_raw_with_dates(engram: EngramRunner, project: str, conv: dict) -> int:
+    """Baseline: raw session text with session dates prepended."""
     count = 0
     for i in range(1, 50):
         key = f"session_{i}"
         if key not in conv["conversation"] or not conv["conversation"][key]:
             break
         turns = conv["conversation"][key]
-        date_key = f"session_{i}_date_time"
-        date_str = conv["conversation"].get(date_key, "")
-        date_prefix = f"[Date: {date_str}]\n" if date_str else ""  # Improvement B
+        date_str = conv["conversation"].get(f"session_{i}_date_time", "")
+        date_prefix = f"[Session date: {date_str}]\n" if date_str else ""
         text = date_prefix + "\n".join(
-            f"{t['speaker']}: {t['text']}"
-            for t in turns if t.get("text")
+            f"{t['speaker']}: {t['text']}" for t in turns if t.get("text")
         )
         if text.strip():
             engram.add(project, "solutions", text[:4000], f"session-{i}")
@@ -378,42 +300,37 @@ def ingest_raw(engram: EngramRunner, project: str, conv: dict) -> int:
 def eval_conversation(
     engram: EngramRunner,
     conv: dict,
-    use_llm_ingest: bool = False,
-    use_fact_extract: bool = False,
+    strategy: str = "atomic",   # "atomic" | "raw"
     use_graph: bool = False,
-    threshold: float = 0.2,
-    top_k: int = 8,
-    gemini_api_key: str = "",
-) -> dict[int, list[float]]:
-    """Returns {category_int: [f1_scores]}."""
+    threshold: float = 0.1,
+    top_k: int = 10,
+    api_key: str = "",
+    extract_model: str = "gemini-2.5-pro",
+    use_judge: bool = False,
+    judge_model: str = "gemini-2.5-pro",
+) -> dict:
+    """
+    Returns {
+        "f1": {category_int: [scores]},
+        "judge": {category_int: [scores]},   # only if use_judge=True
+    }
+    """
     sample_id = conv["sample_id"]
     project = f"locomo-{sample_id}"
-    synth_project_key = sample_id if use_llm_ingest else None
-
-    scores: dict[int, list[float]] = defaultdict(list)
+    f1_scores: dict[int, list[float]] = defaultdict(list)
+    judge_scores: dict[int, list[float]] = defaultdict(list)
 
     try:
-        if use_fact_extract and gemini_api_key:
-            # Improvement A2: direct Gemini fact extraction → atomic facts in engram
-            ingest_facts(engram, project, conv, gemini_api_key)
-        elif use_llm_ingest:
-            # Improvement A: synthetic JSONL → engram ingest → LLM extraction
-            entries = build_synthetic_jsonl(conv)
-            write_synthetic_project(sample_id, entries)
-            success = engram.ingest(project)
-            if not success:
-                ingest_raw(engram, project, conv)
+        if strategy == "atomic":
+            ingest_atomic_facts(engram, project, conv, api_key, extract_model)
         else:
-            # Baseline: raw session text
-            ingest_raw(engram, project, conv)
+            ingest_raw_with_dates(engram, project, conv)
 
-        # Build embedding index (Improvement C: increased top-k used at query time)
         engram.embed(project)
 
         if use_graph:
             engram.graph_build(project)
 
-        # Answer QA pairs
         for qa in conv["qa"]:
             question = qa.get("question", "")
             gold = qa.get("answer", "")
@@ -423,67 +340,94 @@ def eval_conversation(
 
             prediction = engram.ask(
                 project, question,
-                threshold=threshold, top_k=top_k,
-                use_graph=use_graph,
+                threshold=threshold, top_k=top_k, use_graph=use_graph,
             )
-            scores[category].append(token_f1(prediction, gold))
+
+            f1_scores[category].append(token_f1(prediction, gold))
+
+            if use_judge and api_key:
+                judge_scores[category].append(
+                    llm_judge(question, gold, prediction, api_key, judge_model)
+                )
 
     finally:
         engram.forget(project)
-        if use_llm_ingest and synth_project_key:
-            cleanup_synthetic_project(synth_project_key)
 
-    return scores
+    return {"f1": f1_scores, "judge": judge_scores}
 
 
 # ---------------------------------------------------------------------------
 # Reporting
 # ---------------------------------------------------------------------------
 
-BASELINES = {
+V1_BASELINE = 18.0
+BASELINES_F1 = {
     "GPT-4 (no memory)": 32.1,
-    "Mem0 (SOTA)":        67.1,
-    "Human ceiling":      87.9,
+    "Mem0 (token F1)":   38.72,
 }
-ENGRAM_V1 = 18.0  # baseline from raw-add run
+BASELINES_JUDGE = {
+    "Mem0 (LLM-judge)":  67.13,
+    "Human ceiling":     87.9,
+}
 
 
-def print_report(all_scores: dict[int, list[float]], elapsed: float,
-                 n_convs: int, label: str, prev: float = ENGRAM_V1):
-    flat = [s for vals in all_scores.values() for s in vals]
-    overall = sum(flat) / len(flat) * 100 if flat else 0.0
-    delta = overall - prev
+def _avg(scores: list[float]) -> float:
+    return sum(scores) / len(scores) * 100 if scores else 0.0
+
+
+def print_report(f1_all: dict, judge_all: dict, elapsed: float,
+                 n_convs: int, label: str):
+    flat_f1 = [s for v in f1_all.values() for s in v]
+    flat_judge = [s for v in judge_all.values() for s in v]
+    overall_f1 = _avg(flat_f1)
+    overall_judge = _avg(flat_judge)
+    delta = overall_f1 - V1_BASELINE
 
     print()
     print("╔══════════════════════════════════════════════════════╗")
-    print(f"  engram LoCoMo-10  |  {label}")
-    print(f"  Conversations: {n_convs}  |  QA pairs: {len(flat)}  |  {elapsed:.0f}s")
+    print(f"  engram LoCoMo-10 v3  |  {label}")
+    print(f"  {n_convs} convs  |  {len(flat_f1)} QA pairs  |  {elapsed:.0f}s")
     print("╠══════════════════════════════════════════════════════╣")
     sign = "+" if delta >= 0 else ""
-    print(f"  Overall F1:  {overall:.1f}  ({sign}{delta:.1f} vs v1 baseline)")
+    print(f"  Token-F1:       {overall_f1:.1f}  ({sign}{delta:.1f} vs v1)")
+    if flat_judge:
+        print(f"  LLM-as-Judge:   {overall_judge:.1f}")
     print()
-    print("  By category:")
+    print("  By category (Token-F1):")
     for cat_id in sorted(CATEGORY_NAMES):
-        vals = all_scores.get(cat_id, [])
+        vals = f1_all.get(cat_id, [])
         if vals:
-            avg = sum(vals) / len(vals) * 100
+            avg = _avg(vals)
+            j_avg = _avg(judge_all.get(cat_id, []))
+            j_str = f"  judge={j_avg:.1f}" if flat_judge else ""
             bar = "█" * max(1, int(avg / 4))
-            print(f"    {CATEGORY_NAMES[cat_id]:<16} {avg:5.1f}  {bar}")
-    print()
-    print("  Comparison:")
-    print(f"    {'engram v1 (raw add)':<28} {ENGRAM_V1:5.1f}")
-    for name, b in BASELINES.items():
-        marker = " ◀ SOTA" if "Mem0" in name else ""
-        print(f"    {name:<28} {b:5.1f}{marker}")
-    marker = " ◀ engram ✓" if overall >= 67.1 else f" (+{overall-ENGRAM_V1:.1f} vs v1)"
-    print(f"    {'engram (this run)':<28} {overall:5.1f}{marker}")
-    print("╚══════════════════════════════════════════════════════╝")
+            print(f"    {CATEGORY_NAMES[cat_id]:<16} {avg:5.1f}  {bar}{j_str}")
 
-    if overall >= 67.1:
-        print("\n  🎉  SOTA ACHIEVED: engram ≥ Mem0!")
-    elif overall >= 32.1:
+    print()
+    print("  Token-F1 comparison:")
+    print(f"    {'engram v1 (raw add)':<28} {V1_BASELINE:5.1f}")
+    for name, b in BASELINES_F1.items():
+        marker = " ◀ Mem0 F1" if "Mem0" in name else ""
+        print(f"    {name:<28} {b:5.1f}{marker}")
+    marker = " ✓ beats GPT-4!" if overall_f1 >= 32.1 else f" (gap to GPT-4: {32.1 - overall_f1:.1f})"
+    print(f"    {'engram (this run)':<28} {overall_f1:5.1f}{marker}")
+
+    if flat_judge:
+        print()
+        print("  LLM-judge comparison:")
+        for name, b in BASELINES_JUDGE.items():
+            marker = " ◀ SOTA" if "Mem0" in name else ""
+            print(f"    {name:<28} {b:5.1f}{marker}")
+        marker = " ✓ SOTA!" if overall_judge >= 67.13 else f" (gap: {67.13 - overall_judge:.1f})"
+        print(f"    {'engram (this run)':<28} {overall_judge:5.1f}{marker}")
+
+    print("╚══════════════════════════════════════════════════════╝")
+    if overall_f1 >= 38.72:
+        print("\n  🎉 Beats Mem0 token-F1 (38.72)!")
+    elif overall_f1 >= 32.1:
         print(f"\n  ✓  Beats GPT-4 no-memory baseline!")
-    print(f"\n  Gap to Mem0: {67.1 - overall:.1f} F1 points")
+    if flat_judge and overall_judge >= 67.13:
+        print("  🎉 Beats Mem0 LLM-judge (67.13)!")
 
 
 # ---------------------------------------------------------------------------
@@ -491,24 +435,28 @@ def print_report(all_scores: dict[int, list[float]], elapsed: float,
 # ---------------------------------------------------------------------------
 
 def main():
-    ap = argparse.ArgumentParser(description="LoCoMo-10 benchmark for engram")
+    ap = argparse.ArgumentParser(description="LoCoMo-10 v3 benchmark for engram")
     ap.add_argument("--engram", default="./target/release/engram")
     ap.add_argument("--data", default="eval/locomo10.json")
-    ap.add_argument("--provider", default="gemini",
+    ap.add_argument("--embed-provider", default="gemini",
                     choices=["gemini", "openai", "ollama"])
+    ap.add_argument("--extract-model", default="gemini-2.5-pro",
+                    help="Gemini model for fact extraction (default: gemini-2.5-pro)")
+    ap.add_argument("--qa-model", default="gemini-2.5-pro",
+                    help="Model for engram ask synthesis (default: gemini-2.5-pro)")
+    ap.add_argument("--judge-model", default="gemini-2.5-pro",
+                    help="Model for LLM-as-a-Judge (default: gemini-2.5-pro)")
+    ap.add_argument("--strategy", default="atomic",
+                    choices=["atomic", "raw"],
+                    help="atomic=entity-tagged facts (v3), raw=session text (v1)")
+    ap.add_argument("--use-graph", action="store_true")
+    ap.add_argument("--use-judge", action="store_true",
+                    help="Add LLM-as-a-Judge metric (matches Mem0's 67.1 headline)")
+    ap.add_argument("--threshold", type=float, default=0.1)
+    ap.add_argument("--top-k", type=int, default=10)
     ap.add_argument("--max-convs", type=int, default=None)
     ap.add_argument("--workers", type=int, default=3)
-    ap.add_argument("--use-llm-ingest", action="store_true",
-                    help="Improvement A: use engram ingest (LLM extraction) instead of raw add")
-    ap.add_argument("--use-fact-extract", action="store_true",
-                    help="Improvement A2: use Gemini to extract atomic dated facts (requires GEMINI_API_KEY)")
-    ap.add_argument("--use-graph", action="store_true",
-                    help="Improvement: graph-augmented retrieval")
-    ap.add_argument("--threshold", type=float, default=None,
-                    help="Retrieval similarity threshold (default: 0.1 for fact-extract, 0.2 otherwise)")
-    ap.add_argument("--top-k", type=int, default=10,
-                    help="Retrieval top-k (default: 10)")
-    ap.add_argument("--output", default="eval/results_v2.json")
+    ap.add_argument("--output", default="eval/results_v3.json")
     args = ap.parse_args()
 
     binary = str(Path(args.engram).resolve())
@@ -516,82 +464,86 @@ def main():
         print(f"ERROR: {binary} not found. Run: cargo build --release", file=sys.stderr)
         sys.exit(1)
 
+    api_key = os.environ.get("GEMINI_API_KEY", "")
+    if not api_key:
+        print("ERROR: GEMINI_API_KEY not set", file=sys.stderr)
+        sys.exit(1)
+
     with open(args.data) as f:
         dataset = json.load(f)
     if args.max_convs:
         dataset = dataset[:args.max_convs]
 
-    engram = EngramRunner(binary, args.provider)
-    gemini_key = os.environ.get("GEMINI_API_KEY", "")
+    engram = EngramRunner(binary, args.embed_provider, args.qa_model)
 
-    # Auto-select threshold: fact-extract needs lower threshold (more atomic entries)
-    threshold = args.threshold
-    if threshold is None:
-        threshold = 0.1 if args.use_fact_extract else 0.2
-
-    label_parts = []
-    if args.use_fact_extract:
-        label_parts.append("Fact extract")
-    elif args.use_llm_ingest:
-        label_parts.append("LLM ingest")
+    label_parts = [
+        f"strategy={args.strategy}",
+        f"extract={args.extract_model.replace('gemini-', '')}",
+        f"qa={args.qa_model.replace('gemini-', '')}",
+        f"t={args.threshold} k={args.top_k}",
+    ]
     if args.use_graph:
-        label_parts.append("+ Graph")
-    label_parts.append(f"t={threshold} k={args.top_k}")
-    label = " | ".join(label_parts) if label_parts else f"raw add | t={threshold} k={args.top_k}"
+        label_parts.append("graph")
+    if args.use_judge:
+        label_parts.append("judge")
+    label = " | ".join(label_parts)
 
-    print(f"engram LoCoMo eval v2")
-    print(f"  Binary:      {Path(binary).name}")
-    print(f"  Provider:    {args.provider}")
-    print(f"  Dataset:     {len(dataset)} conversations, "
+    print(f"engram LoCoMo v3")
+    print(f"  Binary:   {Path(binary).name}")
+    print(f"  Strategy: {label}")
+    print(f"  Dataset:  {len(dataset)} convs, "
           f"{sum(len(d['qa']) for d in dataset)} QA pairs")
-    print(f"  Strategy:    {label}")
-    print(f"  Workers:     {args.workers}")
+    print(f"  Workers:  {args.workers}")
     print()
+
+    f1_all: dict[int, list[float]] = defaultdict(list)
+    judge_all: dict[int, list[float]] = defaultdict(list)
+    start = time.time()
 
     def process(conv):
         sid = conv["sample_id"]
-        n_qa = len(conv["qa"])
-        print(f"  [{sid}] starting ({n_qa} QA pairs)...", flush=True)
-        scores = eval_conversation(
+        n = len(conv["qa"])
+        print(f"  [{sid}] starting ({n} QA)...", flush=True)
+        result = eval_conversation(
             engram, conv,
-            use_llm_ingest=args.use_llm_ingest,
-            use_fact_extract=args.use_fact_extract,
+            strategy=args.strategy,
             use_graph=args.use_graph,
-            threshold=threshold,
+            threshold=args.threshold,
             top_k=args.top_k,
-            gemini_api_key=gemini_key,
+            api_key=api_key,
+            extract_model=args.extract_model,
+            use_judge=args.use_judge,
+            judge_model=args.judge_model,
         )
-        n = sum(len(v) for v in scores.values())
-        f1 = sum(s for v in scores.values() for s in v) / n * 100 if n else 0.0
-        print(f"  [{sid}] done — F1={f1:.1f} ({n} pairs)", flush=True)
-        return scores
-
-    all_scores: dict[int, list[float]] = defaultdict(list)
-    start = time.time()
+        flat = [s for v in result["f1"].values() for s in v]
+        f1 = _avg(flat)
+        j_flat = [s for v in result["judge"].values() for s in v]
+        j_str = f"  judge={_avg(j_flat):.1f}" if j_flat else ""
+        print(f"  [{sid}] done — F1={f1:.1f} ({len(flat)} pairs){j_str}", flush=True)
+        return result
 
     with ThreadPoolExecutor(max_workers=args.workers) as pool:
-        for scores in pool.map(process, dataset):
-            for cat, vals in scores.items():
-                all_scores[cat].extend(vals)
+        for result in pool.map(process, dataset):
+            for cat, vals in result["f1"].items():
+                f1_all[cat].extend(vals)
+            for cat, vals in result["judge"].items():
+                judge_all[cat].extend(vals)
 
     elapsed = time.time() - start
 
     Path(args.output).parent.mkdir(parents=True, exist_ok=True)
     with open(args.output, "w") as f:
         json.dump({
-            "scores": {str(k): v for k, v in all_scores.items()},
+            "f1_scores": {str(k): v for k, v in f1_all.items()},
+            "judge_scores": {str(k): v for k, v in judge_all.items()},
             "elapsed": elapsed,
             "n_convs": len(dataset),
             "label": label,
-            "provider": args.provider,
-            "use_llm_ingest": args.use_llm_ingest,
-            "use_graph": args.use_graph,
-            "threshold": args.threshold,
-            "top_k": args.top_k,
+            "args": vars(args),
         }, f, indent=2)
-    print(f"\nRaw scores → {args.output}")
+    print(f"\nScores → {args.output}")
 
-    print_report(all_scores, elapsed, len(dataset), label)
+    print_report(f1_all, judge_all, elapsed, len(dataset), label)
 
 
 if __name__ == "__main__":
