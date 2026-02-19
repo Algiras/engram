@@ -75,6 +75,28 @@ fn rotate_log_if_needed(log_path: &PathBuf, max_lines: usize, keep_lines: usize)
     }
 }
 
+/// Count active (non-expired) knowledge blocks across all 6 category files for a project.
+fn count_active_blocks(knowledge_dir: &std::path::Path) -> usize {
+    use crate::extractor::knowledge::{parse_session_blocks, partition_by_expiry};
+    const CATEGORIES: &[&str] = &[
+        "decisions.md",
+        "solutions.md",
+        "patterns.md",
+        "bugs.md",
+        "insights.md",
+        "questions.md",
+    ];
+    let mut count = 0;
+    for cat in CATEGORIES {
+        if let Ok(content) = fs::read_to_string(knowledge_dir.join(cat)) {
+            let (_, blocks) = parse_session_blocks(&content);
+            let (active, _) = partition_by_expiry(blocks);
+            count += active.len();
+        }
+    }
+    count
+}
+
 pub fn cmd_daemon_start(config: &Config, interval: u64, provider: Option<&str>) -> Result<()> {
     // Check if already running
     if let Some(pid) = read_pid(config) {
@@ -285,6 +307,30 @@ pub fn cmd_daemon_logs(config: &Config, lines: usize, follow: bool) -> Result<()
     Ok(())
 }
 
+/// Check if engram hooks are registered in settings.json; reinstall if missing.
+fn heal_hooks_if_needed(log: &dyn Fn(&str)) {
+    let Some(home) = dirs::home_dir() else {
+        return;
+    };
+    let settings_path = home.join(".claude").join("settings.json");
+    let registered = settings_path
+        .exists()
+        .then(|| std::fs::read_to_string(&settings_path).ok())
+        .flatten()
+        .map(|c| c.contains("engram"))
+        .unwrap_or(false);
+
+    if !registered {
+        log("hooks drift detected — reinstalling engram hooks");
+        let status = Command::new("engram").args(["hooks", "install"]).status();
+        match status {
+            Ok(s) if s.success() => log("  hooks install — ok"),
+            Ok(_) => log("  hooks install — exited with error"),
+            Err(e) => log(&format!("  hooks install — failed to spawn: {}", e)),
+        }
+    }
+}
+
 /// The actual long-running daemon loop — called internally via `engram daemon run`
 pub fn cmd_daemon_run(config: &Config, interval_mins: u64, provider: Option<&str>) -> Result<()> {
     use chrono::Local;
@@ -313,6 +359,7 @@ pub fn cmd_daemon_run(config: &Config, interval_mins: u64, provider: Option<&str
     let log_path = log_file(config);
 
     loop {
+        heal_hooks_if_needed(&log);
         log("Running ingest...");
 
         let mut cmd = Command::new("engram");
@@ -342,10 +389,114 @@ pub fn cmd_daemon_run(config: &Config, interval_mins: u64, provider: Option<&str
                     }
                 };
 
+                let ingest_ok = matches!(exit_status, Some(ref s) if s.success());
                 match exit_status {
                     Some(s) if s.success() => log("Ingest complete"),
                     Some(_) => log("Ingest exited with error"),
                     None => log("Ingest killed (timeout or wait error)"),
+                }
+
+                // After a successful ingest, refresh MEMORY.md for every known project
+                if ingest_ok {
+                    let knowledge_dir = config.memory_dir.join("knowledge");
+                    let projects: Vec<String> = fs::read_dir(&knowledge_dir)
+                        .into_iter()
+                        .flatten()
+                        .filter_map(|e| e.ok())
+                        .filter(|e| e.file_type().map(|t| t.is_dir()).unwrap_or(false))
+                        .map(|e| e.file_name().to_string_lossy().into_owned())
+                        .filter(|name| name != crate::config::GLOBAL_DIR)
+                        .collect();
+
+                    if projects.is_empty() {
+                        log("Inject: no projects found, skipping");
+                    } else {
+                        log(&format!("Injecting {} project(s)...", projects.len()));
+                        for project in &projects {
+                            let mut inject_cmd = Command::new("engram");
+                            inject_cmd.arg("inject").arg(project);
+                            match inject_cmd.output() {
+                                Ok(out) if out.status.success() => {
+                                    log(&format!("  inject {} — ok", project));
+                                }
+                                Ok(out) => {
+                                    let stderr =
+                                        String::from_utf8_lossy(&out.stderr).trim().to_string();
+                                    log(&format!("  inject {} — error: {}", project, stderr));
+                                }
+                                Err(e) => {
+                                    log(&format!("  inject {} — failed to spawn: {}", project, e));
+                                }
+                            }
+                        }
+                    }
+
+                    // Distillation: prune projects that have accumulated too many blocks
+                    let distill_threshold = crate::config::DISTILL_THRESHOLD;
+                    let distill_stale_days = crate::config::DISTILL_STALE_DAYS;
+                    for project in &projects {
+                        let knowledge_dir = config.memory_dir.join("knowledge").join(project);
+                        let active_count = count_active_blocks(&knowledge_dir);
+                        if active_count > distill_threshold {
+                            log(&format!(
+                                "  distill {} ({} blocks > {} threshold)",
+                                project, active_count, distill_threshold
+                            ));
+                            let mut forget_cmd = Command::new("engram");
+                            forget_cmd.args([
+                                "forget",
+                                project,
+                                "--stale",
+                                &format!("{}d", distill_stale_days),
+                                "--auto",
+                            ]);
+                            match forget_cmd.output() {
+                                Ok(out) if out.status.success() => {
+                                    log(&format!("    forget --stale {}d — ok", distill_stale_days))
+                                }
+                                Ok(out) => {
+                                    let stderr =
+                                        String::from_utf8_lossy(&out.stderr).trim().to_string();
+                                    log(&format!("    forget --stale — error: {}", stderr));
+                                }
+                                Err(e) => log(&format!("    forget --stale — spawn failed: {}", e)),
+                            }
+                            let mut regen_cmd = Command::new("engram");
+                            regen_cmd.args(["regen", project]);
+                            match regen_cmd.output() {
+                                Ok(out) if out.status.success() => {
+                                    log(&format!("    regen {} — ok", project))
+                                }
+                                Ok(out) => {
+                                    let stderr =
+                                        String::from_utf8_lossy(&out.stderr).trim().to_string();
+                                    log(&format!("    regen {} — error: {}", project, stderr));
+                                }
+                                Err(e) => {
+                                    log(&format!("    regen {} — spawn failed: {}", project, e))
+                                }
+                            }
+                        }
+                    }
+
+                    // Doctor pass: fix stale context / missing embeddings per project
+                    for project in &projects {
+                        let mut doctor_cmd = Command::new("engram");
+                        doctor_cmd.args(["doctor", project, "--fix"]);
+                        match doctor_cmd.output() {
+                            Ok(out) if out.status.success() => {
+                                log(&format!("  doctor {} — ok", project));
+                            }
+                            Ok(out) => {
+                                let stderr =
+                                    String::from_utf8_lossy(&out.stderr).trim().to_string();
+                                log(&format!("  doctor {} — error: {}", project, stderr));
+                            }
+                            Err(e) => {
+                                log(&format!("  doctor {} — failed to spawn: {}", project, e));
+                            }
+                        }
+                    }
                 }
             }
             Err(e) => {

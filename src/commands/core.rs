@@ -974,3 +974,113 @@ fn export_html(
 
     Ok(html)
 }
+
+pub fn cmd_entities(config: &Config, project: &str) -> Result<()> {
+    use std::collections::HashMap;
+
+    let knowledge_dir = config.memory_dir.join("knowledge").join(project);
+    let entities_path = knowledge_dir.join("entities.md");
+
+    if !entities_path.exists() {
+        println!(
+            "{} No entities found for '{}'. Run 'engram ingest' first.",
+            "Not found:".yellow(),
+            project
+        );
+        return Ok(());
+    }
+
+    let content = std::fs::read_to_string(&entities_path)?;
+    let (_, blocks) = crate::extractor::knowledge::parse_session_blocks(&content);
+    let (active, _) = crate::extractor::knowledge::partition_by_expiry(blocks);
+
+    if active.is_empty() {
+        println!(
+            "{} No active entities for '{}'.",
+            "Not found:".yellow(),
+            project
+        );
+        return Ok(());
+    }
+
+    // Aggregate entities by name: NAME | TYPE | key-fact
+    let mut entity_map: HashMap<String, (String, Vec<String>)> = HashMap::new(); // name -> (type, facts)
+
+    for block in &active {
+        for line in block.content.lines() {
+            let line = line.trim();
+            if line.is_empty() || line.starts_with('#') || (line.starts_with('-') && line.len() < 4)
+            {
+                continue;
+            }
+            let parts: Vec<&str> = line.splitn(3, '|').collect();
+            if parts.len() >= 2 {
+                let name = parts[0].trim().to_string();
+                let entity_type = parts
+                    .get(1)
+                    .map(|s| s.trim().to_string())
+                    .unwrap_or_default();
+                let fact = parts
+                    .get(2)
+                    .map(|s| s.trim().to_string())
+                    .unwrap_or_default();
+                if !name.is_empty() && !name.contains("No significant") {
+                    let entry = entity_map
+                        .entry(name)
+                        .or_insert_with(|| (entity_type, Vec::new()));
+                    if !fact.is_empty() {
+                        entry.1.push(fact);
+                    }
+                }
+            }
+        }
+    }
+
+    if entity_map.is_empty() {
+        println!(
+            "{} No entities found for '{}'.",
+            "Not found:".yellow(),
+            project
+        );
+        return Ok(());
+    }
+
+    println!("{}", format!("# Entities — {}", project).green().bold());
+    println!();
+
+    // Sort by fact count (most mentioned first)
+    let mut entities: Vec<(String, String, Vec<String>)> = entity_map
+        .into_iter()
+        .map(|(name, (entity_type, facts))| (name, entity_type, facts))
+        .collect();
+    entities.sort_by(|a, b| b.2.len().cmp(&a.2.len()).then(a.0.cmp(&b.0)));
+
+    for (name, entity_type, facts) in &entities {
+        let type_str = if entity_type.is_empty() {
+            String::new()
+        } else {
+            format!(" [{}]", entity_type)
+        };
+        println!(
+            "**{}**{} — {} session{}",
+            name,
+            type_str,
+            facts.len(),
+            if facts.len() == 1 { "" } else { "s" }
+        );
+        // Deduplicate and show top facts
+        let mut seen: Vec<&str> = Vec::new();
+        for fact in facts {
+            let f = fact.as_str();
+            if !seen.iter().any(|s| s.to_lowercase() == f.to_lowercase()) {
+                seen.push(f);
+            }
+        }
+        for fact in seen.iter().take(3) {
+            println!("  - {}", fact);
+        }
+        println!();
+    }
+
+    Ok(())
+}

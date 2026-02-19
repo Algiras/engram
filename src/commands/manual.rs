@@ -476,10 +476,23 @@ pub fn cmd_add(
         .ok_or_else(|| error::MemoryError::Config("Could not determine home directory".into()))?;
     let memory_dir = home.join("memory");
 
-    let (dir, filename) = if category == "preferences" {
+    let (dir, filename) = if project == crate::config::GLOBAL_PROJECT || category == "preferences" {
+        let filename = match category {
+            "preferences" => "preferences.md",
+            "decisions" => "decisions.md",
+            "solutions" => "solutions.md",
+            "patterns" => "patterns.md",
+            "bugs" => "bugs.md",
+            "insights" => "insights.md",
+            "questions" => "questions.md",
+            _ => return Err(error::MemoryError::Config(format!(
+                "Unknown category: '{}'. Use: decisions, solutions, patterns, bugs, insights, questions, preferences",
+                category
+            ))),
+        };
         (
-            memory_dir.join("knowledge").join("_global"),
-            "preferences.md",
+            memory_dir.join("knowledge").join(crate::config::GLOBAL_DIR),
+            filename,
         )
     } else {
         (
@@ -542,17 +555,24 @@ pub fn cmd_add(
         std::fs::remove_file(&context_path)?;
     }
 
+    let display_project = if project == crate::config::GLOBAL_PROJECT || category == "preferences" {
+        crate::config::GLOBAL_DIR
+    } else {
+        project
+    };
     println!(
         "{} Added to {}/{} for '{}'.",
         "Done!".green().bold(),
         category,
         filename,
-        project
+        display_project
     );
-    println!(
-        "  Run '{}' to update context.",
-        format!("engram regen {}", project).cyan()
-    );
+    if project != crate::config::GLOBAL_PROJECT && category != "preferences" {
+        println!(
+            "  Run '{}' to update context.",
+            format!("engram regen {}", project).cyan()
+        );
+    }
 
     Ok(())
 }

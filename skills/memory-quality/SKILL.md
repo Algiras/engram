@@ -8,11 +8,13 @@ description: >
   (D) observation-augmented smart inject — today's observed files added to semantic signal;
   (E) progressive MCP context — index/recall(session_ids)/timeline for ~10x token savings;
   (F) <private> tag filtering — wrap any content to exclude it from storage and injection.
-  Use this skill when asked about stale knowledge, analytics, smart inject, private content, or MCP token efficiency.
+  Also covers self-healing: engram heal, daemon auto-start, hook drift detection.
+  Use this skill when asked about stale knowledge, analytics, smart inject, private content,
+  MCP token efficiency, hook drift, daemon not running, or self-healing.
 license: MIT
 metadata:
   author: engram
-  version: "1.1.0"
+  version: "1.2.0"
   repository: https://github.com/Algiras/engram
   triggers:
     - stale knowledge
@@ -35,6 +37,12 @@ metadata:
     - mcp timeline
     - token efficient recall
     - session ids recall
+    - engram heal
+    - hook drift
+    - daemon auto-start
+    - hooks not registered
+    - self-healing
+    - daemon not running
 ---
 
 # Memory Quality & Observability (engram v0.3+)
@@ -318,6 +326,96 @@ engram forget Personal --stale 60d --auto && engram regen Personal
         ├── solutions.md
         ├── patterns.md
         └── context.md          ← deleted by forget --stale, regenerated on next inject
+```
+
+---
+
+---
+
+## Self-Healing (v0.3.6+)
+
+Engram detects and repairs its own issues without user intervention.
+
+### What can go wrong silently
+
+| Issue | Symptom |
+|-------|---------|
+| Hook drift | Hooks deleted from `settings.json` (e.g. after Claude Code update) → no observations, no ingest |
+| Stale context | Knowledge updated but `context.md` not regenerated → inject shows old info |
+| Missing embeddings | New knowledge added but index not rebuilt → semantic search fails |
+| Daemon stopped | Background ingest/inject loop not running |
+
+### `engram heal` — one-shot repair
+
+```bash
+# Check everything (no changes)
+engram heal --check
+
+# Detect and fix all issues
+engram heal
+```
+
+Output:
+```
+🩺 Engram Self-Heal
+============================================================
+
+🔗 Hook Integrity
+   ✓ All hooks registered
+
+📊 Project Health
+   ✓ Personal — healthy
+   ! claude-memory — 1 issue(s) (1 auto-fixable)
+     • No embeddings index (semantic search unavailable)
+     Fixing... ✓ Generated embeddings index
+
+✓ Heal complete
+```
+
+### `engram doctor` — system health report
+
+Doctor now includes a **System Health** section that checks hooks in addition to per-project issues:
+
+```bash
+engram doctor          # report only
+engram doctor --fix    # report + auto-fix everything including hooks
+```
+
+```
+🔗 System Health
+============================================================
+   ✗ Hooks not registered in ~/.claude/settings.json [CRITICAL]
+   💡 Run engram hooks install to fix
+```
+
+### Daemon auto-start
+
+The daemon starts automatically in two ways:
+
+**On `engram hooks install`:**
+```bash
+engram hooks install
+# Done! Hooks installed:
+#   SessionStart -> ~/.claude/hooks/inject-context.sh
+#   PostToolUse  -> ~/.claude/hooks/engram-hook.sh
+#   Stop         -> ~/.claude/hooks/session-end-hook.sh
+#   ✓ Daemon started
+```
+
+**On every Claude Code session open** (via the SessionStart hook):
+- Checks `~/memory/daemon.pid` — if process is dead or PID file missing, runs `engram daemon start` silently in the background
+- No delay to session startup — fires and forgets
+
+### Daemon auto-heal loop
+
+When the daemon is running, every cycle it:
+1. Checks `settings.json` for hook registration — reinstalls if missing ("hook drift")
+2. Runs ingest → inject for all projects
+3. Distills projects with >30 active blocks
+4. Runs `engram doctor --fix` per project (fixes stale context, missing embeddings)
+
+```bash
+engram daemon logs --follow   # watch for "hooks drift detected" or "doctor" lines
 ```
 
 ---

@@ -92,6 +92,13 @@ pub fn post_ingest_hook(config: &Config, project: &str) -> Result<()> {
         }
     }
 
+    // Knowledge decay: reduce importance of all boosts slightly each cycle (Feature 4)
+    // Entries that are recalled or searched will have their boosts refreshed via learning signals.
+    // Entries not accessed will gradually fade toward neutral importance.
+    for boost in state.learned_parameters.importance_boosts.values_mut() {
+        *boost = (*boost * crate::config::IMPORTANCE_DECAY_FACTOR).max(0.0);
+    }
+
     // Save updated state
     progress::save_state(&config.memory_dir, &state)?;
 

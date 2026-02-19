@@ -15,6 +15,7 @@ pub struct SessionBlock {
     pub session_id: String,
     pub timestamp: String,
     pub ttl: Option<String>,
+    pub confidence: Option<String>,
     pub header: String,
     pub content: String,
     pub preview: String,
@@ -23,8 +24,10 @@ pub struct SessionBlock {
 /// Parse a knowledge file into (preamble, Vec<SessionBlock>).
 /// Preamble = everything before first "## Session:" header (e.g., "# Decisions\n").
 pub fn parse_session_blocks(file_content: &str) -> (String, Vec<SessionBlock>) {
-    let header_re =
-        Regex::new(r"(?m)^## Session: (\S+) \(([^)]+)\)(?: \[ttl:([^\]]+)\])?").unwrap();
+    let header_re = Regex::new(
+        r"(?m)^## Session: (\S+) \(([^)]+)\)(?: \[ttl:([^\]]+)\])?(?: \[confidence:([^\]]+)\])?",
+    )
+    .unwrap();
     let mut blocks = Vec::new();
 
     let first_match = header_re.find(file_content);
@@ -40,6 +43,7 @@ pub fn parse_session_blocks(file_content: &str) -> (String, Vec<SessionBlock>) {
         let session_id = caps[1].to_string();
         let timestamp = caps[2].to_string();
         let ttl = caps.get(3).map(|m| m.as_str().to_string());
+        let confidence = caps.get(4).map(|m| m.as_str().to_string());
 
         let header_start = match_positions[i].start();
         let content_start = match_positions[i].end();
@@ -65,6 +69,7 @@ pub fn parse_session_blocks(file_content: &str) -> (String, Vec<SessionBlock>) {
             session_id,
             timestamp,
             ttl,
+            confidence,
             header,
             content,
             preview,
@@ -215,6 +220,98 @@ pub fn strip_private_tags(text: &str) -> String {
     static BLANK_RE: OnceLock<regex::Regex> = OnceLock::new();
     let blank_re = BLANK_RE.get_or_init(|| regex::Regex::new(r"\n{3,}").expect("static regex"));
     blank_re.replace_all(&result, "\n\n").to_string()
+}
+
+/// Parse the CONFIDENCE: HIGH|MEDIUM|LOW line from LLM extraction output.
+/// Returns (content_without_confidence_line, confidence_level_string).
+pub fn parse_confidence(text: &str) -> (String, Option<String>) {
+    let mut conf_line_idx = None;
+    for (i, line) in text.lines().enumerate() {
+        let upper = line.trim().to_ascii_uppercase();
+        if upper.starts_with("CONFIDENCE:") {
+            conf_line_idx = Some((i, upper));
+        }
+    }
+
+    if let Some((pos, conf_line)) = conf_line_idx {
+        let level = if conf_line.contains("HIGH") {
+            Some("high".to_string())
+        } else if conf_line.contains("MEDIUM") {
+            Some("medium".to_string())
+        } else if conf_line.contains("LOW") {
+            Some("low".to_string())
+        } else {
+            None
+        };
+
+        let content: String = text
+            .lines()
+            .enumerate()
+            .filter(|(i, _)| *i != pos)
+            .map(|(_, l)| l)
+            .collect::<Vec<_>>()
+            .join("\n")
+            .trim_end()
+            .to_string();
+
+        (content, level)
+    } else {
+        (text.trim_end().to_string(), None)
+    }
+}
+
+/// Check if new content is a near-duplicate of any active block (>75% word overlap).
+/// Used to skip re-storing patterns that already exist.
+pub fn is_near_duplicate(new_content: &str, existing_blocks: &[SessionBlock]) -> bool {
+    let new_words: std::collections::HashSet<String> = new_content
+        .split(|c: char| !c.is_alphanumeric())
+        .filter(|w| w.len() > 4)
+        .map(|w| w.to_lowercase())
+        .collect();
+
+    if new_words.len() < 5 {
+        return false; // Too short to meaningfully dedup
+    }
+
+    for block in existing_blocks {
+        if block.content.contains("<!-- superseded") {
+            continue;
+        }
+
+        let block_words: std::collections::HashSet<String> = block
+            .content
+            .split(|c: char| !c.is_alphanumeric())
+            .filter(|w| w.len() > 4)
+            .map(|w| w.to_lowercase())
+            .collect();
+
+        if block_words.is_empty() {
+            continue;
+        }
+
+        let overlap = new_words.intersection(&block_words).count();
+        let min_len = new_words.len().min(block_words.len());
+        let similarity = overlap as f32 / min_len as f32;
+
+        if similarity > 0.75 {
+            return true;
+        }
+    }
+
+    false
+}
+
+/// Build a session block header with optional ttl and confidence tags.
+fn build_header(session_id: &str, ts: &str, ttl: Option<&str>, confidence: Option<&str>) -> String {
+    let mut h = format!("\n\n## Session: {} ({})", session_id, ts);
+    if let Some(t) = ttl {
+        h.push_str(&format!(" [ttl:{}]", t));
+    }
+    if let Some(c) = confidence {
+        h.push_str(&format!(" [confidence:{}]", c));
+    }
+    h.push_str("\n\n");
+    h
 }
 
 /// Extract session ID from a header string like "\n\n## Session: abc-123 (2025-01-01)\n\n"
@@ -373,13 +470,32 @@ pub async fn extract_and_merge_knowledge(
         )
     };
 
-    let decisions = clean_extraction(&decisions_raw);
-    let solutions = clean_extraction(&solutions_raw);
-    let patterns = clean_extraction(&patterns_raw);
-    let preferences = clean_extraction(&preferences_raw);
-    let bugs = clean_extraction(&bugs_raw);
-    let insights = clean_extraction(&insights_raw);
-    let questions = clean_extraction(&questions_raw);
+    let (decisions_text, decisions_conf) = parse_confidence(&decisions_raw);
+    let (solutions_text, solutions_conf) = parse_confidence(&solutions_raw);
+    let (patterns_text, patterns_conf) = parse_confidence(&patterns_raw);
+    let (preferences_text, _prefs_conf) = parse_confidence(&preferences_raw);
+    let (bugs_text, bugs_conf) = parse_confidence(&bugs_raw);
+    let (insights_text, insights_conf) = parse_confidence(&insights_raw);
+    let (questions_text, questions_conf) = parse_confidence(&questions_raw);
+
+    let decisions = clean_extraction(&decisions_text);
+    let solutions = clean_extraction(&solutions_text);
+    let patterns = clean_extraction(&patterns_text);
+    let preferences = clean_extraction(&preferences_text);
+    let bugs = clean_extraction(&bugs_text);
+    let insights = clean_extraction(&insights_text);
+    let questions = clean_extraction(&questions_text);
+
+    // Add entity extraction (Feature 5)
+    let entities_raw = client
+        .chat(
+            prompts::SYSTEM_KNOWLEDGE_EXTRACTOR,
+            &prompts::entities_prompt(&conv_text),
+        )
+        .await
+        .unwrap_or_else(|e| format!("(extraction failed: {})", e));
+    let (entities_text, _entities_conf) = parse_confidence(&entities_raw);
+    let entities = clean_extraction_entities(&entities_text);
 
     // Write review inbox candidates (short-term memory)
     let inbox_path = knowledge_dir.join("inbox.md");
@@ -388,6 +504,18 @@ pub async fn extract_and_merge_knowledge(
     }
 
     let ts = conversation.start_time.as_deref().unwrap_or("unknown date");
+
+    // Per-category headers with confidence tags (Feature 2)
+    let decisions_header =
+        build_header(&conversation.session_id, ts, ttl, decisions_conf.as_deref());
+    let solutions_header =
+        build_header(&conversation.session_id, ts, ttl, solutions_conf.as_deref());
+    let patterns_header = build_header(&conversation.session_id, ts, ttl, patterns_conf.as_deref());
+    let bugs_header = build_header(&conversation.session_id, ts, ttl, bugs_conf.as_deref());
+    let insights_header = build_header(&conversation.session_id, ts, ttl, insights_conf.as_deref());
+    let questions_header =
+        build_header(&conversation.session_id, ts, ttl, questions_conf.as_deref());
+
     if let Some(ref decisions) = decisions {
         let inbox_header = if let Some(ttl_val) = ttl {
             format!(
@@ -452,29 +580,93 @@ pub async fn extract_and_merge_knowledge(
         append_knowledge(&inbox_path, &inbox_header, &inbox_content)?;
     }
 
-    if let Some(ref decisions) = decisions {
-        append_knowledge(
-            &knowledge_dir.join("decisions.md"),
-            &session_header,
-            decisions,
-        )?;
-    }
-    if let Some(ref solutions) = solutions {
-        append_knowledge(
-            &knowledge_dir.join("solutions.md"),
-            &session_header,
-            solutions,
-        )?;
-    }
-    if let Some(ref patterns) = patterns {
-        append_knowledge(
-            &knowledge_dir.join("patterns.md"),
-            &session_header,
-            patterns,
-        )?;
+    // Contradiction detection: check new knowledge against existing before writing.
+    // Mark existing entries as superseded when a contradiction is detected.
+    // This runs only for categories with substantial existing knowledge.
+    let contradiction_checks: [(&str, std::path::PathBuf, Option<&str>); 3] = [
+        (
+            "decisions",
+            knowledge_dir.join("decisions.md"),
+            decisions.as_deref(),
+        ),
+        (
+            "solutions",
+            knowledge_dir.join("solutions.md"),
+            solutions.as_deref(),
+        ),
+        (
+            "patterns",
+            knowledge_dir.join("patterns.md"),
+            patterns.as_deref(),
+        ),
+    ];
+    for (cat_name, cat_path, new_content) in &contradiction_checks {
+        if let Some(content) = new_content {
+            let superseded_count = check_and_mark_contradictions(
+                &client,
+                cat_name,
+                cat_path,
+                content,
+                &conversation.session_id,
+            )
+            .await;
+            if superseded_count > 0 {
+                eprintln!(
+                    "  [contradiction] {} {} entr{} superseded in {}",
+                    superseded_count,
+                    cat_name,
+                    if superseded_count == 1 { "y" } else { "ies" },
+                    project_name,
+                );
+            }
+        }
     }
 
-    // Global preferences
+    // Append per-category with dedup checks (Features 2 and 3)
+    if let Some(ref decisions) = decisions {
+        let existing = read_or_default(&knowledge_dir.join("decisions.md"));
+        let (_, ex_blocks) = parse_session_blocks(&existing);
+        let (active, _) = partition_by_expiry(ex_blocks);
+        if is_near_duplicate(decisions, &active) {
+            eprintln!("  [dedup] skipped near-duplicate decisions block");
+        } else {
+            append_knowledge(
+                &knowledge_dir.join("decisions.md"),
+                &decisions_header,
+                decisions,
+            )?;
+        }
+    }
+    if let Some(ref solutions) = solutions {
+        let existing = read_or_default(&knowledge_dir.join("solutions.md"));
+        let (_, ex_blocks) = parse_session_blocks(&existing);
+        let (active, _) = partition_by_expiry(ex_blocks);
+        if is_near_duplicate(solutions, &active) {
+            eprintln!("  [dedup] skipped near-duplicate solutions block");
+        } else {
+            append_knowledge(
+                &knowledge_dir.join("solutions.md"),
+                &solutions_header,
+                solutions,
+            )?;
+        }
+    }
+    if let Some(ref patterns) = patterns {
+        let existing = read_or_default(&knowledge_dir.join("patterns.md"));
+        let (_, ex_blocks) = parse_session_blocks(&existing);
+        let (active, _) = partition_by_expiry(ex_blocks);
+        if is_near_duplicate(patterns, &active) {
+            eprintln!("  [dedup] skipped near-duplicate patterns block");
+        } else {
+            append_knowledge(
+                &knowledge_dir.join("patterns.md"),
+                &patterns_header,
+                patterns,
+            )?;
+        }
+    }
+
+    // Global preferences (no dedup needed — preferences are session-specific)
     let global_dir = config.memory_dir.join("knowledge").join("_global");
     std::fs::create_dir_all(&global_dir)?;
     if let Some(ref preferences) = preferences {
@@ -485,22 +677,51 @@ pub async fn extract_and_merge_knowledge(
         )?;
     }
 
-    // New: bugs, insights, questions
     if let Some(ref bugs) = bugs {
-        append_knowledge(&knowledge_dir.join("bugs.md"), &session_header, bugs)?;
+        let existing = read_or_default(&knowledge_dir.join("bugs.md"));
+        let (_, ex_blocks) = parse_session_blocks(&existing);
+        let (active, _) = partition_by_expiry(ex_blocks);
+        if is_near_duplicate(bugs, &active) {
+            eprintln!("  [dedup] skipped near-duplicate bugs block");
+        } else {
+            append_knowledge(&knowledge_dir.join("bugs.md"), &bugs_header, bugs)?;
+        }
     }
     if let Some(ref insights) = insights {
-        append_knowledge(
-            &knowledge_dir.join("insights.md"),
-            &session_header,
-            insights,
-        )?;
+        let existing = read_or_default(&knowledge_dir.join("insights.md"));
+        let (_, ex_blocks) = parse_session_blocks(&existing);
+        let (active, _) = partition_by_expiry(ex_blocks);
+        if is_near_duplicate(insights, &active) {
+            eprintln!("  [dedup] skipped near-duplicate insights block");
+        } else {
+            append_knowledge(
+                &knowledge_dir.join("insights.md"),
+                &insights_header,
+                insights,
+            )?;
+        }
     }
     if let Some(ref questions) = questions {
+        let existing = read_or_default(&knowledge_dir.join("questions.md"));
+        let (_, ex_blocks) = parse_session_blocks(&existing);
+        let (active, _) = partition_by_expiry(ex_blocks);
+        if is_near_duplicate(questions, &active) {
+            eprintln!("  [dedup] skipped near-duplicate questions block");
+        } else {
+            append_knowledge(
+                &knowledge_dir.join("questions.md"),
+                &questions_header,
+                questions,
+            )?;
+        }
+    }
+
+    // Entities (Feature 5): no dedup — entities aggregate across sessions
+    if let Some(ref entities) = entities {
         append_knowledge(
-            &knowledge_dir.join("questions.md"),
+            &knowledge_dir.join("entities.md"),
             &session_header,
-            questions,
+            entities,
         )?;
     }
 
@@ -673,6 +894,191 @@ fn truncate_at_char_boundary(s: &str, max_bytes: usize) -> &str {
         idx -= 1;
     }
     &s[..idx]
+}
+
+/// Check new extracted content against existing blocks in the same category for contradictions.
+/// Uses word-overlap as a lightweight pre-filter, then calls the LLM for likely candidates.
+/// Returns a list of `(old_session_id, contradiction_description)` pairs.
+pub async fn check_for_contradictions_with_existing(
+    client: &LlmClient,
+    new_content: &str,
+    new_session_id: &str,
+    category: &str,
+    existing_blocks: &[SessionBlock],
+) -> Vec<(String, String)> {
+    let mut contradictions = Vec::new();
+    if new_content.trim().is_empty() || existing_blocks.is_empty() {
+        return contradictions;
+    }
+
+    // Build normalized word set for pre-filtering
+    let new_words: std::collections::HashSet<String> = new_content
+        .split(|c: char| !c.is_alphanumeric())
+        .filter(|w| w.len() > 4)
+        .map(|w| w.to_lowercase())
+        .collect();
+
+    if new_words.len() < 3 {
+        return contradictions;
+    }
+
+    for block in existing_blocks {
+        // Skip blocks already marked as superseded
+        if block.content.contains("<!-- superseded") {
+            continue;
+        }
+
+        let block_words: std::collections::HashSet<String> = block
+            .content
+            .split(|c: char| !c.is_alphanumeric())
+            .filter(|w| w.len() > 4)
+            .map(|w| w.to_lowercase())
+            .collect();
+
+        if block_words.is_empty() {
+            continue;
+        }
+
+        let overlap = new_words.intersection(&block_words).count();
+        let min_len = new_words.len().min(block_words.len());
+        let similarity = overlap as f32 / min_len as f32;
+
+        // Only run LLM check for entries with enough semantic overlap to possibly contradict
+        if similarity < 0.15 {
+            continue;
+        }
+
+        let existing_snippet = format!(
+            "[{}:{}]\n{}",
+            category,
+            block.session_id,
+            block.content.trim().chars().take(400).collect::<String>()
+        );
+        let new_snippet = format!(
+            "[{}:{}]\n{}",
+            category,
+            new_session_id,
+            new_content.trim().chars().take(400).collect::<String>()
+        );
+
+        if let Ok(response) = client
+            .chat(
+                prompts::SYSTEM_CONTRADICTION_CHECKER,
+                &prompts::contradiction_check_prompt(&new_snippet, &existing_snippet),
+            )
+            .await
+        {
+            let resp = response.trim();
+            if resp != "No contradictions detected."
+                && !resp.is_empty()
+                && resp.contains("CONTRADICTS")
+            {
+                contradictions.push((block.session_id.clone(), resp.to_string()));
+            }
+        }
+    }
+
+    contradictions
+}
+
+/// Mark a session block as superseded by a newer session.
+/// Prepends a superseded comment to the matching block's content.
+/// Returns None if session_id was not found or was already marked.
+pub fn mark_superseded(
+    file_content: &str,
+    session_id: &str,
+    superseded_by: &str,
+    reason: &str,
+) -> Option<String> {
+    let (preamble, mut blocks) = parse_session_blocks(file_content);
+
+    let mut modified = false;
+    for block in &mut blocks {
+        if block.session_id == session_id && !block.content.contains("<!-- superseded") {
+            let short_reason = reason.chars().take(120).collect::<String>();
+            block.content = format!(
+                "<!-- superseded by: {} — {} -->\n{}",
+                superseded_by, short_reason, block.content
+            );
+            modified = true;
+        }
+    }
+
+    if !modified {
+        return None;
+    }
+
+    Some(reconstruct_blocks(&preamble, &blocks))
+}
+
+/// Check new knowledge content against an existing knowledge file and mark superseded blocks.
+/// Returns the count of blocks marked as superseded. Non-fatal on errors.
+async fn check_and_mark_contradictions(
+    client: &LlmClient,
+    category: &str,
+    cat_path: &Path,
+    new_content: &str,
+    new_session_id: &str,
+) -> usize {
+    if !cat_path.exists() || new_content.trim().is_empty() {
+        return 0;
+    }
+
+    let existing = match std::fs::read_to_string(cat_path) {
+        Ok(s) => s,
+        Err(_) => return 0,
+    };
+
+    let (_, existing_blocks) = parse_session_blocks(&existing);
+    let (active_blocks, _) = partition_by_expiry(existing_blocks);
+    if active_blocks.is_empty() {
+        return 0;
+    }
+
+    let contradictions = check_for_contradictions_with_existing(
+        client,
+        new_content,
+        new_session_id,
+        category,
+        &active_blocks,
+    )
+    .await;
+
+    if contradictions.is_empty() {
+        return 0;
+    }
+
+    let mut updated = existing;
+    let mut count = 0;
+    for (old_session_id, reason) in &contradictions {
+        if let Some(marked) = mark_superseded(&updated, old_session_id, new_session_id, reason) {
+            updated = marked;
+            count += 1;
+        }
+    }
+
+    if count > 0 {
+        if let Err(e) = std::fs::write(cat_path, &updated) {
+            eprintln!(
+                "Warning: could not write contradiction marks to {:?}: {}",
+                cat_path, e
+            );
+        }
+    }
+
+    count
+}
+
+fn clean_extraction_entities(text: &str) -> Option<String> {
+    let trimmed = text.trim();
+    if trimmed.is_empty() {
+        return None;
+    }
+    let lower = trimmed.to_lowercase();
+    if lower.contains("no significant entities") || lower.contains("(extraction failed:") {
+        return None;
+    }
+    Some(trimmed.to_string())
 }
 
 fn clean_extraction(text: &str) -> Option<String> {

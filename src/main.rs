@@ -41,13 +41,15 @@ use commands::auth::{
 };
 use commands::consolidate::{cmd_consolidate, cmd_doctor};
 use commands::core::{
-    cmd_context, cmd_export, cmd_ingest, cmd_mcp, cmd_projects, cmd_recall, cmd_search, cmd_status,
+    cmd_context, cmd_entities, cmd_export, cmd_ingest, cmd_mcp, cmd_projects, cmd_recall,
+    cmd_search, cmd_status,
 };
 use commands::diff::{cmd_analytics, cmd_diff};
 use commands::embeddings::{cmd_embed, cmd_search_semantic};
 use commands::graph::{
     cmd_graph_build, cmd_graph_hubs, cmd_graph_path, cmd_graph_query, cmd_graph_viz,
 };
+use commands::heal::cmd_heal;
 use commands::hive::cmd_hive;
 use commands::hooks::{cmd_hooks_install, cmd_hooks_status, cmd_hooks_uninstall};
 use commands::knowledge::{cmd_forget, cmd_regen};
@@ -397,6 +399,11 @@ fn main() -> Result<()> {
         );
     }
 
+    // Heal command
+    if let Commands::Heal { check } = &cli.command {
+        return cmd_heal(&config, *check);
+    }
+
     // Doctor command (no Config needed for basic checks)
     if let Commands::Doctor {
         project,
@@ -461,6 +468,11 @@ fn main() -> Result<()> {
         };
     }
 
+    // Entities command — filesystem only, no LLM needed
+    if let Commands::Entities { project } = &cli.command {
+        return cmd_entities(&config, project);
+    }
+
     // Ask command
     if let Commands::Ask {
         query,
@@ -512,8 +524,14 @@ fn main() -> Result<()> {
             project,
             knowledge,
             context,
+            global,
         } => {
-            cmd_search(&config, &query, project, knowledge, context)?;
+            let effective_project = if global {
+                Some(crate::config::GLOBAL_DIR.to_string())
+            } else {
+                project
+            };
+            cmd_search(&config, &query, effective_project, knowledge, context)?;
         }
         Commands::Recall { project } => {
             cmd_recall(&config, &project, cli.verbose)?;
@@ -558,7 +576,9 @@ fn main() -> Result<()> {
         | Commands::Daemon { .. }
         | Commands::Observe { .. }
         | Commands::Mem { .. }
-        | Commands::Ask { .. } => {
+        | Commands::Ask { .. }
+        | Commands::Entities { .. }
+        | Commands::Heal { .. } => {
             unreachable!()
         }
     }

@@ -181,9 +181,58 @@ impl EmbeddingProvider {
         api_key: &str,
         model: &str,
     ) -> Result<Vec<Vec<f32>>> {
-        let client = reqwest::Client::new();
-        let mut embeddings = Vec::new();
+        if texts.is_empty() {
+            return Ok(vec![]);
+        }
 
+        let client = reqwest::Client::new();
+
+        // Try batch endpoint first (single API call for all texts)
+        let requests: Vec<serde_json::Value> = texts
+            .iter()
+            .map(|text| {
+                serde_json::json!({
+                    "model": format!("models/{}", model),
+                    "content": {
+                        "parts": [{ "text": text }]
+                    }
+                })
+            })
+            .collect();
+
+        let response = client
+            .post(format!(
+                "https://generativelanguage.googleapis.com/v1beta/models/{}:batchEmbedContents?key={}",
+                model, api_key
+            ))
+            .json(&serde_json::json!({ "requests": requests }))
+            .send()
+            .await?;
+
+        if response.status().is_success() {
+            let result: serde_json::Value = response.json().await?;
+            if let Some(batch) = result.get("embeddings").and_then(|e| e.as_array()) {
+                let embeddings: Vec<Vec<f32>> = batch
+                    .iter()
+                    .map(|e| {
+                        e.get("values")
+                            .and_then(|v| v.as_array())
+                            .map(|arr| {
+                                arr.iter()
+                                    .filter_map(|v| v.as_f64().map(|f| f as f32))
+                                    .collect()
+                            })
+                            .unwrap_or_default()
+                    })
+                    .collect();
+                if embeddings.len() == texts.len() {
+                    return Ok(embeddings);
+                }
+            }
+        }
+
+        // Fallback: individual requests per text
+        let mut embeddings = Vec::new();
         for text in texts {
             let response = client
                 .post(format!(
@@ -192,17 +241,15 @@ impl EmbeddingProvider {
                 ))
                 .json(&serde_json::json!({
                     "content": {
-                        "parts": [{
-                            "text": text
-                        }]
+                        "parts": [{ "text": text }]
                     }
                 }))
                 .send()
                 .await?;
 
             if !response.status().is_success() {
-                let text = response.text().await.unwrap_or_default();
-                return Err(MemoryError::Config(format!("Gemini API error: {}", text)));
+                let body = response.text().await.unwrap_or_default();
+                return Err(MemoryError::Config(format!("Gemini API error: {}", body)));
             }
 
             let result: serde_json::Value = response.json().await?;

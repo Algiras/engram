@@ -72,6 +72,44 @@ pub fn build_raw_context(project: &str, project_knowledge_dir: &Path) -> Option<
     Some(out)
 }
 
+/// Read non-preference global knowledge (decisions, solutions, patterns, bugs, insights)
+/// from the _global directory. Returns None if nothing is stored there yet.
+pub fn read_global_knowledge(memory_dir: &Path) -> Option<String> {
+    let global_dir = memory_dir.join("knowledge").join(crate::config::GLOBAL_DIR);
+    if !global_dir.exists() {
+        return None;
+    }
+
+    let read_and_filter = |path: &Path| -> String {
+        let raw = std::fs::read_to_string(path).unwrap_or_default();
+        let (preamble, blocks) = parse_session_blocks(&raw);
+        let (active, _) = partition_by_expiry(blocks);
+        reconstruct_blocks(&preamble, &active)
+    };
+
+    let files = [
+        ("decisions", "decisions.md"),
+        ("patterns", "patterns.md"),
+        ("solutions", "solutions.md"),
+        ("insights", "insights.md"),
+        ("bugs", "bugs.md"),
+    ];
+
+    let mut sections: Vec<String> = Vec::new();
+    for (_category, filename) in &files {
+        let content = read_and_filter(&global_dir.join(filename));
+        if !content.trim().is_empty() {
+            sections.push(content);
+        }
+    }
+
+    if sections.is_empty() {
+        return None;
+    }
+
+    Some(sections.join("\n\n"))
+}
+
 /// Line budget for compact MEMORY.md sections
 pub const COMPACT_MAX_LINES: usize = 180;
 pub const BUDGET_PREFERENCES: usize = 25;
@@ -79,6 +117,7 @@ pub const BUDGET_PROJECT: usize = 60;
 pub const BUDGET_SHARED: usize = 40;
 pub const BUDGET_PACKS: usize = 20;
 pub const BUDGET_GUIDE: usize = 15;
+pub const BUDGET_GLOBAL: usize = 40;
 
 /// Load learned importance boosts from learning state (graceful fallback to empty HashMap)
 pub fn load_importance_boosts(memory_dir: &Path, project: &str) -> HashMap<String, f32> {
@@ -86,6 +125,15 @@ pub fn load_importance_boosts(memory_dir: &Path, project: &str) -> HashMap<Strin
     match progress::load_state(memory_dir, project) {
         Ok(state) => state.learned_parameters.importance_boosts,
         Err(_) => HashMap::new(), // Graceful degradation
+    }
+}
+
+/// Return importance multiplier based on confidence level stored in the block.
+fn confidence_multiplier(confidence: Option<&str>) -> f32 {
+    match confidence {
+        Some("high") => 1.2,
+        Some("low") => 0.5,
+        _ => 1.0,
     }
 }
 
@@ -185,8 +233,10 @@ fn sort_by_importance(
         let boost_a = lookup_boost(boosts, &a.session_id, category, project);
         let boost_b = lookup_boost(boosts, &b.session_id, category, project);
 
-        let score_a = compute_importance_score(&a.timestamp, boost_a, &oldest, &newest);
-        let score_b = compute_importance_score(&b.timestamp, boost_b, &oldest, &newest);
+        let score_a = compute_importance_score(&a.timestamp, boost_a, &oldest, &newest)
+            * confidence_multiplier(a.confidence.as_deref());
+        let score_b = compute_importance_score(&b.timestamp, boost_b, &oldest, &newest)
+            * confidence_multiplier(b.confidence.as_deref());
 
         score_b
             .partial_cmp(&score_a)
@@ -604,6 +654,58 @@ pub async fn smart_search(
         }
     }
 
+    // Also search global knowledge store (if not already searching global)
+    if project != crate::config::GLOBAL_DIR {
+        let global_index_path = memory_dir
+            .join("knowledge")
+            .join(crate::config::GLOBAL_DIR)
+            .join("embeddings.json");
+        if global_index_path.exists() {
+            if let Ok(global_store) = EmbeddingStore::load(&global_index_path) {
+                if !global_store.chunks.is_empty() {
+                    if let Ok(global_results) = global_store
+                        .search_text(signal, &embed_provider, top_k * 2)
+                        .await
+                    {
+                        for (score, chunk) in global_results {
+                            if score < threshold {
+                                continue;
+                            }
+                            let raw_id = chunk
+                                .metadata
+                                .session_id
+                                .clone()
+                                .unwrap_or_else(|| chunk.id.clone());
+                            // Prefix with "global:" to avoid collisions with project session IDs
+                            let key = format!("global:{}", raw_id);
+                            let first_line = chunk
+                                .text
+                                .lines()
+                                .find(|l| !l.trim().is_empty())
+                                .unwrap_or("")
+                                .trim()
+                                .chars()
+                                .take(120)
+                                .collect::<String>();
+                            let entry = seen.entry(key.clone()).or_insert(SmartEntry {
+                                category: chunk.metadata.category.clone(),
+                                session_id: key,
+                                preview: first_line.clone(),
+                                content: format!("[Global] {}", chunk.text.trim()),
+                                score,
+                                selected: true,
+                            });
+                            if score > entry.score {
+                                entry.score = score;
+                                entry.preview = first_line;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     let mut entries: Vec<SmartEntry> = seen.into_values().collect();
     entries.sort_by(|a, b| {
         b.score
@@ -777,7 +879,15 @@ pub fn build_compact_memory(
         }
     }
 
-    // 4. Pack index (summary, not full content)
+    // 4. Global knowledge (cross-project patterns, decisions, solutions)
+    let global_knowledge = read_global_knowledge(memory_dir);
+    if let Some(ref gk) = global_knowledge {
+        combined.push_str("## Global Knowledge\n\n");
+        combined.push_str(&trim_to_budget(gk, BUDGET_GLOBAL));
+        combined.push_str("\n\n---\n\n");
+    }
+
+    // 5. Pack index (summary, not full content)
     let pack_summary = compact_pack_summary(memory_dir)?;
     if !pack_summary.is_empty() {
         combined.push_str("## Installed Packs\n\n");
@@ -785,7 +895,7 @@ pub fn build_compact_memory(
         combined.push('\n');
     }
 
-    // 5. Retrieval guide footer
+    // 6. Retrieval guide footer
     combined.push_str(&retrieval_guide());
 
     Ok(strip_private_tags(&combined))
@@ -825,6 +935,13 @@ pub fn build_full_memory(
 
     combined.push_str(&format!("## Project: {}\n\n", project_name));
     combined.push_str(context_content);
+
+    // Append global knowledge (decisions, solutions, patterns, etc.)
+    let global_knowledge = read_global_knowledge(memory_dir);
+    if let Some(gk) = global_knowledge {
+        combined.push_str("\n\n---\n\n## Global Knowledge\n\n");
+        combined.push_str(&gk);
+    }
 
     let pack_content = crate::hive::get_installed_pack_knowledge(memory_dir)?;
     if !pack_content.is_empty() {
@@ -933,6 +1050,7 @@ mod tests {
                 session_id: "old-important".to_string(),
                 timestamp: "2024-01-01T00:00:00Z".to_string(),
                 ttl: None,
+                confidence: None,
                 header: "## Session: old-important (2024-01-01T00:00:00Z)\n".to_string(),
                 content: "High-value old knowledge".to_string(),
                 preview: "High-value".to_string(),
@@ -941,6 +1059,7 @@ mod tests {
                 session_id: "recent-unimportant".to_string(),
                 timestamp: "2024-02-13T00:00:00Z".to_string(),
                 ttl: None,
+                confidence: None,
                 header: "## Session: recent-unimportant (2024-02-13T00:00:00Z)\n".to_string(),
                 content: "Low-value recent".to_string(),
                 preview: "Low-value".to_string(),
@@ -965,6 +1084,7 @@ mod tests {
                 session_id: "old".to_string(),
                 timestamp: "2024-01-01T00:00:00Z".to_string(),
                 ttl: None,
+                confidence: None,
                 header: "## Session: old (2024-01-01T00:00:00Z)\n".to_string(),
                 content: "Old".to_string(),
                 preview: "Old".to_string(),
@@ -973,6 +1093,7 @@ mod tests {
                 session_id: "recent".to_string(),
                 timestamp: "2024-02-13T00:00:00Z".to_string(),
                 ttl: None,
+                confidence: None,
                 header: "## Session: recent (2024-02-13T00:00:00Z)\n".to_string(),
                 content: "Recent".to_string(),
                 preview: "Recent".to_string(),

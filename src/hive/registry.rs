@@ -241,9 +241,13 @@ impl RegistryManager {
     /// Clone a registry from Git (tries HTTPS first, falls back to SSH)
     fn clone_registry(&self, registry: &Registry) -> Result<()> {
         let local_path = registry.local_path(&self.hive_dir);
-        std::fs::create_dir_all(local_path.parent().unwrap())?;
+        if let Some(parent) = local_path.parent() {
+            std::fs::create_dir_all(parent)?;
+        }
 
-        let local_str = local_path.to_str().unwrap();
+        let local_str = local_path.to_str().ok_or_else(|| {
+            MemoryError::Config(format!("Non-UTF8 path: {}", local_path.display()))
+        })?;
 
         // Try HTTPS first
         let status = std::process::Command::new("git")

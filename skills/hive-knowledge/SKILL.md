@@ -463,6 +463,8 @@ engram learn dashboard
 
 # Health checks
 engram doctor [project]
+engram heal          # detect + repair hook drift, stale context, missing embeddings
+engram heal --check  # report issues without fixing
 ```
 
 ## Examples

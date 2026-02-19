@@ -131,6 +131,39 @@ pub fn cmd_hooks_install() -> Result<()> {
         settings_path.display().to_string().dimmed()
     );
 
+    // Auto-start daemon if not already running
+    let memory_dir = home.join("memory");
+    let pid_file = memory_dir.join("daemon.pid");
+    let already_running = pid_file
+        .exists()
+        .then(|| std::fs::read_to_string(&pid_file).ok())
+        .flatten()
+        .and_then(|s| s.trim().parse::<u32>().ok())
+        .map(|pid| {
+            #[cfg(unix)]
+            {
+                unsafe { libc::kill(pid as i32, 0) == 0 }
+            }
+            #[cfg(not(unix))]
+            {
+                let _ = pid;
+                false
+            }
+        })
+        .unwrap_or(false);
+
+    if !already_running {
+        match std::process::Command::new("engram")
+            .args(["daemon", "start"])
+            .spawn()
+        {
+            Ok(_) => println!("  {} Daemon started", "✓".green()),
+            Err(e) => eprintln!("  Warning: could not start daemon: {}", e),
+        }
+    } else {
+        println!("  {} Daemon already running", "✓".green());
+    }
+
     Ok(())
 }
 

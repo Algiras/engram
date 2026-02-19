@@ -114,13 +114,82 @@ pub fn cmd_consolidate(
             println!("To merge duplicates, run with: {}", "--auto-merge".cyan());
         }
 
-        // Contradiction detection
+        // Contradiction detection via LLM on semantically related but non-identical chunks
         if find_contradictions {
             println!(
                 "\n{} Checking for contradictions...",
                 "Analyzing".green().bold()
             );
-            println!("{} Contradiction detection coming soon!", "Note:".yellow());
+
+            use crate::embeddings::cosine_similarity;
+            use crate::llm::client::LlmClient;
+            use crate::llm::prompts;
+
+            let llm_client = LlmClient::new(&config.llm);
+            let mut contradiction_count = 0;
+
+            // Check pairs with similarity in the "related but different" range
+            let low = 0.5f32;
+            let high = 0.92f32;
+
+            for i in 0..store.chunks.len() {
+                for j in (i + 1)..store.chunks.len() {
+                    let sim =
+                        cosine_similarity(&store.chunks[i].embedding, &store.chunks[j].embedding);
+                    if sim < low || sim > high {
+                        continue;
+                    }
+
+                    let a = &store.chunks[i];
+                    let b = &store.chunks[j];
+                    let snippet_a = format!(
+                        "[{}:{}]\n{}",
+                        a.metadata.category,
+                        a.metadata.session_id.as_deref().unwrap_or(&a.id),
+                        truncate_text(&a.text, 300)
+                    );
+                    let snippet_b = format!(
+                        "[{}:{}]\n{}",
+                        b.metadata.category,
+                        b.metadata.session_id.as_deref().unwrap_or(&b.id),
+                        truncate_text(&b.text, 300)
+                    );
+
+                    if let Ok(response) = llm_client
+                        .chat(
+                            prompts::SYSTEM_CONTRADICTION_CHECKER,
+                            &prompts::contradiction_check_prompt(&snippet_a, &snippet_b),
+                        )
+                        .await
+                    {
+                        let resp = response.trim();
+                        if resp != "No contradictions detected."
+                            && !resp.is_empty()
+                            && resp.contains("CONTRADICTS")
+                        {
+                            println!(
+                                "  {} [{:.0}% similarity]\n    {}\n    vs\n    {}\n    {}",
+                                "CONTRADICTION:".red().bold(),
+                                sim * 100.0,
+                                snippet_a.lines().next().unwrap_or("").cyan(),
+                                snippet_b.lines().next().unwrap_or("").cyan(),
+                                resp.dimmed()
+                            );
+                            contradiction_count += 1;
+                        }
+                    }
+                }
+            }
+
+            if contradiction_count == 0 {
+                println!("{} No contradictions detected.", "✓".green());
+            } else {
+                println!(
+                    "\n{} {} potential contradiction(s) found. Review and update knowledge files manually.",
+                    "Summary:".yellow(),
+                    contradiction_count
+                );
+            }
         }
 
         // Track learning signals from consolidation
@@ -254,6 +323,41 @@ pub fn cmd_doctor(
 
     if !auto_fix {
         println!("💡 Run with {} to automatically fix issues", "--fix".cyan());
+    }
+
+    // System-level hook integrity check
+    println!("{}", "🔗 System Health".green().bold());
+    println!("{}", "=".repeat(60));
+    println!();
+    if let Some(home) = dirs::home_dir() {
+        let hook_issues = health::check_hooks_health(&home);
+        if hook_issues.is_empty() {
+            println!("   {} All hooks registered\n", "✓".green());
+        } else {
+            for issue in &hook_issues {
+                println!(
+                    "   {} {} [{}]",
+                    "✗".red(),
+                    issue.description,
+                    "CRITICAL".red()
+                );
+                if verbose {
+                    if let Some(ref cmd) = issue.fix_command {
+                        println!("       Fix: {}", cmd.dimmed());
+                    }
+                }
+            }
+            if auto_fix {
+                print!("   {} Reinstalling hooks... ", "🔧".yellow());
+                match crate::commands::hooks::cmd_hooks_install() {
+                    Ok(()) => println!("{}", "ok".green()),
+                    Err(e) => println!("{}: {}", "error".red(), e),
+                }
+            } else {
+                println!("   💡 Run {} to fix", "engram hooks install".cyan());
+            }
+            println!();
+        }
     }
 
     // Check installed packs health

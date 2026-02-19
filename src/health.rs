@@ -37,6 +37,7 @@ pub enum IssueCategory {
     UnusedKnowledge,
     LargeFiles,
     ExpiredEntries,
+    MissingHooks,
 }
 
 impl HealthReport {
@@ -363,6 +364,53 @@ async fn build_graph(config: &crate::config::Config, project: &str) -> Result<()
         .map_err(|e| crate::error::MemoryError::Config(format!("Failed to save graph: {}", e)))?;
 
     Ok(())
+}
+
+/// Check hook scripts and settings.json registration for engram hooks.
+pub fn check_hooks_health(home: &Path) -> Vec<Issue> {
+    let mut issues = Vec::new();
+
+    let hooks_dir = home.join(".claude").join("hooks");
+    let hook_scripts = ["engram-hook.sh", "inject-context.sh", "session-end-hook.sh"];
+
+    for script in &hook_scripts {
+        let path = hooks_dir.join(script);
+        if !path.exists() {
+            issues.push(Issue {
+                severity: Severity::Critical,
+                category: IssueCategory::MissingHooks,
+                description: format!("Hook script missing: ~/.claude/hooks/{}", script),
+                auto_fixable: true,
+                fix_command: Some("engram hooks install".to_string()),
+            });
+        }
+    }
+
+    let settings_path = home.join(".claude").join("settings.json");
+    if settings_path.exists() {
+        match std::fs::read_to_string(&settings_path) {
+            Ok(content) if !content.contains("engram") => {
+                issues.push(Issue {
+                    severity: Severity::Critical,
+                    category: IssueCategory::MissingHooks,
+                    description: "Hooks not registered in ~/.claude/settings.json".to_string(),
+                    auto_fixable: true,
+                    fix_command: Some("engram hooks install".to_string()),
+                });
+            }
+            _ => {}
+        }
+    } else {
+        issues.push(Issue {
+            severity: Severity::Critical,
+            category: IssueCategory::MissingHooks,
+            description: "~/.claude/settings.json not found — hooks not registered".to_string(),
+            auto_fixable: true,
+            fix_command: Some("engram hooks install".to_string()),
+        });
+    }
+
+    issues
 }
 
 /// Count total expired entries across all knowledge files for a project.

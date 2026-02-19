@@ -4,6 +4,18 @@ use crate::auth;
 use crate::auth::providers::ResolvedProvider;
 use crate::error::{MemoryError, Result};
 
+/// Reserved pseudo-project name for cross-project global knowledge
+pub const GLOBAL_PROJECT: &str = "global";
+/// Directory under knowledge/ that holds global knowledge files
+pub const GLOBAL_DIR: &str = "_global";
+
+/// Minimum active block count before daemon triggers distillation
+pub const DISTILL_THRESHOLD: usize = 30;
+/// Age cutoff for daemon distillation (days)
+pub const DISTILL_STALE_DAYS: u64 = 90;
+/// Per-ingest-cycle decay factor for importance boosts
+pub const IMPORTANCE_DECAY_FACTOR: f32 = 0.98;
+
 #[derive(Debug, Clone)]
 pub struct Config {
     /// Where Claude stores project data

@@ -64,6 +64,10 @@ pub enum Commands {
         /// Lines of context around matches
         #[arg(short, long, default_value = "2")]
         context: usize,
+
+        /// Search global memory (_global knowledge store)
+        #[arg(long)]
+        global: bool,
     },
 
     /// Show project context (knowledge summary)
@@ -434,6 +438,19 @@ pub enum Commands {
         /// LLM provider override (anthropic, openai, ollama)
         #[arg(long)]
         provider: Option<String>,
+    },
+
+    /// Show named entity cards for a project (libraries, tools, APIs extracted from sessions)
+    Entities {
+        /// Project name
+        project: String,
+    },
+
+    /// Detect and repair issues: hook drift, stale context, missing embeddings
+    Heal {
+        /// Check only — report issues without fixing
+        #[arg(long)]
+        check: bool,
     },
 }
 

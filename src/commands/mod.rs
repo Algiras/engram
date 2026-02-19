@@ -5,6 +5,7 @@ pub mod core;
 pub mod diff;
 pub mod embeddings;
 pub mod graph;
+pub mod heal;
 pub mod hive;
 pub mod hooks;
 pub mod knowledge;

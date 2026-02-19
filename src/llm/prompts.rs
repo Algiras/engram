@@ -14,6 +14,8 @@ Rules:
 - Maximum 5 decisions. If fewer are significant, extract fewer.
 - Each decision: 1-3 lines maximum.
 - If no significant decisions were made, respond with exactly: "No significant decisions."
+- After all entries, on a new line write: CONFIDENCE: HIGH|MEDIUM|LOW
+  HIGH = explicitly stated or demonstrated; MEDIUM = clearly implied; LOW = speculative.
 
 ---
 CONVERSATION:
@@ -39,6 +41,8 @@ Rules:
 - Maximum 5 solutions. If fewer are significant, extract fewer.
 - Each entry: 2-4 lines maximum.
 - If no significant problems were solved, respond with exactly: "No significant problems solved."
+- After all entries, on a new line write: CONFIDENCE: HIGH|MEDIUM|LOW
+  HIGH = explicitly stated or demonstrated; MEDIUM = clearly implied; LOW = speculative.
 
 ---
 CONVERSATION:
@@ -63,6 +67,8 @@ Rules:
 - Only extract patterns that are non-obvious and specific to this codebase. Skip generic best practices.
 - Maximum 4 patterns. If fewer are significant, extract fewer.
 - If no significant patterns were discovered, respond with exactly: "No significant patterns."
+- After all entries, on a new line write: CONFIDENCE: HIGH|MEDIUM|LOW
+  HIGH = explicitly stated or demonstrated; MEDIUM = clearly implied; LOW = speculative.
 
 ---
 CONVERSATION:
@@ -112,6 +118,8 @@ Rules:
 - Only include real bugs with concrete details. Skip expected behavior, vague complaints, or config issues.
 - Maximum 5 bugs.
 - If no real bugs were encountered, respond with exactly: "No bugs encountered."
+- After all entries, on a new line write: CONFIDENCE: HIGH|MEDIUM|LOW
+  HIGH = explicitly stated or demonstrated; MEDIUM = clearly implied; LOW = speculative.
 
 ---
 CONVERSATION:
@@ -135,6 +143,8 @@ Rules:
 - Only include things genuinely surprising or counterintuitive — not standard practices.
 - Maximum 3 insights. High bar: if nothing is truly non-obvious, extract nothing.
 - If no significant insights were found, respond with exactly: "No significant insights."
+- After all entries, on a new line write: CONFIDENCE: HIGH|MEDIUM|LOW
+  HIGH = explicitly stated or demonstrated; MEDIUM = clearly implied; LOW = speculative.
 
 ---
 CONVERSATION:
@@ -158,6 +168,8 @@ Rules:
 - Only include questions that were explicitly left open. Skip rhetorical questions and answered questions.
 - Maximum 3 questions.
 - If no open questions remain, respond with exactly: "No open questions."
+- After all entries, on a new line write: CONFIDENCE: HIGH|MEDIUM|LOW
+  HIGH = explicitly stated or demonstrated; MEDIUM = clearly implied; LOW = speculative.
 
 ---
 CONVERSATION:
@@ -295,6 +307,29 @@ pub fn summarize_stale_prompt(category: &str, entries_text: &str) -> String {
          Condense them into a single concise summary, preserving any insight \
          that might still be relevant. Aim for 3-5 bullet points.\n\n\
          ENTRIES:\n{entries_text}\n\nSummary:"
+    )
+}
+
+pub fn entities_prompt(conversation_text: &str) -> String {
+    format!(
+        r#"Analyze this Claude Code conversation and extract named entities (libraries, tools, APIs, services, key files) that are central to the work.
+
+For each entity, write one line in this format:
+NAME | TYPE | key-fact
+
+Types: library, tool, api, service, file, concept
+Rules:
+- Only extract entities that appear multiple times or are clearly central to the work.
+- Maximum 8 entities. If none are significant, respond with exactly: "No significant entities."
+- Examples: reqwest|library|async HTTP client, cargo|tool|Rust build system
+
+---
+CONVERSATION:
+{}
+---
+
+Extract entities:"#,
+        truncate_for_llm(conversation_text)
     )
 }
 
