@@ -12,7 +12,7 @@ All notable changes to claude-memory will be documented in this file.
 - **panic: empty category guard in `cmd_add()`** — same fix applied to `commands/manual.rs`
 - **panic: `history.first().unwrap()` in `sync.rs`** — replaced with `.map().unwrap_or("(unknown)")`
 - **dedup: `cmd_add()` now replaces instead of appends on duplicate session labels** — matches extractor behaviour via `replace_session_block`
-- **Gemini embeddings endpoint changed from `v1beta` to `v1`** — correct stable API endpoint
+- **Gemini embeddings endpoint stays on `v1beta`** — `gemini-embedding-001` and newer Gemini embedding models require `v1beta`; `v1` returns 404
 
 ## [0.3.4] - 2026-02-19
 
