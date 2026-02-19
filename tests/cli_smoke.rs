@@ -127,3 +127,81 @@ fn hooks_status_exits_zero() {
         .assert()
         .success();
 }
+
+// ── Reflect (no LLM, filesystem only) ────────────────────────────────────
+
+#[test]
+fn reflect_unknown_project_exits_zero() {
+    let tmp = TempDir::new().unwrap();
+    engram()
+        .args(["reflect", "nonexistent-project-xyz"])
+        .env("HOME", tmp.path())
+        .assert()
+        .success();
+}
+
+#[test]
+fn reflect_all_exits_zero_with_no_projects() {
+    let tmp = TempDir::new().unwrap();
+    engram()
+        .args(["reflect", "--all"])
+        .env("HOME", tmp.path())
+        .assert()
+        .success();
+}
+
+#[test]
+fn reflect_with_knowledge_shows_quality_score() {
+    use std::fs;
+    let tmp = TempDir::new().unwrap();
+    let knowledge_dir = tmp.path().join("memory").join("knowledge").join("test-proj");
+    fs::create_dir_all(&knowledge_dir).unwrap();
+
+    let now = chrono::Utc::now().to_rfc3339();
+    let decisions = format!(
+        "# Decisions\n\n## Session: abc123 ({}) [confidence:high]\n\nWe decided to use Rust.\n\n",
+        now
+    );
+    fs::write(knowledge_dir.join("decisions.md"), decisions).unwrap();
+
+    let output = engram()
+        .args(["reflect", "test-proj"])
+        .env("HOME", tmp.path())
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let text = String::from_utf8_lossy(&output);
+    assert!(text.contains("Quality Score"), "Should show quality score; got: {}", text);
+    assert!(text.contains("test-proj"), "Should mention project name; got: {}", text);
+}
+
+#[test]
+fn reflect_all_shows_table_with_project() {
+    use std::fs;
+    let tmp = TempDir::new().unwrap();
+    let knowledge_dir = tmp.path().join("memory").join("knowledge").join("my-project");
+    fs::create_dir_all(&knowledge_dir).unwrap();
+
+    let now = chrono::Utc::now().to_rfc3339();
+    let content = format!(
+        "# Decisions\n\n## Session: s1 ({}) [confidence:high]\n\nTest entry.\n\n",
+        now
+    );
+    fs::write(knowledge_dir.join("decisions.md"), content).unwrap();
+
+    let output = engram()
+        .args(["reflect", "--all"])
+        .env("HOME", tmp.path())
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let text = String::from_utf8_lossy(&output);
+    assert!(text.contains("my-project"), "Should show project in table; got: {}", text);
+    assert!(text.contains("Score"), "Should show Score column header; got: {}", text);
+}

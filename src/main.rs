@@ -50,7 +50,7 @@ use commands::graph::{
     cmd_graph_build, cmd_graph_hubs, cmd_graph_path, cmd_graph_query, cmd_graph_viz,
 };
 use commands::heal::cmd_heal;
-use commands::reflect::cmd_reflect;
+use commands::reflect::{cmd_reflect, cmd_reflect_all};
 use commands::hive::cmd_hive;
 use commands::hooks::{cmd_hooks_install, cmd_hooks_status, cmd_hooks_uninstall};
 use commands::knowledge::{cmd_forget, cmd_regen};
@@ -406,8 +406,18 @@ fn main() -> Result<()> {
     }
 
     // Reflect command (no LLM needed — pure filesystem analysis)
-    if let Commands::Reflect { project } = &cli.command {
-        return cmd_reflect(project);
+    if let Commands::Reflect { project, all } = &cli.command {
+        if *all {
+            return cmd_reflect_all();
+        }
+        let project_name = match project {
+            Some(p) => p.clone(),
+            None => std::env::current_dir()
+                .ok()
+                .and_then(|p| p.file_name().map(|n| n.to_string_lossy().to_string()))
+                .unwrap_or_else(|| "default".to_string()),
+        };
+        return cmd_reflect(&project_name);
     }
 
     // Doctor command (no Config needed for basic checks)

@@ -497,6 +497,38 @@ pub fn cmd_daemon_run(config: &Config, interval_mins: u64, provider: Option<&str
                             }
                         }
                     }
+
+                    // Quality reflection pass: log memory quality scores per project
+                    let mut total_score = 0u32;
+                    let mut scored = 0u32;
+                    for project in &projects {
+                        let project_knowledge_dir =
+                            config.memory_dir.join("knowledge").join(project);
+                        if let Some(q) = crate::commands::reflect::compute_project_quality(
+                            &project_knowledge_dir,
+                            project,
+                        ) {
+                            let label = match q.quality_score {
+                                90..=100 => "Excellent",
+                                75..=89 => "Good",
+                                50..=74 => "Fair",
+                                _ => "Poor",
+                            };
+                            log(&format!(
+                                "  quality {} — {}/100 ({}) — {} entries, {}% stale",
+                                project, q.quality_score, label, q.total_entries, q.stale_pct
+                            ));
+                            total_score += q.quality_score as u32;
+                            scored += 1;
+                        }
+                    }
+                    if scored > 0 {
+                        log(&format!(
+                            "  avg quality {}/100 across {} project(s)",
+                            total_score / scored,
+                            scored
+                        ));
+                    }
                 }
             }
             Err(e) => {

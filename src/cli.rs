@@ -455,8 +455,12 @@ pub enum Commands {
 
     /// Reflect on memory quality: confidence, staleness, coverage, recommendations
     Reflect {
-        /// Project name
-        project: String,
+        /// Project name (omit with --all to scan every project)
+        project: Option<String>,
+
+        /// Show quality summary for all projects
+        #[arg(long)]
+        all: bool,
     },
 }
 
