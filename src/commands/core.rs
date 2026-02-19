@@ -594,6 +594,29 @@ pub fn cmd_status(config: &Config) -> Result<()> {
         0
     };
 
+    // Compute quality summary across all knowledge projects
+    let mut quality_scores: Vec<(String, u8)> = Vec::new();
+    if knowledge_dir.exists() {
+        for entry in std::fs::read_dir(&knowledge_dir)
+            .into_iter()
+            .flatten()
+            .flatten()
+        {
+            if !entry.file_type().map(|t| t.is_dir()).unwrap_or(false) {
+                continue;
+            }
+            let name = entry.file_name().to_string_lossy().to_string();
+            if name.starts_with('_') {
+                continue;
+            }
+            if let Some(q) =
+                crate::commands::reflect::compute_project_quality(&entry.path(), &name)
+            {
+                quality_scores.push((name, q.quality_score));
+            }
+        }
+    }
+
     println!("{}", "Engram Status".green().bold());
     println!("{}", "=".repeat(40));
     println!(
@@ -613,6 +636,36 @@ pub fn cmd_status(config: &Config) -> Result<()> {
         "  LLM provider:      {}",
         config.llm.provider.display_name().cyan()
     );
+
+    // Quality summary
+    if !quality_scores.is_empty() {
+        let avg = quality_scores.iter().map(|(_, s)| *s as usize).sum::<usize>()
+            / quality_scores.len();
+        let avg_color = match avg as u8 {
+            90..=100 => colored::Color::Green,
+            75..=89 => colored::Color::Cyan,
+            50..=74 => colored::Color::Yellow,
+            _ => colored::Color::Red,
+        };
+        println!(
+            "  Avg quality:       {}/100 across {} project(s)",
+            avg.to_string().color(avg_color).bold(),
+            quality_scores.len()
+        );
+        // Flag projects needing attention
+        let mut needs_attention: Vec<&(String, u8)> =
+            quality_scores.iter().filter(|(_, s)| *s < 75).collect();
+        if !needs_attention.is_empty() {
+            needs_attention.sort_by(|a, b| a.1.cmp(&b.1));
+            print!("  Needs attention:   ");
+            let flagged: Vec<String> = needs_attention
+                .iter()
+                .take(3)
+                .map(|(name, score)| format!("{} ({})", name, score))
+                .collect();
+            println!("{}", flagged.join(", ").yellow());
+        }
+    }
 
     Ok(())
 }

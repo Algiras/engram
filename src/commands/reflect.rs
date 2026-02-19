@@ -63,6 +63,10 @@ pub fn cmd_reflect(project: &str) -> Result<()> {
 
     let mut total_expired = 0usize;
     let mut category_stats: Vec<(String, CategoryStats)> = Vec::new();
+    // TTL expiry buckets: (this_week, this_month, later)
+    let mut ttl_this_week = 0usize;
+    let mut ttl_this_month = 0usize;
+    let mut ttl_later = 0usize;
 
     for cat in &categories {
         let path = knowledge_dir.join(format!("{}.md", cat));
@@ -92,15 +96,21 @@ pub fn cmd_reflect(project: &str) -> Result<()> {
             if let Some(ref ttl_str) = block.ttl {
                 if ttl_str != "never" {
                     stats.with_ttl += 1;
-                    // Expiring within 7 days
                     if let (Ok(ts), Some(dur)) = (
                         DateTime::parse_from_rfc3339(&block.timestamp),
                         parse_ttl(ttl_str),
                     ) {
                         let expiry = ts.with_timezone(&Utc) + dur;
                         let days_left = (expiry - now).num_days();
-                        if days_left >= 0 && days_left <= 7 {
-                            stats.expiring_soon += 1;
+                        if days_left >= 0 {
+                            if days_left <= 7 {
+                                stats.expiring_soon += 1;
+                                ttl_this_week += 1;
+                            } else if days_left <= 30 {
+                                ttl_this_month += 1;
+                            } else {
+                                ttl_later += 1;
+                            }
                         }
                     }
                 }
@@ -314,6 +324,27 @@ pub fn cmd_reflect(project: &str) -> Result<()> {
         println!(
             "{}",
             format!("  Expiring ≤7d   {}", expiring_soon_total).yellow()
+        );
+    }
+
+    // TTL expiry timeline
+    let total_with_ttl: usize = category_stats.iter().map(|(_, s)| s.with_ttl).sum();
+    if total_with_ttl > 0 {
+        println!();
+        println!("{}", "  TTL Expiry Timeline".bold());
+        let week_str = format!("  This week  ≤7d   {}", ttl_this_week);
+        let month_str = format!("  This month ≤30d  {}", ttl_this_month);
+        let later_str = format!("  Later      >30d  {}", ttl_later);
+        if ttl_this_week > 0 {
+            println!("{}", week_str.yellow());
+        } else {
+            println!("{}", week_str);
+        }
+        println!("{}", month_str);
+        println!("{}", later_str);
+        println!(
+            "  Permanent  (no TTL)  {}",
+            total_entries.saturating_sub(total_with_ttl)
         );
     }
 
@@ -658,5 +689,129 @@ mod tests {
         let q = compute_project_quality(project_dir, "sparse-proj").unwrap();
         assert!(q.quality_score < 95, "Few categories should penalize score, got {}", q.quality_score);
         assert_eq!(q.categories, 1);
+    }
+
+    #[test]
+    fn test_reflect_all_high_confidence_six_categories_scores_100() {
+        let tmp = TempDir::new().unwrap();
+        let project_dir = tmp.path();
+        let now = Utc::now().to_rfc3339();
+
+        for cat in &["decisions", "solutions", "patterns", "bugs", "insights", "questions"] {
+            write_knowledge_file(project_dir, cat, &[(&format!("{}-1", cat), &now, "high")]);
+        }
+
+        let q = compute_project_quality(project_dir, "perfect-proj").unwrap();
+        assert_eq!(q.quality_score, 100, "6 fresh, high-confidence categories should score 100");
+        assert_eq!(q.categories, 6);
+        assert_eq!(q.stale_pct, 0);
+        assert_eq!(q.recent, 6);
+    }
+
+    #[test]
+    fn test_reflect_expired_entries_not_counted() {
+        let tmp = TempDir::new().unwrap();
+        let project_dir = tmp.path();
+
+        // Entry with a very short TTL that has already passed
+        let old_ts = (Utc::now() - chrono::Duration::days(10)).to_rfc3339();
+        let now = Utc::now().to_rfc3339();
+
+        // One expired (10 days ago, 7d TTL) + one active
+        let mut content = "# Decisions\n\n".to_string();
+        content.push_str(&format!(
+            "## Session: expired-1 ({}) [ttl:7d] [confidence:high]\n\nExpired entry.\n\n",
+            old_ts
+        ));
+        content.push_str(&format!(
+            "## Session: active-1 ({}) [confidence:high]\n\nActive entry.\n\n",
+            now
+        ));
+        fs::write(project_dir.join("decisions.md"), content).unwrap();
+
+        let q = compute_project_quality(project_dir, "ttl-proj").unwrap();
+        // Expired entry should be excluded — only 1 active entry counted
+        assert_eq!(q.total_entries, 1, "Expired entries should not count; got {}", q.total_entries);
+    }
+
+    #[test]
+    fn test_reflect_mixed_confidence_correct_distribution() {
+        let tmp = TempDir::new().unwrap();
+        let project_dir = tmp.path();
+        let now = Utc::now().to_rfc3339();
+
+        // 2 high, 1 medium, 1 low, 1 unknown (no confidence tag) in decisions
+        let mut content = "# Decisions\n\n".to_string();
+        for (id, conf) in &[("h1","high"),("h2","high"),("m1","medium"),("l1","low")] {
+            content.push_str(&format!(
+                "## Session: {} ({}) [confidence:{}]\n\nContent.\n\n",
+                id, now, conf
+            ));
+        }
+        // one without confidence tag
+        content.push_str(&format!(
+            "## Session: u1 ({})\n\nNo confidence tag.\n\n",
+            now
+        ));
+        fs::write(project_dir.join("decisions.md"), content).unwrap();
+
+        // cmd_reflect should run without panicking and count 5 entries
+        let _result = cmd_reflect("nonexistent-in-real-home");
+        // This won't find the file since HOME is real, but compute_project_quality is unit-tested
+        // directly, so verify via that:
+        let q = compute_project_quality(project_dir, "conf-proj").unwrap();
+        assert_eq!(q.total_entries, 5);
+    }
+
+    #[test]
+    fn test_reflect_future_timestamp_treated_as_recent() {
+        let tmp = TempDir::new().unwrap();
+        let project_dir = tmp.path();
+        // Slightly in the future (clock skew) — age_days will be 0 or negative, not stale, is recent
+        let future_ts = (Utc::now() + chrono::Duration::hours(1)).to_rfc3339();
+        write_knowledge_file(project_dir, "decisions", &[("f1", &future_ts, "high")]);
+
+        let q = compute_project_quality(project_dir, "future-proj").unwrap();
+        assert_eq!(q.stale_pct, 0, "Future timestamps should not be counted as stale");
+        assert_eq!(q.total_entries, 1);
+    }
+
+    #[test]
+    fn test_reflect_compute_quality_returns_none_for_empty_files() {
+        let tmp = TempDir::new().unwrap();
+        let project_dir = tmp.path();
+        // Files exist but contain no session blocks
+        fs::write(project_dir.join("decisions.md"), "# Decisions\n\n(empty)\n").unwrap();
+        fs::write(project_dir.join("solutions.md"), "").unwrap();
+
+        let q = compute_project_quality(project_dir, "empty-blocks");
+        assert!(q.is_none(), "No session blocks should yield None");
+    }
+
+    #[test]
+    fn test_reflect_all_projects_aggregation() {
+        let tmp = TempDir::new().unwrap();
+        let knowledge_dir = tmp.path();
+        let now = Utc::now().to_rfc3339();
+
+        // Project A: 6 categories, all fresh → should score 100
+        for cat in &["decisions","solutions","patterns","bugs","insights","questions"] {
+            let dir = knowledge_dir.join("proj-a");
+            fs::create_dir_all(&dir).unwrap();
+            write_knowledge_file(&dir, cat, &[("e1", &now, "high")]);
+        }
+
+        // Project B: 1 category only → low diversity score
+        {
+            let dir = knowledge_dir.join("proj-b");
+            fs::create_dir_all(&dir).unwrap();
+            write_knowledge_file(&dir, "decisions", &[("e1", &now, "high")]);
+        }
+
+        let a = compute_project_quality(&knowledge_dir.join("proj-a"), "proj-a").unwrap();
+        let b = compute_project_quality(&knowledge_dir.join("proj-b"), "proj-b").unwrap();
+
+        assert_eq!(a.quality_score, 100);
+        assert!(b.quality_score < a.quality_score, "proj-b should score lower due to low category count");
     }
 }

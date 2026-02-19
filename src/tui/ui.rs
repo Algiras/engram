@@ -1062,8 +1062,10 @@ pub fn render_help(f: &mut Frame, _app: &App) {
         Line::from("  D             - Daemon"),
         Line::from("  C             - Config"),
         Line::from("  I             - Inject preview"),
-        Line::from("  W             - Timeline"),
-        Line::from("  A             - Ask"),
+        Line::from("  W             - Timeline (work log)"),
+        Line::from("  A             - Ask (RAG Q&A)"),
+        Line::from("  V             - VCS (memory snapshots)"),
+        Line::from("  F             - Reflect (memory quality)"),
         Line::from("  ?             - Help"),
         Line::from(""),
         Line::from(Span::styled(
