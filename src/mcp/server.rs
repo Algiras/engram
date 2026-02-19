@@ -224,8 +224,8 @@ impl McpServer {
                         },
                         "category": {
                             "type": "string",
-                            "description": "Category: decisions, solutions, patterns, bugs, insights, questions, or preferences",
-                            "enum": ["decisions", "solutions", "patterns", "bugs", "insights", "questions", "preferences"]
+                            "description": "Category: decisions, solutions, patterns, bugs, insights, questions, procedures, or preferences",
+                            "enum": ["decisions", "solutions", "patterns", "bugs", "insights", "questions", "procedures", "preferences"]
                         },
                         "content": {
                             "type": "string",
@@ -327,8 +327,8 @@ impl McpServer {
                         },
                         "categories": {
                             "type": "array",
-                            "items": { "type": "string", "enum": ["decisions", "solutions", "patterns", "bugs", "insights", "questions"] },
-                            "description": "Which categories to extract. Defaults to all six if omitted."
+                            "items": { "type": "string", "enum": ["decisions", "solutions", "patterns", "bugs", "insights", "questions", "procedures"] },
+                            "description": "Which categories to extract. Defaults to all seven if omitted."
                         }
                     },
                     "required": ["project", "text"]
@@ -346,7 +346,7 @@ impl McpServer {
                         },
                         "category": {
                             "type": "string",
-                            "enum": ["decisions", "solutions", "patterns", "bugs", "insights", "questions"],
+                            "enum": ["decisions", "solutions", "patterns", "bugs", "insights", "questions", "procedures"],
                             "description": "Knowledge category file to search"
                         },
                         "label": {
@@ -373,7 +373,7 @@ impl McpServer {
                         },
                         "category": {
                             "type": "string",
-                            "enum": ["decisions", "solutions", "patterns", "bugs", "insights", "questions"],
+                            "enum": ["decisions", "solutions", "patterns", "bugs", "insights", "questions", "procedures"],
                             "description": "Knowledge category file containing the entry"
                         },
                         "label": {

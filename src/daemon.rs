@@ -75,19 +75,11 @@ fn rotate_log_if_needed(log_path: &PathBuf, max_lines: usize, keep_lines: usize)
     }
 }
 
-/// Count active (non-expired) knowledge blocks across all 6 category files for a project.
+/// Count active (non-expired) knowledge blocks across all category files for a project.
 fn count_active_blocks(knowledge_dir: &std::path::Path) -> usize {
     use crate::extractor::knowledge::{parse_session_blocks, partition_by_expiry};
-    const CATEGORIES: &[&str] = &[
-        "decisions.md",
-        "solutions.md",
-        "patterns.md",
-        "bugs.md",
-        "insights.md",
-        "questions.md",
-    ];
     let mut count = 0;
-    for cat in CATEGORIES {
+    for cat in crate::config::CATEGORY_FILES {
         if let Ok(content) = fs::read_to_string(knowledge_dir.join(cat)) {
             let (_, blocks) = parse_session_blocks(&content);
             let (active, _) = partition_by_expiry(blocks);

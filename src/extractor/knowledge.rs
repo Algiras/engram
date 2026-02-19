@@ -8,6 +8,157 @@ use crate::llm::client::LlmClient;
 use crate::llm::prompts;
 use crate::parser::conversation::Conversation;
 
+// ── Update Resolver ────────────────────────────────────────────────────
+
+/// Decision returned by the Update Resolver for each new knowledge entry.
+#[derive(Debug)]
+pub enum UpdateAction {
+    /// New information — append as a new block
+    Add,
+    /// Merges/updates an existing block with new content
+    Update {
+        existing_session_id: String,
+        merged_content: String,
+    },
+    /// New entry supersedes and replaces an existing block
+    Delete { existing_session_id: String },
+    /// Duplicate — skip silently
+    Noop,
+}
+
+/// Find top-N existing blocks that share enough word overlap with new_content to be candidates.
+fn find_top_similar_blocks<'a>(
+    new_content: &str,
+    existing_blocks: &'a [SessionBlock],
+    top_n: usize,
+) -> Vec<(&'a SessionBlock, f32)> {
+    let new_words: std::collections::HashSet<String> = new_content
+        .split(|c: char| !c.is_alphanumeric())
+        .filter(|w| w.len() > 4)
+        .map(|w| w.to_lowercase())
+        .collect();
+
+    if new_words.len() < 3 {
+        return Vec::new();
+    }
+
+    let mut scored: Vec<(&SessionBlock, f32)> = existing_blocks
+        .iter()
+        .filter(|b| !b.content.contains("<!-- superseded"))
+        .filter_map(|block| {
+            let block_words: std::collections::HashSet<String> = block
+                .content
+                .split(|c: char| !c.is_alphanumeric())
+                .filter(|w| w.len() > 4)
+                .map(|w| w.to_lowercase())
+                .collect();
+            if block_words.is_empty() {
+                return None;
+            }
+            let overlap = new_words.intersection(&block_words).count();
+            let min_len = new_words.len().min(block_words.len());
+            let similarity = overlap as f32 / min_len as f32;
+            if similarity > 0.15 {
+                Some((block, similarity))
+            } else {
+                None
+            }
+        })
+        .collect();
+
+    scored.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
+    scored.truncate(top_n);
+    scored
+}
+
+/// Parse an LLM resolver response line into an UpdateAction.
+/// Fallback = Add on any parse error.
+fn parse_resolver_response(response: &str) -> UpdateAction {
+    let trimmed = response.trim();
+    let first_line = trimmed.lines().next().unwrap_or("").trim();
+
+    if first_line.eq_ignore_ascii_case("add") {
+        return UpdateAction::Add;
+    }
+    if first_line.eq_ignore_ascii_case("noop") {
+        return UpdateAction::Noop;
+    }
+    if let Some(rest) = first_line.strip_prefix("UPDATE ").or_else(|| first_line.strip_prefix("update ")) {
+        let session_id = rest.trim().to_string();
+        // Content is everything after the first line
+        let merged_content = trimmed
+            .lines()
+            .skip(1)
+            .collect::<Vec<_>>()
+            .join("\n")
+            .trim()
+            .to_string();
+        if !session_id.is_empty() && !merged_content.is_empty() {
+            return UpdateAction::Update {
+                existing_session_id: session_id,
+                merged_content,
+            };
+        }
+    }
+    if let Some(rest) = first_line.strip_prefix("DELETE ").or_else(|| first_line.strip_prefix("delete ")) {
+        let session_id = rest.trim().to_string();
+        if !session_id.is_empty() {
+            return UpdateAction::Delete {
+                existing_session_id: session_id,
+            };
+        }
+    }
+
+    // Fallback — never silently lose data
+    UpdateAction::Add
+}
+
+/// Resolve what action to take when ingesting new content into a category.
+/// Returns Add immediately (no LLM call) when there are no similar existing blocks.
+pub async fn resolve_update(
+    client: &LlmClient,
+    category: &str,
+    new_content: &str,
+    existing_blocks: &[SessionBlock],
+) -> UpdateAction {
+    let candidates = find_top_similar_blocks(new_content, existing_blocks, 3);
+    if candidates.is_empty() {
+        return UpdateAction::Add;
+    }
+
+    // Build existing entries snippet for the LLM
+    let existing_snippet: String = candidates
+        .iter()
+        .map(|(b, _)| {
+            format!(
+                "[session_id: {}]\n{}",
+                b.session_id,
+                b.content.trim().chars().take(400).collect::<String>()
+            )
+        })
+        .collect::<Vec<_>>()
+        .join("\n\n---\n\n");
+
+    match client
+        .chat(
+            prompts::SYSTEM_UPDATE_RESOLVER,
+            &prompts::update_resolver_prompt(
+                category,
+                &new_content.trim().chars().take(600).collect::<String>(),
+                &existing_snippet,
+            ),
+        )
+        .await
+    {
+        Ok(response) => {
+            let action = parse_resolver_response(&response);
+            eprintln!("  [resolver] {} → {:?}", category, action);
+            action
+        }
+        Err(_) => UpdateAction::Add, // Fallback on LLM failure
+    }
+}
+
 // ── Session block parsing ──────────────────────────────────────────────
 
 /// A parsed session block from a knowledge file
@@ -16,6 +167,10 @@ pub struct SessionBlock {
     pub timestamp: String,
     pub ttl: Option<String>,
     pub confidence: Option<String>,
+    /// FadeMem strength: how "strong" this memory is (1.0 = fresh, decays over time unless recalled)
+    pub strength: Option<f32>,
+    /// Number of times this block has been accessed/recalled
+    pub access_count: Option<u32>,
     pub header: String,
     pub content: String,
     pub preview: String,
@@ -23,11 +178,19 @@ pub struct SessionBlock {
 
 /// Parse a knowledge file into (preamble, Vec<SessionBlock>).
 /// Preamble = everything before first "## Session:" header (e.g., "# Decisions\n").
+/// Supports optional metadata tags in any order: [ttl:...] [confidence:...] [strength:...] [access:N]
 pub fn parse_session_blocks(file_content: &str) -> (String, Vec<SessionBlock>) {
+    // Match the core header; all bracket tags are captured separately below
     let header_re = Regex::new(
-        r"(?m)^## Session: (\S+) \(([^)]+)\)(?: \[ttl:([^\]]+)\])?(?: \[confidence:([^\]]+)\])?",
+        r"(?m)^## Session: (\S+) \(([^)]+)\)((?:\s*\[[^\]]+\])*)",
     )
     .unwrap();
+    // Individual tag extractors
+    let ttl_re = Regex::new(r"\[ttl:([^\]]+)\]").unwrap();
+    let conf_re = Regex::new(r"\[confidence:([^\]]+)\]").unwrap();
+    let strength_re = Regex::new(r"\[strength:([\d.]+)\]").unwrap();
+    let access_re = Regex::new(r"\[access:(\d+)\]").unwrap();
+
     let mut blocks = Vec::new();
 
     let first_match = header_re.find(file_content);
@@ -42,8 +205,16 @@ pub fn parse_session_blocks(file_content: &str) -> (String, Vec<SessionBlock>) {
     for (i, caps) in matches.iter().enumerate() {
         let session_id = caps[1].to_string();
         let timestamp = caps[2].to_string();
-        let ttl = caps.get(3).map(|m| m.as_str().to_string());
-        let confidence = caps.get(4).map(|m| m.as_str().to_string());
+        let tags = caps.get(3).map(|m| m.as_str()).unwrap_or("");
+
+        let ttl = ttl_re.captures(tags).map(|c| c[1].to_string());
+        let confidence = conf_re.captures(tags).map(|c| c[1].to_string());
+        let strength = strength_re
+            .captures(tags)
+            .and_then(|c| c[1].parse::<f32>().ok());
+        let access_count = access_re
+            .captures(tags)
+            .and_then(|c| c[1].parse::<u32>().ok());
 
         let header_start = match_positions[i].start();
         let content_start = match_positions[i].end();
@@ -70,6 +241,8 @@ pub fn parse_session_blocks(file_content: &str) -> (String, Vec<SessionBlock>) {
             timestamp,
             ttl,
             confidence,
+            strength,
+            access_count,
             header,
             content,
             preview,
@@ -301,8 +474,15 @@ pub fn is_near_duplicate(new_content: &str, existing_blocks: &[SessionBlock]) ->
     false
 }
 
-/// Build a session block header with optional ttl and confidence tags.
-fn build_header(session_id: &str, ts: &str, ttl: Option<&str>, confidence: Option<&str>) -> String {
+/// Build a session block header with optional tags: ttl, confidence, strength, access_count.
+pub(crate) fn build_header(
+    session_id: &str,
+    ts: &str,
+    ttl: Option<&str>,
+    confidence: Option<&str>,
+    strength: Option<f32>,
+    access_count: Option<u32>,
+) -> String {
     let mut h = format!("\n\n## Session: {} ({})", session_id, ts);
     if let Some(t) = ttl {
         h.push_str(&format!(" [ttl:{}]", t));
@@ -310,8 +490,47 @@ fn build_header(session_id: &str, ts: &str, ttl: Option<&str>, confidence: Optio
     if let Some(c) = confidence {
         h.push_str(&format!(" [confidence:{}]", c));
     }
+    if let Some(s) = strength {
+        h.push_str(&format!(" [strength:{:.2}]", s));
+    }
+    if let Some(a) = access_count {
+        h.push_str(&format!(" [access:{}]", a));
+    }
     h.push_str("\n\n");
     h
+}
+
+/// Increment the access count for a session block in a file's content.
+/// Returns the updated file content, or None if the session was not found.
+pub fn increment_access_count(file_content: &str, session_id: &str) -> Option<String> {
+    let (preamble, blocks) = parse_session_blocks(file_content);
+
+    let found = blocks.iter().any(|b| b.session_id == session_id);
+    if !found {
+        return None;
+    }
+
+    let mut result = preamble;
+    for block in &blocks {
+        if block.session_id == session_id {
+            let new_count = block.access_count.unwrap_or(0) + 1;
+            let new_header = build_header(
+                &block.session_id,
+                &block.timestamp,
+                block.ttl.as_deref(),
+                block.confidence.as_deref(),
+                block.strength,
+                Some(new_count),
+            );
+            result.push_str(&new_header);
+            result.push_str(&block.content);
+        } else {
+            result.push_str(&block.header);
+            result.push_str(&block.content);
+        }
+    }
+
+    Some(result)
 }
 
 /// Extract session ID from a header string like "\n\n## Session: abc-123 (2025-01-01)\n\n"
@@ -442,6 +661,14 @@ pub async fn extract_and_merge_knowledge(
         .await
         .unwrap_or_else(|e| format!("(extraction failed: {})", e));
 
+    let procedures_raw = client
+        .chat(
+            prompts::SYSTEM_KNOWLEDGE_EXTRACTOR,
+            &prompts::procedures_prompt(&conv_text),
+        )
+        .await
+        .unwrap_or_else(|e| format!("(extraction failed: {})", e));
+
     let summary = client
         .chat(
             prompts::SYSTEM_KNOWLEDGE_EXTRACTOR,
@@ -477,6 +704,7 @@ pub async fn extract_and_merge_knowledge(
     let (bugs_text, bugs_conf) = parse_confidence(&bugs_raw);
     let (insights_text, insights_conf) = parse_confidence(&insights_raw);
     let (questions_text, questions_conf) = parse_confidence(&questions_raw);
+    let (procedures_text, procedures_conf) = parse_confidence(&procedures_raw);
 
     let decisions = clean_extraction(&decisions_text);
     let solutions = clean_extraction(&solutions_text);
@@ -485,8 +713,9 @@ pub async fn extract_and_merge_knowledge(
     let bugs = clean_extraction(&bugs_text);
     let insights = clean_extraction(&insights_text);
     let questions = clean_extraction(&questions_text);
+    let procedures = clean_extraction(&procedures_text);
 
-    // Add entity extraction (Feature 5)
+    // Entity extraction: no dedup — entities aggregate across sessions
     let entities_raw = client
         .chat(
             prompts::SYSTEM_KNOWLEDGE_EXTRACTOR,
@@ -505,62 +734,50 @@ pub async fn extract_and_merge_knowledge(
 
     let ts = conversation.start_time.as_deref().unwrap_or("unknown date");
 
-    // Per-category headers with confidence tags (Feature 2)
+    // Per-category headers with confidence tags
     let decisions_header =
-        build_header(&conversation.session_id, ts, ttl, decisions_conf.as_deref());
+        build_header(&conversation.session_id, ts, ttl, decisions_conf.as_deref(), None, None);
     let solutions_header =
-        build_header(&conversation.session_id, ts, ttl, solutions_conf.as_deref());
-    let patterns_header = build_header(&conversation.session_id, ts, ttl, patterns_conf.as_deref());
-    let bugs_header = build_header(&conversation.session_id, ts, ttl, bugs_conf.as_deref());
-    let insights_header = build_header(&conversation.session_id, ts, ttl, insights_conf.as_deref());
+        build_header(&conversation.session_id, ts, ttl, solutions_conf.as_deref(), None, None);
+    let patterns_header =
+        build_header(&conversation.session_id, ts, ttl, patterns_conf.as_deref(), None, None);
+    let bugs_header =
+        build_header(&conversation.session_id, ts, ttl, bugs_conf.as_deref(), None, None);
+    let insights_header =
+        build_header(&conversation.session_id, ts, ttl, insights_conf.as_deref(), None, None);
     let questions_header =
-        build_header(&conversation.session_id, ts, ttl, questions_conf.as_deref());
+        build_header(&conversation.session_id, ts, ttl, questions_conf.as_deref(), None, None);
+    let procedures_header =
+        build_header(&conversation.session_id, ts, ttl, procedures_conf.as_deref(), None, None);
 
-    if let Some(ref decisions) = decisions {
-        let inbox_header = if let Some(ttl_val) = ttl {
-            format!(
-                "\n\n## Session: {}:decisions ({}) [ttl:{}]\n\n",
-                conversation.session_id, ts, ttl_val
-            )
-        } else {
-            format!(
-                "\n\n## Session: {}:decisions ({})\n\n",
-                conversation.session_id, ts
-            )
-        };
-        let inbox_content = format!("- category: decisions\n- scope: project\n\n{}", decisions);
-        append_knowledge(&inbox_path, &inbox_header, &inbox_content)?;
+    // Add inbox entries for review
+    for (cat_name, content_opt) in &[
+        ("decisions", decisions.as_deref()),
+        ("solutions", solutions.as_deref()),
+        ("patterns", patterns.as_deref()),
+        ("bugs", bugs.as_deref()),
+        ("insights", insights.as_deref()),
+        ("questions", questions.as_deref()),
+        ("procedures", procedures.as_deref()),
+    ] {
+        if let Some(content) = content_opt {
+            let inbox_header = if let Some(ttl_val) = ttl {
+                format!(
+                    "\n\n## Session: {}:{} ({}) [ttl:{}]\n\n",
+                    conversation.session_id, cat_name, ts, ttl_val
+                )
+            } else {
+                format!(
+                    "\n\n## Session: {}:{} ({})\n\n",
+                    conversation.session_id, cat_name, ts
+                )
+            };
+            let inbox_content =
+                format!("- category: {}\n- scope: project\n\n{}", cat_name, content);
+            append_knowledge(&inbox_path, &inbox_header, &inbox_content)?;
+        }
     }
-    if let Some(ref solutions) = solutions {
-        let inbox_header = if let Some(ttl_val) = ttl {
-            format!(
-                "\n\n## Session: {}:solutions ({}) [ttl:{}]\n\n",
-                conversation.session_id, ts, ttl_val
-            )
-        } else {
-            format!(
-                "\n\n## Session: {}:solutions ({})\n\n",
-                conversation.session_id, ts
-            )
-        };
-        let inbox_content = format!("- category: solutions\n- scope: project\n\n{}", solutions);
-        append_knowledge(&inbox_path, &inbox_header, &inbox_content)?;
-    }
-    if let Some(ref patterns) = patterns {
-        let inbox_header = if let Some(ttl_val) = ttl {
-            format!(
-                "\n\n## Session: {}:patterns ({}) [ttl:{}]\n\n",
-                conversation.session_id, ts, ttl_val
-            )
-        } else {
-            format!(
-                "\n\n## Session: {}:patterns ({})\n\n",
-                conversation.session_id, ts
-            )
-        };
-        let inbox_content = format!("- category: patterns\n- scope: project\n\n{}", patterns);
-        append_knowledge(&inbox_path, &inbox_header, &inbox_content)?;
-    }
+    // Preferences go to inbox with global scope
     if let Some(ref preferences) = preferences {
         let inbox_header = if let Some(ttl_val) = ttl {
             format!(
@@ -580,93 +797,88 @@ pub async fn extract_and_merge_knowledge(
         append_knowledge(&inbox_path, &inbox_header, &inbox_content)?;
     }
 
-    // Contradiction detection: check new knowledge against existing before writing.
-    // Mark existing entries as superseded when a contradiction is detected.
-    // This runs only for categories with substantial existing knowledge.
-    let contradiction_checks: [(&str, std::path::PathBuf, Option<&str>); 3] = [
-        (
-            "decisions",
-            knowledge_dir.join("decisions.md"),
-            decisions.as_deref(),
-        ),
-        (
-            "solutions",
-            knowledge_dir.join("solutions.md"),
-            solutions.as_deref(),
-        ),
-        (
-            "patterns",
-            knowledge_dir.join("patterns.md"),
-            patterns.as_deref(),
-        ),
-    ];
-    for (cat_name, cat_path, new_content) in &contradiction_checks {
-        if let Some(content) = new_content {
-            let superseded_count = check_and_mark_contradictions(
-                &client,
-                cat_name,
-                cat_path,
-                content,
-                &conversation.session_id,
-            )
-            .await;
-            if superseded_count > 0 {
-                eprintln!(
-                    "  [contradiction] {} {} entr{} superseded in {}",
-                    superseded_count,
-                    cat_name,
-                    if superseded_count == 1 { "y" } else { "ies" },
-                    project_name,
-                );
+    // Update Resolver: smart dedup/merge for each category
+    // Replaces old contradiction_checks + is_near_duplicate blocks
+    {
+        let resolver_data: Vec<(String, std::path::PathBuf, Option<String>, String)> = vec![
+            ("decisions".to_string(), knowledge_dir.join("decisions.md"), decisions.clone(), decisions_header.clone()),
+            ("solutions".to_string(), knowledge_dir.join("solutions.md"), solutions.clone(), solutions_header.clone()),
+            ("patterns".to_string(), knowledge_dir.join("patterns.md"), patterns.clone(), patterns_header.clone()),
+            ("bugs".to_string(), knowledge_dir.join("bugs.md"), bugs.clone(), bugs_header.clone()),
+            ("insights".to_string(), knowledge_dir.join("insights.md"), insights.clone(), insights_header.clone()),
+            ("questions".to_string(), knowledge_dir.join("questions.md"), questions.clone(), questions_header.clone()),
+            ("procedures".to_string(), knowledge_dir.join("procedures.md"), procedures.clone(), procedures_header.clone()),
+        ];
+
+        for (cat_name, cat_path, new_content_opt, header) in &resolver_data {
+            let Some(new_content) = new_content_opt else { continue };
+
+            let existing = read_or_default(cat_path);
+            let (_, ex_blocks) = parse_session_blocks(&existing);
+            let (active, _) = partition_by_expiry(ex_blocks);
+
+            let action = resolve_update(&client, cat_name, new_content, &active).await;
+
+            match action {
+                UpdateAction::Add => {
+                    append_knowledge(cat_path, header, new_content)?;
+                }
+                UpdateAction::Update { existing_session_id, merged_content } => {
+                    // Rebuild header for the existing block with new content
+                    let existing_block = active
+                        .iter()
+                        .find(|b| b.session_id == existing_session_id);
+                    let replacement_header = if let Some(b) = existing_block {
+                        build_header(
+                            &b.session_id,
+                            &b.timestamp,
+                            b.ttl.as_deref(),
+                            b.confidence.as_deref(),
+                            b.strength,
+                            b.access_count,
+                        )
+                    } else {
+                        header.clone()
+                    };
+                    let current = std::fs::read_to_string(cat_path).unwrap_or_default();
+                    if let Some(updated) = replace_session_block(
+                        &current,
+                        &existing_session_id,
+                        &replacement_header,
+                        &merged_content,
+                    ) {
+                        std::fs::write(cat_path, updated)?;
+                    } else {
+                        // Fallback: just append
+                        append_knowledge(cat_path, header, new_content)?;
+                    }
+                    eprintln!(
+                        "  [resolver] updated {} entry '{}'",
+                        cat_name, existing_session_id
+                    );
+                }
+                UpdateAction::Delete { existing_session_id } => {
+                    let current = std::fs::read_to_string(cat_path).unwrap_or_default();
+                    if let Some(removed) =
+                        remove_session_blocks(&current, &[existing_session_id.as_str()])
+                    {
+                        std::fs::write(cat_path, removed)?;
+                    }
+                    // Add the new (superseding) entry
+                    append_knowledge(cat_path, header, new_content)?;
+                    eprintln!(
+                        "  [resolver] deleted superseded {} entry '{}' and added new entry",
+                        cat_name, existing_session_id
+                    );
+                }
+                UpdateAction::Noop => {
+                    eprintln!("  [resolver] skipped duplicate {} entry", cat_name);
+                }
             }
         }
     }
 
-    // Append per-category with dedup checks (Features 2 and 3)
-    if let Some(ref decisions) = decisions {
-        let existing = read_or_default(&knowledge_dir.join("decisions.md"));
-        let (_, ex_blocks) = parse_session_blocks(&existing);
-        let (active, _) = partition_by_expiry(ex_blocks);
-        if is_near_duplicate(decisions, &active) {
-            eprintln!("  [dedup] skipped near-duplicate decisions block");
-        } else {
-            append_knowledge(
-                &knowledge_dir.join("decisions.md"),
-                &decisions_header,
-                decisions,
-            )?;
-        }
-    }
-    if let Some(ref solutions) = solutions {
-        let existing = read_or_default(&knowledge_dir.join("solutions.md"));
-        let (_, ex_blocks) = parse_session_blocks(&existing);
-        let (active, _) = partition_by_expiry(ex_blocks);
-        if is_near_duplicate(solutions, &active) {
-            eprintln!("  [dedup] skipped near-duplicate solutions block");
-        } else {
-            append_knowledge(
-                &knowledge_dir.join("solutions.md"),
-                &solutions_header,
-                solutions,
-            )?;
-        }
-    }
-    if let Some(ref patterns) = patterns {
-        let existing = read_or_default(&knowledge_dir.join("patterns.md"));
-        let (_, ex_blocks) = parse_session_blocks(&existing);
-        let (active, _) = partition_by_expiry(ex_blocks);
-        if is_near_duplicate(patterns, &active) {
-            eprintln!("  [dedup] skipped near-duplicate patterns block");
-        } else {
-            append_knowledge(
-                &knowledge_dir.join("patterns.md"),
-                &patterns_header,
-                patterns,
-            )?;
-        }
-    }
-
-    // Global preferences (no dedup needed — preferences are session-specific)
+    // Global preferences (no resolver needed — preferences are session-specific)
     let global_dir = config.memory_dir.join("knowledge").join("_global");
     std::fs::create_dir_all(&global_dir)?;
     if let Some(ref preferences) = preferences {
@@ -677,46 +889,7 @@ pub async fn extract_and_merge_knowledge(
         )?;
     }
 
-    if let Some(ref bugs) = bugs {
-        let existing = read_or_default(&knowledge_dir.join("bugs.md"));
-        let (_, ex_blocks) = parse_session_blocks(&existing);
-        let (active, _) = partition_by_expiry(ex_blocks);
-        if is_near_duplicate(bugs, &active) {
-            eprintln!("  [dedup] skipped near-duplicate bugs block");
-        } else {
-            append_knowledge(&knowledge_dir.join("bugs.md"), &bugs_header, bugs)?;
-        }
-    }
-    if let Some(ref insights) = insights {
-        let existing = read_or_default(&knowledge_dir.join("insights.md"));
-        let (_, ex_blocks) = parse_session_blocks(&existing);
-        let (active, _) = partition_by_expiry(ex_blocks);
-        if is_near_duplicate(insights, &active) {
-            eprintln!("  [dedup] skipped near-duplicate insights block");
-        } else {
-            append_knowledge(
-                &knowledge_dir.join("insights.md"),
-                &insights_header,
-                insights,
-            )?;
-        }
-    }
-    if let Some(ref questions) = questions {
-        let existing = read_or_default(&knowledge_dir.join("questions.md"));
-        let (_, ex_blocks) = parse_session_blocks(&existing);
-        let (active, _) = partition_by_expiry(ex_blocks);
-        if is_near_duplicate(questions, &active) {
-            eprintln!("  [dedup] skipped near-duplicate questions block");
-        } else {
-            append_knowledge(
-                &knowledge_dir.join("questions.md"),
-                &questions_header,
-                questions,
-            )?;
-        }
-    }
-
-    // Entities (Feature 5): no dedup — entities aggregate across sessions
+    // Entities: no dedup — entities aggregate across sessions
     if let Some(ref entities) = entities {
         append_knowledge(
             &knowledge_dir.join("entities.md"),
@@ -748,12 +921,13 @@ pub async fn extract_and_merge_knowledge(
     let all_bugs = read_or_default(&knowledge_dir.join("bugs.md"));
     let all_insights = read_or_default(&knowledge_dir.join("insights.md"));
     let all_questions = read_or_default(&knowledge_dir.join("questions.md"));
+    let all_procedures = read_or_default(&knowledge_dir.join("procedures.md"));
     let all_summaries = collect_summaries(&summary_dir)?;
 
     let context = client
         .chat(
             prompts::SYSTEM_KNOWLEDGE_EXTRACTOR,
-            &prompts::context_prompt(
+            &prompts::context_prompt_with_procedures(
                 project_name,
                 &all_decisions,
                 &all_solutions,
@@ -761,6 +935,7 @@ pub async fn extract_and_merge_knowledge(
                 &all_bugs,
                 &all_insights,
                 &all_questions,
+                &all_procedures,
                 &all_summaries,
             ),
         )
@@ -1093,6 +1268,10 @@ fn clean_extraction(text: &str) -> Option<String> {
         "no significant problems solved",
         "no significant patterns",
         "no clear preferences",
+        "no bugs encountered",
+        "no significant insights",
+        "no open questions",
+        "no significant procedures",
         "(extraction failed:",
     ]
     .iter()
@@ -1226,6 +1405,181 @@ fn atomic_write(target: &Path, content: &str) -> crate::Result<()> {
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod improvement_tests {
+    use super::*;
+
+    // ── Improvement 1: Procedures category ────────────────────────────────
+
+    #[test]
+    fn test_categories_contains_procedures() {
+        assert!(crate::config::CATEGORIES.contains(&"procedures"));
+        assert_eq!(crate::config::CATEGORIES.len(), 7);
+    }
+
+    #[test]
+    fn test_category_files_contains_procedures() {
+        assert!(crate::config::CATEGORY_FILES.contains(&"procedures.md"));
+        assert_eq!(crate::config::CATEGORY_FILES.len(), 7);
+    }
+
+    // ── Improvement 2: Access count tracking ──────────────────────────────
+
+    #[test]
+    fn test_parse_session_blocks_access_count() {
+        let content =
+            "# Decisions\n\n## Session: abc-123 (2024-01-01T00:00:00Z) [access:5]\n\nSome content\n";
+        let (_, blocks) = parse_session_blocks(content);
+        assert_eq!(blocks.len(), 1);
+        assert_eq!(blocks[0].access_count, Some(5));
+    }
+
+    #[test]
+    fn test_parse_session_blocks_no_access_tag() {
+        let content =
+            "# Decisions\n\n## Session: abc-123 (2024-01-01T00:00:00Z)\n\nSome content\n";
+        let (_, blocks) = parse_session_blocks(content);
+        assert_eq!(blocks.len(), 1);
+        assert_eq!(blocks[0].access_count, None);
+    }
+
+    #[test]
+    fn test_increment_access_count_from_none() {
+        let content =
+            "# Decisions\n\n## Session: abc-123 (2024-01-01T00:00:00Z)\n\nSome content\n";
+        let result = increment_access_count(content, "abc-123");
+        assert!(result.is_some());
+        let updated = result.unwrap();
+        assert!(updated.contains("[access:1]"), "Expected [access:1] in: {}", updated);
+    }
+
+    #[test]
+    fn test_increment_access_count_from_existing() {
+        let content =
+            "# Decisions\n\n## Session: abc-123 (2024-01-01T00:00:00Z) [access:3]\n\nSome content\n";
+        let result = increment_access_count(content, "abc-123");
+        assert!(result.is_some());
+        let updated = result.unwrap();
+        assert!(updated.contains("[access:4]"), "Expected [access:4] in: {}", updated);
+    }
+
+    #[test]
+    fn test_increment_access_count_not_found() {
+        let content =
+            "# Decisions\n\n## Session: abc-123 (2024-01-01T00:00:00Z)\n\nSome content\n";
+        let result = increment_access_count(content, "nonexistent-id");
+        assert!(result.is_none());
+    }
+
+    // ── Improvement 3: FadeMem strength field ─────────────────────────────
+
+    #[test]
+    fn test_parse_session_blocks_strength() {
+        let content =
+            "# Patterns\n\n## Session: xyz (2024-01-01T00:00:00Z) [strength:2.50]\n\nContent\n";
+        let (_, blocks) = parse_session_blocks(content);
+        assert_eq!(blocks.len(), 1);
+        let s = blocks[0].strength.expect("strength should be parsed");
+        assert!((s - 2.5).abs() < 0.01, "strength was {}", s);
+    }
+
+    #[test]
+    fn test_parse_session_blocks_all_tags() {
+        let content = "# Decisions\n\n## Session: s1 (2024-01-01T00:00:00Z) [ttl:7d] [confidence:high] [strength:1.30] [access:2]\n\nContent\n";
+        let (_, blocks) = parse_session_blocks(content);
+        assert_eq!(blocks.len(), 1);
+        assert_eq!(blocks[0].ttl.as_deref(), Some("7d"));
+        assert_eq!(blocks[0].confidence.as_deref(), Some("high"));
+        assert!((blocks[0].strength.unwrap() - 1.3).abs() < 0.01);
+        assert_eq!(blocks[0].access_count, Some(2));
+    }
+
+    // ── Improvement 5: Update Resolver ───────────────────────────────────
+
+    #[test]
+    fn test_parse_resolver_response_add() {
+        let action = parse_resolver_response("ADD");
+        assert!(matches!(action, UpdateAction::Add));
+    }
+
+    #[test]
+    fn test_parse_resolver_response_noop() {
+        let action = parse_resolver_response("NOOP");
+        assert!(matches!(action, UpdateAction::Noop));
+    }
+
+    #[test]
+    fn test_parse_resolver_response_update() {
+        let action = parse_resolver_response("UPDATE abc-123\nMerged text here.");
+        match action {
+            UpdateAction::Update { existing_session_id, merged_content } => {
+                assert_eq!(existing_session_id, "abc-123");
+                assert_eq!(merged_content, "Merged text here.");
+            }
+            _ => panic!("Expected Update, got {:?}", action),
+        }
+    }
+
+    #[test]
+    fn test_parse_resolver_response_delete() {
+        let action = parse_resolver_response("DELETE old-session-456");
+        match action {
+            UpdateAction::Delete { existing_session_id } => {
+                assert_eq!(existing_session_id, "old-session-456");
+            }
+            _ => panic!("Expected Delete, got {:?}", action),
+        }
+    }
+
+    #[test]
+    fn test_parse_resolver_response_fallback() {
+        let action = parse_resolver_response("unexpected gobbledygook");
+        assert!(matches!(action, UpdateAction::Add), "Fallback should be Add");
+    }
+
+    #[test]
+    fn test_find_top_similar_blocks_no_overlap() {
+        let blocks = vec![SessionBlock {
+            session_id: "s1".to_string(),
+            timestamp: "2024-01-01T00:00:00Z".to_string(),
+            ttl: None,
+            confidence: None,
+            strength: None,
+            access_count: None,
+            header: "header".to_string(),
+            content: "completely unrelated content about widgets".to_string(),
+            preview: String::new(),
+        }];
+        let result = find_top_similar_blocks("python async await coroutine", &blocks, 3);
+        assert!(result.is_empty(), "Expected no results for zero overlap");
+    }
+
+    #[test]
+    fn test_find_top_similar_blocks_returns_top3() {
+        let make_block = |id: &str, text: &str| SessionBlock {
+            session_id: id.to_string(),
+            timestamp: "2024-01-01T00:00:00Z".to_string(),
+            ttl: None,
+            confidence: None,
+            strength: None,
+            access_count: None,
+            header: String::new(),
+            content: text.to_string(),
+            preview: String::new(),
+        };
+        let blocks = vec![
+            make_block("s1", "tokio async runtime executor thread"),
+            make_block("s2", "tokio async runtime spawn future"),
+            make_block("s3", "tokio async runtime channel sender"),
+            make_block("s4", "tokio async runtime select macro"),
+            make_block("s5", "tokio async runtime join handle"),
+        ];
+        let result = find_top_similar_blocks("tokio async runtime configuration", &blocks, 3);
+        assert!(result.len() <= 3, "Should return at most top 3");
+        assert!(!result.is_empty(), "Should find overlapping blocks");
+    }
 }
 
 #[cfg(test)]

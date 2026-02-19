@@ -3,6 +3,7 @@ use crate::embeddings;
 use crate::embeddings::store::SearchFilter;
 use crate::error::{MemoryError, Result};
 use crate::extractor::knowledge::parse_ttl;
+use crate::llm::client::LlmClient;
 use colored::Colorize;
 
 pub fn cmd_embed(
@@ -165,10 +166,13 @@ pub fn cmd_search_semantic(
             }
         }
 
+        // Build optional LLM client for HyDE
+        let llm_client = LlmClient::new(&config.llm);
+
         if let Some(proj) = project {
             // Search specific project (filtered)
             let results =
-                search_project_filtered(&config.memory_dir, proj, query, &provider, top_k, &filter)
+                search_project_filtered(&config.memory_dir, proj, query, &provider, top_k, &filter, Some(&llm_client), verbose)
                     .await?;
 
             println!(
@@ -214,6 +218,8 @@ pub fn cmd_search_semantic(
                     &provider,
                     top_k,
                     &filter,
+                    Some(&llm_client),
+                    verbose,
                 )
                 .await
                 {
@@ -270,6 +276,8 @@ pub fn cmd_search_semantic(
 }
 
 /// Search a project's embedding index with an optional filter.
+/// When `llm_client` is provided, uses HyDE (Hypothetical Document Embedding) to improve recall.
+#[allow(clippy::too_many_arguments)]
 async fn search_project_filtered(
     memory_dir: &std::path::Path,
     project: &str,
@@ -277,6 +285,8 @@ async fn search_project_filtered(
     provider: &embeddings::EmbeddingProvider,
     top_k: usize,
     filter: &SearchFilter,
+    llm_client: Option<&LlmClient>,
+    verbose: bool,
 ) -> Result<Vec<(f32, String, String)>> {
     use embeddings::store::EmbeddingStore;
 
@@ -292,7 +302,29 @@ async fn search_project_filtered(
     }
 
     let store = EmbeddingStore::load(&index_path)?;
-    let query_embedding = provider.embed(query).await?;
+
+    // HyDE: generate a hypothetical document that would answer the query, then embed that
+    let embed_text = if let Some(client) = llm_client {
+        match client
+            .chat(
+                crate::llm::prompts::SYSTEM_HYDE_GENERATOR,
+                &crate::llm::prompts::hyde_prompt(query),
+            )
+            .await
+        {
+            Ok(hypothetical) => {
+                if verbose {
+                    println!("  HyDE: {}", hypothetical.trim().chars().take(120).collect::<String>());
+                }
+                format!("{}\n\nQuery: {}", hypothetical.trim(), query)
+            }
+            Err(_) => query.to_string(), // Fall back to raw query on LLM failure
+        }
+    } else {
+        query.to_string()
+    };
+
+    let query_embedding = provider.embed(&embed_text).await?;
     let results = store.search_filtered(&query_embedding, top_k, filter);
 
     Ok(results

@@ -117,7 +117,8 @@ pub fn post_ingest_hook(config: &Config, project: &str) -> Result<()> {
     Ok(())
 }
 
-/// Hook called after recall to boost importance of accessed knowledge
+/// Hook called after recall to boost importance of accessed knowledge.
+/// Also increments access_count and boosts strength (FadeMem) for each recalled block.
 pub fn post_recall_hook(
     config: &Config,
     project: &str,
@@ -133,6 +134,7 @@ pub fn post_recall_hook(
     let recall_reward = 0.6;
 
     for knowledge_id in knowledge_accessed {
+        // Update importance boosts (learning state)
         let current = state
             .learned_parameters
             .importance_boosts
@@ -153,6 +155,72 @@ pub fn post_recall_hook(
     }
 
     progress::save_state(&config.memory_dir, &state)?;
+
+    // Write back access_count + strength to knowledge files (FadeMem + access tracking)
+    let knowledge_dir = config.memory_dir.join("knowledge").join(project);
+    for knowledge_id in knowledge_accessed {
+        // knowledge_id may be "category:session_id" or just "session_id"
+        let (cat_hint, bare_id) = if let Some(pos) = knowledge_id.find(':') {
+            let (cat, id) = knowledge_id.split_at(pos);
+            (Some(cat.to_string()), id[1..].to_string())
+        } else {
+            (None, knowledge_id.clone())
+        };
+
+        for cat_file in crate::config::CATEGORY_FILES {
+            // Optimization: if we have a category hint, only scan matching file
+            if let Some(ref hint) = cat_hint {
+                if !cat_file.starts_with(hint.as_str()) {
+                    continue;
+                }
+            }
+
+            let path = knowledge_dir.join(cat_file);
+            if !path.exists() {
+                continue;
+            }
+
+            let content = match std::fs::read_to_string(&path) {
+                Ok(c) => c,
+                Err(_) => continue,
+            };
+
+            // Combined read-modify-write: increment access_count AND boost strength
+            use crate::extractor::knowledge::{parse_session_blocks, build_header, reconstruct_blocks};
+            let (preamble, mut blocks) = parse_session_blocks(&content);
+            let mut modified = false;
+
+            for block in &mut blocks {
+                if block.session_id == bare_id {
+                    block.access_count = Some(block.access_count.unwrap_or(0) + 1);
+                    let new_strength = (block
+                        .strength
+                        .unwrap_or(crate::config::INITIAL_STRENGTH)
+                        + crate::config::STRENGTH_RECALL_BOOST)
+                        .min(crate::config::STRENGTH_MAX);
+                    block.strength = Some(new_strength);
+                    // Rebuild header in-place
+                    block.header = build_header(
+                        &block.session_id,
+                        &block.timestamp,
+                        block.ttl.as_deref(),
+                        block.confidence.as_deref(),
+                        block.strength,
+                        block.access_count,
+                    );
+                    modified = true;
+                    break; // Each session_id appears once per file
+                }
+            }
+
+            if modified {
+                let rebuilt = reconstruct_blocks(&preamble, &blocks);
+                let _ = std::fs::write(&path, rebuilt);
+                break; // Found and updated — skip remaining files
+            }
+        }
+    }
+
     Ok(())
 }
 
@@ -238,16 +306,8 @@ fn train_ttl_q_table_from_knowledge(
 
     let knowledge_dir = config.memory_dir.join("knowledge").join(project);
     let now = Utc::now();
-    let categories = [
-        "decisions",
-        "solutions",
-        "patterns",
-        "bugs",
-        "insights",
-        "questions",
-    ];
 
-    for cat in &categories {
+    for cat in crate::config::CATEGORIES {
         let path = knowledge_dir.join(format!("{}.md", cat));
         if let Ok(content) = std::fs::read_to_string(&path) {
             let (_, blocks) = parse_session_blocks(&content);
@@ -292,21 +352,13 @@ fn compute_stale_percentage(memory_dir: &std::path::Path, project: &str) -> f32 
     use crate::extractor::knowledge::{parse_session_blocks, partition_by_expiry};
 
     let knowledge_dir = memory_dir.join("knowledge").join(project);
-    let categories = [
-        "decisions",
-        "solutions",
-        "patterns",
-        "bugs",
-        "insights",
-        "questions",
-    ];
     let now = chrono::Utc::now();
     let threshold = chrono::Duration::days(30);
 
     let mut total = 0usize;
     let mut stale = 0usize;
 
-    for cat in &categories {
+    for cat in crate::config::CATEGORIES {
         let path = knowledge_dir.join(format!("{}.md", cat));
         if let Ok(content) = std::fs::read_to_string(&path) {
             let (_, blocks) = parse_session_blocks(&content);

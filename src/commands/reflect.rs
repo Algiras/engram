@@ -52,15 +52,6 @@ pub fn cmd_reflect(project: &str) -> Result<()> {
     }
 
     let now = Utc::now();
-    let categories = [
-        "decisions",
-        "solutions",
-        "patterns",
-        "bugs",
-        "insights",
-        "questions",
-    ];
-
     let mut total_expired = 0usize;
     let mut category_stats: Vec<(String, CategoryStats)> = Vec::new();
     // TTL expiry buckets: (this_week, this_month, later)
@@ -68,7 +59,7 @@ pub fn cmd_reflect(project: &str) -> Result<()> {
     let mut ttl_this_month = 0usize;
     let mut ttl_later = 0usize;
 
-    for cat in &categories {
+    for cat in crate::config::CATEGORIES {
         let path = knowledge_dir.join(format!("{}.md", cat));
         if !path.exists() {
             continue;
@@ -697,7 +688,7 @@ mod tests {
         let project_dir = tmp.path();
         let now = Utc::now().to_rfc3339();
 
-        for cat in &["decisions", "solutions", "patterns", "bugs", "insights", "questions"] {
+        for cat in crate::config::CATEGORIES {
             write_knowledge_file(project_dir, cat, &[(&format!("{}-1", cat), &now, "high")]);
         }
 
@@ -794,8 +785,8 @@ mod tests {
         let knowledge_dir = tmp.path();
         let now = Utc::now().to_rfc3339();
 
-        // Project A: 6 categories, all fresh → should score 100
-        for cat in &["decisions","solutions","patterns","bugs","insights","questions"] {
+        // Project A: all categories, all fresh → should score 100
+        for cat in crate::config::CATEGORIES {
             let dir = knowledge_dir.join("proj-a");
             fs::create_dir_all(&dir).unwrap();
             write_knowledge_file(&dir, cat, &[("e1", &now, "high")]);

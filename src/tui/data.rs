@@ -614,7 +614,6 @@ pub fn load_reflect_report(memory_dir: &Path, project: &str) -> String {
     }
 
     let now = Utc::now();
-    let categories = ["decisions", "solutions", "patterns", "bugs", "insights", "questions"];
 
     struct CatStats {
         total: usize, high: usize, medium: usize, low: usize, unknown: usize,
@@ -624,7 +623,7 @@ pub fn load_reflect_report(memory_dir: &Path, project: &str) -> String {
     let mut total_expired = 0usize;
     let mut cat_stats: Vec<(String, CatStats)> = Vec::new();
 
-    for cat in &categories {
+    for cat in crate::config::CATEGORIES {
         let path = knowledge_dir.join(format!("{}.md", cat));
         if !path.exists() { continue; }
         let content = std::fs::read_to_string(&path).unwrap_or_default();
@@ -831,15 +830,6 @@ pub fn load_timeline(memory_dir: &Path) -> Vec<TimelineEntry> {
         return Vec::new();
     }
 
-    let categories = [
-        "decisions",
-        "solutions",
-        "patterns",
-        "bugs",
-        "insights",
-        "questions",
-    ];
-
     let mut all_entries: Vec<TimelineEntry> = Vec::new();
 
     if let Ok(project_dirs) = fs::read_dir(&knowledge_dir) {
@@ -852,7 +842,7 @@ pub fn load_timeline(memory_dir: &Path) -> Vec<TimelineEntry> {
                 continue;
             }
 
-            for cat in &categories {
+            for cat in crate::config::CATEGORIES {
                 let path = project_dir.path().join(format!("{}.md", cat));
                 if !path.exists() {
                     continue;

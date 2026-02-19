@@ -181,6 +181,30 @@ Extract questions:"#,
     )
 }
 
+pub fn procedures_prompt(conversation_text: &str) -> String {
+    format!(
+        r#"Analyze this Claude Code conversation and extract step-by-step workflows or procedures that were demonstrated or described.
+
+For each procedure, write:
+- **Steps**: Numbered list of steps (concise)
+- **When to use**: Brief context
+
+Rules:
+- Only extract repeatable multi-step workflows (3+ steps). Skip one-off commands.
+- Maximum 3 procedures. If none are significant, respond with exactly: "No significant procedures."
+- After all entries, on a new line write: CONFIDENCE: HIGH|MEDIUM|LOW
+  HIGH = explicitly stated or demonstrated; MEDIUM = clearly implied; LOW = speculative.
+
+---
+CONVERSATION:
+{}
+---
+
+Extract procedures:"#,
+        truncate_for_llm(conversation_text)
+    )
+}
+
 pub fn summary_prompt(conversation_text: &str) -> String {
     format!(
         r#"Summarize this Claude Code conversation in 2-3 sentences. Focus on:
@@ -211,6 +235,31 @@ pub fn context_prompt(
     questions: &str,
     summaries: &str,
 ) -> String {
+    context_prompt_with_procedures(
+        project_name,
+        decisions,
+        solutions,
+        patterns,
+        bugs,
+        insights,
+        questions,
+        "",
+        summaries,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+pub fn context_prompt_with_procedures(
+    project_name: &str,
+    decisions: &str,
+    solutions: &str,
+    patterns: &str,
+    bugs: &str,
+    insights: &str,
+    questions: &str,
+    procedures: &str,
+    summaries: &str,
+) -> String {
     // Build optional sections only when there's non-trivial content
     let bugs_section = if bugs.trim().is_empty() || bugs.trim() == "No bugs encountered." {
         String::new()
@@ -228,6 +277,12 @@ pub fn context_prompt(
             String::new()
         } else {
             format!("\nOPEN QUESTIONS FROM SESSIONS:\n{questions}\n")
+        };
+    let procedures_section =
+        if procedures.trim().is_empty() || procedures.trim() == "No significant procedures." {
+            String::new()
+        } else {
+            format!("\nWORKFLOWS & PROCEDURES FROM SESSIONS:\n{procedures}\n")
         };
 
     format!(
@@ -249,6 +304,9 @@ Format as markdown with these sections (omit any section that has no content):
 ## Known Issues & Solutions
 (Recurring problems and fixes — only if substantive)
 
+## Workflows & Procedures
+(Repeatable multi-step workflows — only if any exist)
+
 ## Open Questions
 (Unresolved questions — only if any exist)
 
@@ -263,7 +321,7 @@ SOLUTIONS:
 
 PATTERNS:
 {patterns}
-{bugs_section}{insights_section}{questions_section}
+{bugs_section}{insights_section}{procedures_section}{questions_section}
 SESSION SUMMARIES:
 {summaries}
 ---
@@ -333,6 +391,45 @@ Extract entities:"#,
     )
 }
 
+/// System prompt for HyDE (Hypothetical Document Embedding) generation
+pub const SYSTEM_HYDE_GENERATOR: &str =
+    "You are a knowledge retrieval assistant. Given a search query, write a short 2-3 sentence \
+     declarative knowledge entry that would directly answer or address the query. Write it as if \
+     it were already stored in a developer's memory system. Be specific and factual.";
+
+/// Generate a HyDE prompt for the given search query
+pub fn hyde_prompt(query: &str) -> String {
+    format!(
+        "Write a 2-3 sentence declarative memory entry that would directly answer this query:\n\
+         QUERY: {query}\n\n\
+         Respond with only the hypothetical knowledge entry, no preamble."
+    )
+}
+
+/// System prompt for the Update Resolver
+pub const SYSTEM_UPDATE_RESOLVER: &str =
+    "You are a knowledge base update resolver. You decide whether new information should be \
+     added, merged with existing entries, replace/supersede them, or be ignored as a duplicate. \
+     Be conservative: only UPDATE or DELETE when the new entry clearly contradicts or supersedes \
+     an existing one. Prefer ADD for genuinely new information.";
+
+/// Generate an update resolver prompt
+pub fn update_resolver_prompt(category: &str, new_entry: &str, existing_entries: &str) -> String {
+    format!(
+        "CATEGORY: {category}\n\n\
+         NEW ENTRY:\n{new_entry}\n\n\
+         EXISTING ENTRIES:\n{existing_entries}\n\n\
+         Decide what to do with the new entry. Respond with exactly ONE of:\n\
+         - ADD (new information not in existing entries)\n\
+         - NOOP (duplicate or already covered)\n\
+         - UPDATE <session_id>\\n<merged content> (new info updates/extends an existing entry; \
+           provide the session_id to replace and the merged content on the next lines)\n\
+         - DELETE <session_id> (new entry contradicts and supersedes an existing entry; \
+           new entry will be added and old one removed)\n\n\
+         First line must be exactly one of: ADD, NOOP, UPDATE <id>, DELETE <id>"
+    )
+}
+
 /// Truncate conversation text to fit within LLM context limits
 fn truncate_for_llm(text: &str) -> &str {
     // Keep roughly 12k chars to leave room for prompt + response in small models
@@ -345,5 +442,35 @@ fn truncate_for_llm(text: &str) -> &str {
             idx -= 1;
         }
         &text[..idx]
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_procedures_prompt_contains_steps_keyword() {
+        let p = procedures_prompt("Some conversation text");
+        assert!(
+            p.to_lowercase().contains("steps") || p.to_lowercase().contains("workflow"),
+            "procedures_prompt should mention steps or workflow"
+        );
+        assert!(!p.is_empty());
+    }
+
+    #[test]
+    fn test_hyde_prompt_non_empty() {
+        let p = hyde_prompt("how to fix gemini endpoint");
+        assert!(!p.is_empty());
+        assert!(p.contains("how to fix gemini endpoint"));
+    }
+
+    #[test]
+    fn test_update_resolver_prompt_contains_category() {
+        let p = update_resolver_prompt("decisions", "new decision text", "existing entries");
+        assert!(p.contains("decisions"));
+        assert!(p.contains("ADD"));
+        assert!(p.contains("NOOP"));
     }
 }

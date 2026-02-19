@@ -140,8 +140,8 @@ pub enum Commands {
         /// Project name
         project: String,
 
-        /// Knowledge category: decisions, solutions, patterns, bugs, insights, questions, or preferences
-        #[arg(value_parser = ["decisions", "solutions", "patterns", "bugs", "insights", "questions", "preferences"])]
+        /// Knowledge category: decisions, solutions, patterns, bugs, insights, questions, procedures, or preferences
+        #[arg(value_parser = ["decisions", "solutions", "patterns", "bugs", "insights", "questions", "procedures", "preferences"])]
         category: String,
 
         /// The knowledge content to add
@@ -174,8 +174,8 @@ pub enum Commands {
         /// Inbox session ID to promote (for example: abc123:decisions)
         session_id: String,
 
-        /// Target category: decisions, solutions, patterns, or preferences
-        #[arg(value_parser = ["decisions", "solutions", "patterns", "preferences"])]
+        /// Target category: decisions, solutions, patterns, bugs, insights, questions, procedures, or preferences
+        #[arg(value_parser = ["decisions", "solutions", "patterns", "bugs", "insights", "questions", "procedures", "preferences"])]
         category: String,
 
         /// Promote to global memory instead of project memory
@@ -380,7 +380,7 @@ pub enum Commands {
         project: String,
 
         /// Knowledge category
-        #[arg(value_parser = ["decisions", "solutions", "patterns", "preferences"])]
+        #[arg(value_parser = ["decisions", "solutions", "patterns", "bugs", "insights", "questions", "procedures", "preferences"])]
         category: String,
 
         /// Compare with specific version ID

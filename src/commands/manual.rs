@@ -189,13 +189,21 @@ pub fn cmd_promote(
                 "decisions" => "decisions.md",
                 "solutions" => "solutions.md",
                 "patterns" => "patterns.md",
-                _ => unreachable!(),
+                "bugs" => "bugs.md",
+                "insights" => "insights.md",
+                "questions" => "questions.md",
+                "procedures" => "procedures.md",
+                _ => "decisions.md",
             },
             match category {
                 "decisions" => "Decisions",
                 "solutions" => "Solutions",
                 "patterns" => "Patterns",
-                _ => unreachable!(),
+                "bugs" => "Bugs",
+                "insights" => "Insights",
+                "questions" => "Questions",
+                "procedures" => "Procedures",
+                _ => "Knowledge",
             },
         )
     };
@@ -485,8 +493,9 @@ pub fn cmd_add(
             "bugs" => "bugs.md",
             "insights" => "insights.md",
             "questions" => "questions.md",
+            "procedures" => "procedures.md",
             _ => return Err(error::MemoryError::Config(format!(
-                "Unknown category: '{}'. Use: decisions, solutions, patterns, bugs, insights, questions, preferences",
+                "Unknown category: '{}'. Use: decisions, solutions, patterns, bugs, insights, questions, procedures, preferences",
                 category
             ))),
         };
@@ -504,8 +513,9 @@ pub fn cmd_add(
                 "bugs" => "bugs.md",
                 "insights" => "insights.md",
                 "questions" => "questions.md",
+                "procedures" => "procedures.md",
                 _ => return Err(error::MemoryError::Config(format!(
-                    "Unknown category: '{}'. Use: decisions, solutions, patterns, bugs, insights, questions, preferences",
+                    "Unknown category: '{}'. Use: decisions, solutions, patterns, bugs, insights, questions, procedures, preferences",
                     category
                 ))),
             },

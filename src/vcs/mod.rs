@@ -8,14 +8,7 @@ use std::path::{Path, PathBuf};
 use crate::error::{MemoryError, Result};
 use crate::extractor::knowledge::parse_session_blocks;
 
-pub const CATEGORIES: &[&str] = &[
-    "decisions",
-    "solutions",
-    "patterns",
-    "bugs",
-    "insights",
-    "questions",
-];
+pub use crate::config::CATEGORIES;
 
 // ── Data types ────────────────────────────────────────────────────────────
 

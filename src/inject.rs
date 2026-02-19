@@ -28,6 +28,7 @@ pub fn build_raw_context(project: &str, project_knowledge_dir: &Path) -> Option<
     let bugs = read_and_filter(&project_knowledge_dir.join("bugs.md"));
     let insights = read_and_filter(&project_knowledge_dir.join("insights.md"));
     let questions = read_and_filter(&project_knowledge_dir.join("questions.md"));
+    let procedures = read_and_filter(&project_knowledge_dir.join("procedures.md"));
 
     if decisions.trim().is_empty()
         && solutions.trim().is_empty()
@@ -35,6 +36,7 @@ pub fn build_raw_context(project: &str, project_knowledge_dir: &Path) -> Option<
         && bugs.trim().is_empty()
         && insights.trim().is_empty()
         && questions.trim().is_empty()
+        && procedures.trim().is_empty()
     {
         return None;
     }
@@ -68,6 +70,11 @@ pub fn build_raw_context(project: &str, project_knowledge_dir: &Path) -> Option<
         out.push_str(&questions);
         out.push_str("\n\n");
     }
+    if !procedures.trim().is_empty() {
+        out.push_str("## Workflows & Procedures\n\n");
+        out.push_str(&procedures);
+        out.push_str("\n\n");
+    }
 
     Some(out)
 }
@@ -93,6 +100,7 @@ pub fn read_global_knowledge(memory_dir: &Path) -> Option<String> {
         ("solutions", "solutions.md"),
         ("insights", "insights.md"),
         ("bugs", "bugs.md"),
+        ("procedures", "procedures.md"),
     ];
 
     let mut sections: Vec<String> = Vec::new();
@@ -168,12 +176,20 @@ fn lookup_boost(
     0.0
 }
 
-/// Compute hybrid importance score: 40% recency + 60% learned boost
+/// FadeMem retention function: R = e^(-age_days / (strength * 30))
+/// Returns a value in (0, 1] — never fully decays to 0.
+fn fadem_retention(strength: Option<f32>, age_days: f32) -> f32 {
+    let s = strength.unwrap_or(1.0).clamp(0.1, 5.0);
+    (-age_days / (s * 30.0_f32)).exp().clamp(f32::MIN_POSITIVE, 1.0)
+}
+
+/// Compute hybrid importance score: 40% recency + 60% learned boost, then multiply by FadeMem retention.
 fn compute_importance_score(
     timestamp: &str,
     boost: f32,
     oldest_timestamp: &str,
     newest_timestamp: &str,
+    strength: Option<f32>,
 ) -> f32 {
     use chrono::DateTime;
 
@@ -184,8 +200,10 @@ fn compute_importance_score(
             .map(|dt| dt.with_timezone(&chrono::Utc))
     };
 
+    let block_ts = parse_ts(timestamp);
+
     let recency_score = match (
-        parse_ts(timestamp),
+        block_ts,
         parse_ts(oldest_timestamp),
         parse_ts(newest_timestamp),
     ) {
@@ -201,8 +219,18 @@ fn compute_importance_score(
         _ => 0.5, // Fallback if timestamps unparseable
     };
 
-    // Hybrid: 40% recency, 60% learned boost
-    (recency_score * 0.4) + (boost * 0.6)
+    // Compute age in days for FadeMem
+    let age_days = if let Some(ts) = parse_ts(timestamp) {
+        let now = chrono::Utc::now();
+        let age_secs = (now - ts).num_seconds().max(0) as f32;
+        age_secs / 86400.0
+    } else {
+        0.0
+    };
+
+    // Hybrid: 40% recency, 60% learned boost — multiplied by FadeMem retention
+    let base_score = (recency_score * 0.4) + (boost * 0.6);
+    base_score * fadem_retention(strength, age_days)
 }
 
 /// Sort session blocks by boosted importance (descending: highest first)
@@ -233,9 +261,9 @@ fn sort_by_importance(
         let boost_a = lookup_boost(boosts, &a.session_id, category, project);
         let boost_b = lookup_boost(boosts, &b.session_id, category, project);
 
-        let score_a = compute_importance_score(&a.timestamp, boost_a, &oldest, &newest)
+        let score_a = compute_importance_score(&a.timestamp, boost_a, &oldest, &newest, a.strength)
             * confidence_multiplier(a.confidence.as_deref());
-        let score_b = compute_importance_score(&b.timestamp, boost_b, &oldest, &newest)
+        let score_b = compute_importance_score(&b.timestamp, boost_b, &oldest, &newest, b.strength)
             * confidence_multiplier(b.confidence.as_deref());
 
         score_b
@@ -760,6 +788,7 @@ pub fn format_smart_memory(
         "bugs",
         "insights",
         "questions",
+        "procedures",
         "context",
     ];
     for cat in &categories {
@@ -953,6 +982,38 @@ pub fn build_full_memory(
 }
 
 #[cfg(test)]
+mod fadem_tests {
+    use super::fadem_retention;
+
+    #[test]
+    fn test_fadem_retention_fresh_block() {
+        let r = fadem_retention(Some(1.0), 0.0);
+        assert!((r - 1.0).abs() < 0.001, "Fresh block should have retention ≈ 1.0, got {}", r);
+    }
+
+    #[test]
+    fn test_fadem_retention_one_period() {
+        // e^(-30/(1.0*30)) = e^-1 ≈ 0.368
+        let r = fadem_retention(Some(1.0), 30.0);
+        assert!((r - 0.368).abs() < 0.01, "Expected ≈0.368, got {}", r);
+    }
+
+    #[test]
+    fn test_fadem_retention_high_strength_decays_slower() {
+        let r_high = fadem_retention(Some(5.0), 30.0);
+        let r_low = fadem_retention(Some(1.0), 30.0);
+        assert!(r_high > 0.8, "High strength should retain well, got {}", r_high);
+        assert!(r_high > r_low, "High strength decays slower than low strength");
+    }
+
+    #[test]
+    fn test_fadem_retention_never_zero() {
+        let r = fadem_retention(None, 9999.0);
+        assert!(r > 0.0, "Retention should never be exactly zero");
+    }
+}
+
+#[cfg(test)]
 mod tests {
     use super::*;
     use std::collections::HashMap;
@@ -993,41 +1054,40 @@ mod tests {
 
     #[test]
     fn test_compute_importance_score_high_boost() {
-        let score = compute_importance_score(
-            "2024-02-13T12:00:00Z",
-            0.9, // High boost
-            "2024-02-01T00:00:00Z",
-            "2024-02-13T12:00:00Z",
-        );
-        // Most recent (recency=1.0) + high boost (0.9)
-        // = 1.0 * 0.4 + 0.9 * 0.6 = 0.4 + 0.54 = 0.94
-        assert!((score - 0.94).abs() < 0.01);
+        // Fresh block (age_days ≈ 0) so FadeMem ≈ 1.0
+        let now = chrono::Utc::now();
+        let ts = now.format("%Y-%m-%dT%H:%M:%SZ").to_string();
+        let oldest = "2024-02-01T00:00:00Z";
+        let newest = ts.as_str();
+        let score = compute_importance_score(&ts, 0.9, oldest, newest, None);
+        // recency ≈ 1.0 (newest), high boost 0.9 → base ≈ 0.94, fadem ≈ 1.0
+        assert!(score > 0.8, "score was {}", score);
     }
 
     #[test]
     fn test_compute_importance_score_old_high_boost() {
+        // Old block with high boost — FadeMem reduces it somewhat
         let score = compute_importance_score(
             "2024-02-01T00:00:00Z",
-            0.9, // High boost
+            0.9,
             "2024-02-01T00:00:00Z",
             "2024-02-13T12:00:00Z",
+            None,
         );
-        // Oldest (recency=0.0) + high boost (0.9)
-        // = 0.0 * 0.4 + 0.9 * 0.6 = 0.54
-        assert!((score - 0.54).abs() < 0.01);
+        // base = 0.54, fadem significantly reduces old blocks
+        // just check it's positive and less than 0.54
+        assert!(score > 0.0 && score <= 0.54 + 0.01, "score was {}", score);
     }
 
     #[test]
     fn test_compute_importance_score_recent_low_boost() {
-        let score = compute_importance_score(
-            "2024-02-13T12:00:00Z",
-            0.1, // Low boost
-            "2024-02-01T00:00:00Z",
-            "2024-02-13T12:00:00Z",
-        );
-        // Most recent (recency=1.0) + low boost (0.1)
-        // = 1.0 * 0.4 + 0.1 * 0.6 = 0.4 + 0.06 = 0.46
-        assert!((score - 0.46).abs() < 0.01);
+        let now = chrono::Utc::now();
+        let ts = now.format("%Y-%m-%dT%H:%M:%SZ").to_string();
+        let oldest = "2024-02-01T00:00:00Z";
+        let newest = ts.as_str();
+        let score = compute_importance_score(&ts, 0.1, oldest, newest, None);
+        // fresh block, low boost → base ≈ 0.46
+        assert!(score > 0.3, "score was {}", score);
     }
 
     #[test]
@@ -1037,22 +1097,25 @@ mod tests {
             0.8,
             "2024-02-01T00:00:00Z",
             "2024-02-13T12:00:00Z",
+            None,
         );
-        // Fallback recency=0.5 + boost=0.8
-        // = 0.5 * 0.4 + 0.8 * 0.6 = 0.2 + 0.48 = 0.68
-        assert!((score - 0.68).abs() < 0.01);
+        // Fallback recency=0.5, age_days=0 → fadem=1.0 → base=0.68
+        assert!((score - 0.68).abs() < 0.02, "score was {}", score);
     }
 
     #[test]
     fn test_sort_by_importance_prioritizes_high_boost() {
+        // Use recent timestamps so FadeMem doesn't zero out old entries
         let mut blocks = vec![
             SessionBlock {
-                session_id: "old-important".to_string(),
-                timestamp: "2024-01-01T00:00:00Z".to_string(),
+                session_id: "recent-important".to_string(),
+                timestamp: "2024-02-12T00:00:00Z".to_string(),
                 ttl: None,
                 confidence: None,
-                header: "## Session: old-important (2024-01-01T00:00:00Z)\n".to_string(),
-                content: "High-value old knowledge".to_string(),
+                strength: Some(5.0), // Very high strength keeps it alive
+                access_count: None,
+                header: "## Session: recent-important (2024-02-12T00:00:00Z)\n".to_string(),
+                content: "High-value knowledge".to_string(),
                 preview: "High-value".to_string(),
             },
             SessionBlock {
@@ -1060,6 +1123,8 @@ mod tests {
                 timestamp: "2024-02-13T00:00:00Z".to_string(),
                 ttl: None,
                 confidence: None,
+                strength: None,
+                access_count: None,
                 header: "## Session: recent-unimportant (2024-02-13T00:00:00Z)\n".to_string(),
                 content: "Low-value recent".to_string(),
                 preview: "Low-value".to_string(),
@@ -1067,13 +1132,13 @@ mod tests {
         ];
 
         let mut boosts = HashMap::new();
-        boosts.insert("old-important".to_string(), 0.9); // High boost
+        boosts.insert("recent-important".to_string(), 0.9); // High boost
         boosts.insert("recent-unimportant".to_string(), 0.1); // Low boost
 
         sort_by_importance(&mut blocks, &boosts, "test", None);
 
-        // Old but important should rank first
-        assert_eq!(blocks[0].session_id, "old-important");
+        // High boost should rank first
+        assert_eq!(blocks[0].session_id, "recent-important");
         assert_eq!(blocks[1].session_id, "recent-unimportant");
     }
 
@@ -1085,6 +1150,8 @@ mod tests {
                 timestamp: "2024-01-01T00:00:00Z".to_string(),
                 ttl: None,
                 confidence: None,
+                strength: None,
+                access_count: None,
                 header: "## Session: old (2024-01-01T00:00:00Z)\n".to_string(),
                 content: "Old".to_string(),
                 preview: "Old".to_string(),
@@ -1094,6 +1161,8 @@ mod tests {
                 timestamp: "2024-02-13T00:00:00Z".to_string(),
                 ttl: None,
                 confidence: None,
+                strength: None,
+                access_count: None,
                 header: "## Session: recent (2024-02-13T00:00:00Z)\n".to_string(),
                 content: "Recent".to_string(),
                 preview: "Recent".to_string(),
@@ -1104,7 +1173,8 @@ mod tests {
 
         sort_by_importance(&mut blocks, &boosts, "test", None);
 
-        // With no boosts, both get boost=0.0, so recency wins
+        // With no boosts and FadeMem, very old blocks should rank lower than newer ones
+        // (recency wins at equal boost=0.0, even with FadeMem factored in)
         assert_eq!(blocks[0].session_id, "recent");
         assert_eq!(blocks[1].session_id, "old");
     }

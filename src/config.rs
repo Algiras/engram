@@ -9,12 +9,41 @@ pub const GLOBAL_PROJECT: &str = "global";
 /// Directory under knowledge/ that holds global knowledge files
 pub const GLOBAL_DIR: &str = "_global";
 
+/// Canonical knowledge categories (without .md extension)
+pub const CATEGORIES: &[&str] = &[
+    "decisions",
+    "solutions",
+    "patterns",
+    "bugs",
+    "insights",
+    "questions",
+    "procedures",
+];
+
+/// Canonical knowledge category filenames (with .md extension)
+pub const CATEGORY_FILES: &[&str] = &[
+    "decisions.md",
+    "solutions.md",
+    "patterns.md",
+    "bugs.md",
+    "insights.md",
+    "questions.md",
+    "procedures.md",
+];
+
 /// Minimum active block count before daemon triggers distillation
 pub const DISTILL_THRESHOLD: usize = 30;
 /// Age cutoff for daemon distillation (days)
 pub const DISTILL_STALE_DAYS: u64 = 90;
 /// Per-ingest-cycle decay factor for importance boosts
 pub const IMPORTANCE_DECAY_FACTOR: f32 = 0.98;
+
+/// Initial FadeMem strength for newly written blocks
+pub const INITIAL_STRENGTH: f32 = 1.0;
+/// Strength boost applied to a block each time it is recalled
+pub const STRENGTH_RECALL_BOOST: f32 = 0.3;
+/// Maximum FadeMem strength (clamp ceiling)
+pub const STRENGTH_MAX: f32 = 5.0;
 
 #[derive(Debug, Clone)]
 pub struct Config {
