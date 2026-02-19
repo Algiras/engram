@@ -18,6 +18,7 @@ pub fn cmd_ask(
     threshold: f32,
     verbose: bool,
     use_graph: bool,
+    concise: bool,
 ) -> Result<()> {
     // 1. Semantic search (graceful error → empty)
     let mut entries: Vec<SmartEntry> =
@@ -154,10 +155,19 @@ pub fn cmd_ask(
         .enable_all()
         .build()
         .map_err(|e| MemoryError::Config(format!("tokio runtime: {}", e)))?;
+    let (system, prompt) = if concise {
+        (
+            crate::llm::prompts::SYSTEM_QA_CONCISE,
+            crate::llm::prompts::ask_concise_prompt(query, &context_str),
+        )
+    } else {
+        (
+            SYSTEM_QA_ASSISTANT,
+            ask_prompt(query, &context_str),
+        )
+    };
     let answer = rt.block_on(async {
-        client
-            .chat(SYSTEM_QA_ASSISTANT, &ask_prompt(query, &context_str))
-            .await
+        client.chat(system, &prompt).await
     })?;
 
     // 5. Output

@@ -497,6 +497,7 @@ fn main() -> Result<()> {
         top_k,
         threshold,
         use_graph,
+        concise,
         ..
     } = &cli.command
     {
@@ -514,6 +515,7 @@ fn main() -> Result<()> {
             *threshold,
             cli.verbose,
             *use_graph,
+            *concise,
         );
     }
 

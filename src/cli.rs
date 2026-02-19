@@ -445,6 +445,10 @@ pub enum Commands {
         /// Use graph-augmented retrieval (traverses 2-hop entity neighbors for multi-hop QA)
         #[arg(long)]
         use_graph: bool,
+
+        /// Return a short answer (1-10 words) — better for benchmark evaluation
+        #[arg(long)]
+        concise: bool,
     },
 
     /// Show named entity cards for a project (libraries, tools, APIs extracted from sessions)

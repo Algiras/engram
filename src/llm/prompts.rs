@@ -335,6 +335,19 @@ pub const SYSTEM_QA_ASSISTANT: &str = "You are a precise Q&A assistant over a de
     Cite 1-3 session IDs used. \
     If the answer is not found in the knowledge, say exactly: 'Not found in knowledge base.'";
 
+/// Concise QA system prompt for benchmark evaluation (LoCoMo-style short answers)
+pub const SYSTEM_QA_CONCISE: &str =
+    "Answer the question using ONLY information from the provided knowledge. \
+     Give a SHORT answer: 1-10 words maximum. Use exact names, dates, and phrases from the knowledge. \
+     No explanation, no full sentences. Just the answer. \
+     If not found, respond: 'Not found in knowledge base.'";
+
+pub fn ask_concise_prompt(question: &str, context: &str) -> String {
+    format!(
+        "KNOWLEDGE:\n{context}\n\nQUESTION: {question}\n\nShort answer (1-10 words):"
+    )
+}
+
 pub fn ask_prompt(question: &str, context: &str) -> String {
     format!(
         "QUESTION: {question}\n\nKNOWLEDGE:\n{context}\n\n\
