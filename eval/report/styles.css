@@ -45,8 +45,9 @@ tbody td:first-child { text-align: left; font-weight: 600; }
 .dataframe th { background: #16213e; color: #fff; padding: .55rem .85rem; text-align: center; white-space: nowrap; }
 .dataframe td { padding: .5rem .85rem; border-bottom: 1px solid #e8e8f0; text-align: center; }
 
-/* fixed-width images */
-img.quarto-figure { max-width: 800px; width: 100%; }
+/* images always fill column, never overflow */
+img { max-width: 100% !important; height: auto !important; }
+figure { max-width: 100%; }
 
 /* ── technique timeline ────────────────────────────────────────────── */
 .timeline { list-style: none; padding: 0; margin: 1.5rem 0; position: relative; }

@@ -121,7 +121,7 @@ This report shows how three techniques address these failure modes — and docum
 
 ```{python}
 #| fig-cap: "F1 and judge scores across all versions. Dashed lines = ceiling upper bounds."
-#| out-width: 800px
+#| out-width: 100%
 
 labels = list(V.keys())
 f1s    = [v["f1"]    for v in V.values()]
@@ -196,7 +196,7 @@ The constant 60 dampens rank sensitivity, making the fusion robust to small posi
 
 ```{python}
 #| fig-cap: "F1 change at each version. Most gains come from v2→v3 (HyDE) and v5→v6 (BM25 hybrid)."
-#| out-width: 800px
+#| out-width: 100%
 
 prev   = [None] + f1s[:-1]
 deltas = [round(f - p, 1) if p else 0.0 for f, p in zip(f1s, prev)]
@@ -233,7 +233,7 @@ plt.close(fig)
 
 ```{python}
 #| fig-cap: "Token F1 by category for four reference points: baseline, v3-full (HyDE only), v6b (full stack), ceiling."
-#| out-width: 800px
+#| out-width: 100%
 
 run_cfg = [
     ("Baseline", LIGHT,  "//"),
@@ -285,7 +285,7 @@ plt.close(fig)
 
 ```{python}
 #| fig-cap: "Fraction of questions where the retriever returned no answer. BM25 hybrid reduced this by ~5 points."
-#| out-width: 800px
+#| out-width: 100%
 
 versions_nfr = {k: v for k, v in V.items() if v["nfr"] is not None and k != "Ceiling"}
 nfr_labels   = list(versions_nfr.keys())
@@ -345,7 +345,7 @@ display(df.style
 
 ```{python}
 #| fig-cap: "Gap between v6b and ceiling per category. Negative = still below ceiling."
-#| out-width: 800px
+#| out-width: 100%
 
 gap = {
     c: V["v6b"]["cats"].get(c, {}).get("f1", 0) - V["Ceiling"]["cats"].get(c, {}).get("f1", 0)
