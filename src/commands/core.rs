@@ -609,8 +609,7 @@ pub fn cmd_status(config: &Config) -> Result<()> {
             if name.starts_with('_') {
                 continue;
             }
-            if let Some(q) =
-                crate::commands::reflect::compute_project_quality(&entry.path(), &name)
+            if let Some(q) = crate::commands::reflect::compute_project_quality(&entry.path(), &name)
             {
                 quality_scores.push((name, q.quality_score));
             }
@@ -639,7 +638,10 @@ pub fn cmd_status(config: &Config) -> Result<()> {
 
     // Quality summary
     if !quality_scores.is_empty() {
-        let avg = quality_scores.iter().map(|(_, s)| *s as usize).sum::<usize>()
+        let avg = quality_scores
+            .iter()
+            .map(|(_, s)| *s as usize)
+            .sum::<usize>()
             / quality_scores.len();
         let avg_color = match avg as u8 {
             90..=100 => colored::Color::Green,

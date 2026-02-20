@@ -6,6 +6,7 @@ use colored::Colorize;
 use crate::error::Result;
 use crate::extractor::knowledge::{parse_session_blocks, parse_ttl, partition_by_expiry};
 
+#[derive(Default)]
 struct CategoryStats {
     total: usize,
     high_confidence: usize,
@@ -16,22 +17,6 @@ struct CategoryStats {
     expiring_soon: usize,
     stale: usize,
     recent: usize,
-}
-
-impl Default for CategoryStats {
-    fn default() -> Self {
-        Self {
-            total: 0,
-            high_confidence: 0,
-            medium_confidence: 0,
-            low_confidence: 0,
-            unknown_confidence: 0,
-            with_ttl: 0,
-            expiring_soon: 0,
-            stale: 0,
-            recent: 0,
-        }
-    }
 }
 
 /// Reflect on memory quality for a project: confidence, staleness, coverage, recommendations.
@@ -71,8 +56,10 @@ pub fn cmd_reflect(project: &str) -> Result<()> {
 
         total_expired += expired.len();
 
-        let mut stats = CategoryStats::default();
-        stats.total = active.len();
+        let mut stats = CategoryStats {
+            total: active.len(),
+            ..Default::default()
+        };
 
         for block in &active {
             // Confidence distribution
@@ -198,9 +185,8 @@ pub fn cmd_reflect(project: &str) -> Result<()> {
 
     if category_stats.len() < 3 {
         quality_score -= 10;
-        recommendations.push(
-            "Low category diversity — only a few knowledge categories are populated".into(),
-        );
+        recommendations
+            .push("Low category diversity — only a few knowledge categories are populated".into());
     }
 
     if expiring_soon_total > 0 {
@@ -466,7 +452,10 @@ pub fn cmd_reflect_all() -> Result<()> {
     let knowledge_dir = home.join("memory").join("knowledge");
 
     if !knowledge_dir.exists() {
-        eprintln!("{} No memory directory found. Run 'engram ingest' first.", "Not found:".yellow());
+        eprintln!(
+            "{} No memory directory found. Run 'engram ingest' first.",
+            "Not found:".yellow()
+        );
         return Ok(());
     }
 
@@ -535,7 +524,11 @@ pub fn cmd_reflect_all() -> Result<()> {
     }
 
     println!();
-    let avg = projects.iter().map(|p| p.quality_score as usize).sum::<usize>() / projects.len().max(1);
+    let avg = projects
+        .iter()
+        .map(|p| p.quality_score as usize)
+        .sum::<usize>()
+        / projects.len().max(1);
     let avg_color = score_color(avg as u8);
     println!(
         "  {} projects  ·  avg quality {}/100",
@@ -601,7 +594,11 @@ mod tests {
         write_knowledge_file(
             project_dir,
             "decisions",
-            &[("d1", &now, "high"), ("d2", &now, "high"), ("d3", &now, "high")],
+            &[
+                ("d1", &now, "high"),
+                ("d2", &now, "high"),
+                ("d3", &now, "high"),
+            ],
         );
         write_knowledge_file(
             project_dir,
@@ -611,7 +608,11 @@ mod tests {
         write_knowledge_file(project_dir, "patterns", &[("p1", &now, "high")]);
 
         let q = compute_project_quality(project_dir, "test-proj").unwrap();
-        assert!(q.quality_score >= 90, "All-fresh, all-high should score >= 90, got {}", q.quality_score);
+        assert!(
+            q.quality_score >= 90,
+            "All-fresh, all-high should score >= 90, got {}",
+            q.quality_score
+        );
         assert_eq!(q.total_entries, 6);
         assert_eq!(q.recent, 6, "All entries are from today");
         assert_eq!(q.stale_pct, 0);
@@ -641,8 +642,16 @@ mod tests {
         write_knowledge_file(project_dir, "patterns", &[("p1", &old_ts, "high")]);
 
         let q = compute_project_quality(project_dir, "stale-proj").unwrap();
-        assert!(q.stale_pct > 25, "Should detect >25% stale, got {}%", q.stale_pct);
-        assert!(q.quality_score < 90, "Stale knowledge should lower score, got {}", q.quality_score);
+        assert!(
+            q.stale_pct > 25,
+            "Should detect >25% stale, got {}%",
+            q.stale_pct
+        );
+        assert!(
+            q.quality_score < 90,
+            "Stale knowledge should lower score, got {}",
+            q.quality_score
+        );
     }
 
     #[test]
@@ -665,7 +674,10 @@ mod tests {
         write_knowledge_file(project_dir, "patterns", &[("p1", &now, "high")]);
 
         let q = compute_project_quality(project_dir, "low-conf-proj").unwrap();
-        assert!(q.quality_score < 100, "Low confidence should penalize score");
+        assert!(
+            q.quality_score < 100,
+            "Low confidence should penalize score"
+        );
     }
 
     #[test]
@@ -678,7 +690,11 @@ mod tests {
         write_knowledge_file(project_dir, "decisions", &[("d1", &now, "high")]);
 
         let q = compute_project_quality(project_dir, "sparse-proj").unwrap();
-        assert!(q.quality_score < 95, "Few categories should penalize score, got {}", q.quality_score);
+        assert!(
+            q.quality_score < 95,
+            "Few categories should penalize score, got {}",
+            q.quality_score
+        );
         assert_eq!(q.categories, 1);
     }
 
@@ -693,7 +709,10 @@ mod tests {
         }
 
         let q = compute_project_quality(project_dir, "perfect-proj").unwrap();
-        assert_eq!(q.quality_score, 100, "6 fresh, high-confidence categories should score 100");
+        assert_eq!(
+            q.quality_score, 100,
+            "6 fresh, high-confidence categories should score 100"
+        );
         assert_eq!(q.categories, 6);
         assert_eq!(q.stale_pct, 0);
         assert_eq!(q.recent, 6);
@@ -722,7 +741,11 @@ mod tests {
 
         let q = compute_project_quality(project_dir, "ttl-proj").unwrap();
         // Expired entry should be excluded — only 1 active entry counted
-        assert_eq!(q.total_entries, 1, "Expired entries should not count; got {}", q.total_entries);
+        assert_eq!(
+            q.total_entries, 1,
+            "Expired entries should not count; got {}",
+            q.total_entries
+        );
     }
 
     #[test]
@@ -733,7 +756,12 @@ mod tests {
 
         // 2 high, 1 medium, 1 low, 1 unknown (no confidence tag) in decisions
         let mut content = "# Decisions\n\n".to_string();
-        for (id, conf) in &[("h1","high"),("h2","high"),("m1","medium"),("l1","low")] {
+        for (id, conf) in &[
+            ("h1", "high"),
+            ("h2", "high"),
+            ("m1", "medium"),
+            ("l1", "low"),
+        ] {
             content.push_str(&format!(
                 "## Session: {} ({}) [confidence:{}]\n\nContent.\n\n",
                 id, now, conf
@@ -763,7 +791,10 @@ mod tests {
         write_knowledge_file(project_dir, "decisions", &[("f1", &future_ts, "high")]);
 
         let q = compute_project_quality(project_dir, "future-proj").unwrap();
-        assert_eq!(q.stale_pct, 0, "Future timestamps should not be counted as stale");
+        assert_eq!(
+            q.stale_pct, 0,
+            "Future timestamps should not be counted as stale"
+        );
         assert_eq!(q.total_entries, 1);
     }
 
@@ -803,6 +834,9 @@ mod tests {
         let b = compute_project_quality(&knowledge_dir.join("proj-b"), "proj-b").unwrap();
 
         assert_eq!(a.quality_score, 100);
-        assert!(b.quality_score < a.quality_score, "proj-b should score lower due to low category count");
+        assert!(
+            b.quality_score < a.quality_score,
+            "proj-b should score lower due to low category count"
+        );
     }
 }

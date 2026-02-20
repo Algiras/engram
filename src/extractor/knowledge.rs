@@ -83,7 +83,10 @@ fn parse_resolver_response(response: &str) -> UpdateAction {
     if first_line.eq_ignore_ascii_case("noop") {
         return UpdateAction::Noop;
     }
-    if let Some(rest) = first_line.strip_prefix("UPDATE ").or_else(|| first_line.strip_prefix("update ")) {
+    if let Some(rest) = first_line
+        .strip_prefix("UPDATE ")
+        .or_else(|| first_line.strip_prefix("update "))
+    {
         let session_id = rest.trim().to_string();
         // Content is everything after the first line
         let merged_content = trimmed
@@ -100,7 +103,10 @@ fn parse_resolver_response(response: &str) -> UpdateAction {
             };
         }
     }
-    if let Some(rest) = first_line.strip_prefix("DELETE ").or_else(|| first_line.strip_prefix("delete ")) {
+    if let Some(rest) = first_line
+        .strip_prefix("DELETE ")
+        .or_else(|| first_line.strip_prefix("delete "))
+    {
         let session_id = rest.trim().to_string();
         if !session_id.is_empty() {
             return UpdateAction::Delete {
@@ -181,10 +187,7 @@ pub struct SessionBlock {
 /// Supports optional metadata tags in any order: [ttl:...] [confidence:...] [strength:...] [access:N]
 pub fn parse_session_blocks(file_content: &str) -> (String, Vec<SessionBlock>) {
     // Match the core header; all bracket tags are captured separately below
-    let header_re = Regex::new(
-        r"(?m)^## Session: (\S+) \(([^)]+)\)((?:\s*\[[^\]]+\])*)",
-    )
-    .unwrap();
+    let header_re = Regex::new(r"(?m)^## Session: (\S+) \(([^)]+)\)((?:\s*\[[^\]]+\])*)").unwrap();
     // Individual tag extractors
     let ttl_re = Regex::new(r"\[ttl:([^\]]+)\]").unwrap();
     let conf_re = Regex::new(r"\[confidence:([^\]]+)\]").unwrap();
@@ -735,20 +738,62 @@ pub async fn extract_and_merge_knowledge(
     let ts = conversation.start_time.as_deref().unwrap_or("unknown date");
 
     // Per-category headers with confidence tags
-    let decisions_header =
-        build_header(&conversation.session_id, ts, ttl, decisions_conf.as_deref(), None, None);
-    let solutions_header =
-        build_header(&conversation.session_id, ts, ttl, solutions_conf.as_deref(), None, None);
-    let patterns_header =
-        build_header(&conversation.session_id, ts, ttl, patterns_conf.as_deref(), None, None);
-    let bugs_header =
-        build_header(&conversation.session_id, ts, ttl, bugs_conf.as_deref(), None, None);
-    let insights_header =
-        build_header(&conversation.session_id, ts, ttl, insights_conf.as_deref(), None, None);
-    let questions_header =
-        build_header(&conversation.session_id, ts, ttl, questions_conf.as_deref(), None, None);
-    let procedures_header =
-        build_header(&conversation.session_id, ts, ttl, procedures_conf.as_deref(), None, None);
+    let decisions_header = build_header(
+        &conversation.session_id,
+        ts,
+        ttl,
+        decisions_conf.as_deref(),
+        None,
+        None,
+    );
+    let solutions_header = build_header(
+        &conversation.session_id,
+        ts,
+        ttl,
+        solutions_conf.as_deref(),
+        None,
+        None,
+    );
+    let patterns_header = build_header(
+        &conversation.session_id,
+        ts,
+        ttl,
+        patterns_conf.as_deref(),
+        None,
+        None,
+    );
+    let bugs_header = build_header(
+        &conversation.session_id,
+        ts,
+        ttl,
+        bugs_conf.as_deref(),
+        None,
+        None,
+    );
+    let insights_header = build_header(
+        &conversation.session_id,
+        ts,
+        ttl,
+        insights_conf.as_deref(),
+        None,
+        None,
+    );
+    let questions_header = build_header(
+        &conversation.session_id,
+        ts,
+        ttl,
+        questions_conf.as_deref(),
+        None,
+        None,
+    );
+    let procedures_header = build_header(
+        &conversation.session_id,
+        ts,
+        ttl,
+        procedures_conf.as_deref(),
+        None,
+        None,
+    );
 
     // Add inbox entries for review
     for (cat_name, content_opt) in &[
@@ -801,17 +846,54 @@ pub async fn extract_and_merge_knowledge(
     // Replaces old contradiction_checks + is_near_duplicate blocks
     {
         let resolver_data: Vec<(String, std::path::PathBuf, Option<String>, String)> = vec![
-            ("decisions".to_string(), knowledge_dir.join("decisions.md"), decisions.clone(), decisions_header.clone()),
-            ("solutions".to_string(), knowledge_dir.join("solutions.md"), solutions.clone(), solutions_header.clone()),
-            ("patterns".to_string(), knowledge_dir.join("patterns.md"), patterns.clone(), patterns_header.clone()),
-            ("bugs".to_string(), knowledge_dir.join("bugs.md"), bugs.clone(), bugs_header.clone()),
-            ("insights".to_string(), knowledge_dir.join("insights.md"), insights.clone(), insights_header.clone()),
-            ("questions".to_string(), knowledge_dir.join("questions.md"), questions.clone(), questions_header.clone()),
-            ("procedures".to_string(), knowledge_dir.join("procedures.md"), procedures.clone(), procedures_header.clone()),
+            (
+                "decisions".to_string(),
+                knowledge_dir.join("decisions.md"),
+                decisions.clone(),
+                decisions_header.clone(),
+            ),
+            (
+                "solutions".to_string(),
+                knowledge_dir.join("solutions.md"),
+                solutions.clone(),
+                solutions_header.clone(),
+            ),
+            (
+                "patterns".to_string(),
+                knowledge_dir.join("patterns.md"),
+                patterns.clone(),
+                patterns_header.clone(),
+            ),
+            (
+                "bugs".to_string(),
+                knowledge_dir.join("bugs.md"),
+                bugs.clone(),
+                bugs_header.clone(),
+            ),
+            (
+                "insights".to_string(),
+                knowledge_dir.join("insights.md"),
+                insights.clone(),
+                insights_header.clone(),
+            ),
+            (
+                "questions".to_string(),
+                knowledge_dir.join("questions.md"),
+                questions.clone(),
+                questions_header.clone(),
+            ),
+            (
+                "procedures".to_string(),
+                knowledge_dir.join("procedures.md"),
+                procedures.clone(),
+                procedures_header.clone(),
+            ),
         ];
 
         for (cat_name, cat_path, new_content_opt, header) in &resolver_data {
-            let Some(new_content) = new_content_opt else { continue };
+            let Some(new_content) = new_content_opt else {
+                continue;
+            };
 
             let existing = read_or_default(cat_path);
             let (_, ex_blocks) = parse_session_blocks(&existing);
@@ -823,11 +905,13 @@ pub async fn extract_and_merge_knowledge(
                 UpdateAction::Add => {
                     append_knowledge(cat_path, header, new_content)?;
                 }
-                UpdateAction::Update { existing_session_id, merged_content } => {
+                UpdateAction::Update {
+                    existing_session_id,
+                    merged_content,
+                } => {
                     // Rebuild header for the existing block with new content
-                    let existing_block = active
-                        .iter()
-                        .find(|b| b.session_id == existing_session_id);
+                    let existing_block =
+                        active.iter().find(|b| b.session_id == existing_session_id);
                     let replacement_header = if let Some(b) = existing_block {
                         build_header(
                             &b.session_id,
@@ -857,7 +941,9 @@ pub async fn extract_and_merge_knowledge(
                         cat_name, existing_session_id
                     );
                 }
-                UpdateAction::Delete { existing_session_id } => {
+                UpdateAction::Delete {
+                    existing_session_id,
+                } => {
                     let current = std::fs::read_to_string(cat_path).unwrap_or_default();
                     if let Some(removed) =
                         remove_session_blocks(&current, &[existing_session_id.as_str()])
@@ -1438,8 +1524,7 @@ mod improvement_tests {
 
     #[test]
     fn test_parse_session_blocks_no_access_tag() {
-        let content =
-            "# Decisions\n\n## Session: abc-123 (2024-01-01T00:00:00Z)\n\nSome content\n";
+        let content = "# Decisions\n\n## Session: abc-123 (2024-01-01T00:00:00Z)\n\nSome content\n";
         let (_, blocks) = parse_session_blocks(content);
         assert_eq!(blocks.len(), 1);
         assert_eq!(blocks[0].access_count, None);
@@ -1447,12 +1532,15 @@ mod improvement_tests {
 
     #[test]
     fn test_increment_access_count_from_none() {
-        let content =
-            "# Decisions\n\n## Session: abc-123 (2024-01-01T00:00:00Z)\n\nSome content\n";
+        let content = "# Decisions\n\n## Session: abc-123 (2024-01-01T00:00:00Z)\n\nSome content\n";
         let result = increment_access_count(content, "abc-123");
         assert!(result.is_some());
         let updated = result.unwrap();
-        assert!(updated.contains("[access:1]"), "Expected [access:1] in: {}", updated);
+        assert!(
+            updated.contains("[access:1]"),
+            "Expected [access:1] in: {}",
+            updated
+        );
     }
 
     #[test]
@@ -1462,13 +1550,16 @@ mod improvement_tests {
         let result = increment_access_count(content, "abc-123");
         assert!(result.is_some());
         let updated = result.unwrap();
-        assert!(updated.contains("[access:4]"), "Expected [access:4] in: {}", updated);
+        assert!(
+            updated.contains("[access:4]"),
+            "Expected [access:4] in: {}",
+            updated
+        );
     }
 
     #[test]
     fn test_increment_access_count_not_found() {
-        let content =
-            "# Decisions\n\n## Session: abc-123 (2024-01-01T00:00:00Z)\n\nSome content\n";
+        let content = "# Decisions\n\n## Session: abc-123 (2024-01-01T00:00:00Z)\n\nSome content\n";
         let result = increment_access_count(content, "nonexistent-id");
         assert!(result.is_none());
     }
@@ -1514,7 +1605,10 @@ mod improvement_tests {
     fn test_parse_resolver_response_update() {
         let action = parse_resolver_response("UPDATE abc-123\nMerged text here.");
         match action {
-            UpdateAction::Update { existing_session_id, merged_content } => {
+            UpdateAction::Update {
+                existing_session_id,
+                merged_content,
+            } => {
                 assert_eq!(existing_session_id, "abc-123");
                 assert_eq!(merged_content, "Merged text here.");
             }
@@ -1526,7 +1620,9 @@ mod improvement_tests {
     fn test_parse_resolver_response_delete() {
         let action = parse_resolver_response("DELETE old-session-456");
         match action {
-            UpdateAction::Delete { existing_session_id } => {
+            UpdateAction::Delete {
+                existing_session_id,
+            } => {
                 assert_eq!(existing_session_id, "old-session-456");
             }
             _ => panic!("Expected Delete, got {:?}", action),
@@ -1536,7 +1632,10 @@ mod improvement_tests {
     #[test]
     fn test_parse_resolver_response_fallback() {
         let action = parse_resolver_response("unexpected gobbledygook");
-        assert!(matches!(action, UpdateAction::Add), "Fallback should be Add");
+        assert!(
+            matches!(action, UpdateAction::Add),
+            "Fallback should be Add"
+        );
     }
 
     #[test]

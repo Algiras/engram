@@ -10,6 +10,7 @@ use crate::inject::{build_raw_context, smart_search_sync, SmartEntry};
 use crate::llm::client::LlmClient;
 use crate::llm::prompts::{ask_prompt, SYSTEM_QA_ASSISTANT};
 
+#[allow(clippy::too_many_arguments)]
 pub fn cmd_ask(
     config: &Config,
     query: &str,
@@ -35,7 +36,11 @@ pub fn cmd_ask(
         )) {
             Ok(hypothetical) => {
                 if verbose {
-                    eprintln!("{} HyDE: {}", "Ask:".cyan(), hypothetical.trim().chars().take(100).collect::<String>());
+                    eprintln!(
+                        "{} HyDE: {}",
+                        "Ask:".cyan(),
+                        hypothetical.trim().chars().take(100).collect::<String>()
+                    );
                 }
                 format!("{}\n\nQuery: {}", hypothetical.trim(), query)
             }
@@ -44,16 +49,22 @@ pub fn cmd_ask(
     };
 
     // 2. Semantic search using HyDE-enhanced signal
-    let mut entries: Vec<SmartEntry> =
-        smart_search_sync(project, &config.memory_dir, &search_signal, top_k, threshold)
-            .unwrap_or_else(|_| vec![]);
+    let mut entries: Vec<SmartEntry> = smart_search_sync(
+        project,
+        &config.memory_dir,
+        &search_signal,
+        top_k,
+        threshold,
+    )
+    .unwrap_or_else(|_| vec![]);
     let used_semantic = !entries.is_empty();
 
     // 1b. Graph-augmented retrieval (opt-in via --use-graph)
     // For each concept in the knowledge graph that matches the query, retrieve
     // semantically similar entries for its 2-hop graph neighbors.
     if use_graph {
-        let graph_path = config.memory_dir
+        let graph_path = config
+            .memory_dir
             .join("knowledge")
             .join(project)
             .join("graph.json");
@@ -74,7 +85,10 @@ pub fn cmd_ask(
                                 if verbose {
                                     eprintln!(
                                         "{} graph: {} →[{}]→ {}",
-                                        "Ask:".cyan(), concept.name, depth, rel_concept.name
+                                        "Ask:".cyan(),
+                                        concept.name,
+                                        depth,
+                                        rel_concept.name
                                     );
                                 }
                             }
@@ -84,9 +98,9 @@ pub fn cmd_ask(
 
                 // Fetch entries for each augmented query (dedup by session_id)
                 for aug_query in augmented_queries.iter().take(4) {
-                    let aug_entries = smart_search_sync(
-                        project, &config.memory_dir, aug_query, 2, threshold,
-                    ).unwrap_or_default();
+                    let aug_entries =
+                        smart_search_sync(project, &config.memory_dir, aug_query, 2, threshold)
+                            .unwrap_or_default();
                     for entry in aug_entries {
                         if !entries.iter().any(|e| e.session_id == entry.session_id) {
                             entries.push(SmartEntry {
@@ -100,7 +114,8 @@ pub fn cmd_ask(
         } else if verbose {
             eprintln!(
                 "{} No graph.json found. Run 'engram graph build {}' first.",
-                "Ask:".yellow(), project
+                "Ask:".yellow(),
+                project
             );
         }
     }
@@ -184,14 +199,9 @@ pub fn cmd_ask(
             crate::llm::prompts::ask_concise_prompt(query, &context_str),
         )
     } else {
-        (
-            SYSTEM_QA_ASSISTANT,
-            ask_prompt(query, &context_str),
-        )
+        (SYSTEM_QA_ASSISTANT, ask_prompt(query, &context_str))
     };
-    let answer = rt.block_on(async {
-        client.chat(system, &prompt).await
-    })?;
+    let answer = rt.block_on(async { client.chat(system, &prompt).await })?;
 
     // 5. Output
     println!("{}", answer);

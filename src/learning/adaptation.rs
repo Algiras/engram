@@ -101,11 +101,7 @@ fn apply_importance_boosts_to_analytics(
 /// 4. Rewrite the block header in the knowledge file with the new TTL.
 ///
 /// Returns the number of blocks actually updated.
-fn apply_ttl_adjustments(
-    config: &Config,
-    project: &str,
-    state: &LearningState,
-) -> Result<usize> {
+fn apply_ttl_adjustments(config: &Config, project: &str, state: &LearningState) -> Result<usize> {
     // Require at least some Q-table training before touching files.
     if state.ttl_q_learning.q_table.is_empty() {
         return Ok(0);
@@ -447,7 +443,10 @@ mod tests {
     #[test]
     fn test_build_block_header_with_ttl() {
         let h = build_block_header("abc123", "2026-02-19T10:00:00Z", Some(30), Some("high"));
-        assert_eq!(h, "## Session: abc123 (2026-02-19T10:00:00Z) [ttl:30d] [confidence:high]");
+        assert_eq!(
+            h,
+            "## Session: abc123 (2026-02-19T10:00:00Z) [ttl:30d] [confidence:high]"
+        );
     }
 
     #[test]
@@ -490,8 +489,12 @@ mod tests {
         let now = Utc::now().to_rfc3339();
         std::fs::write(
             kdir.join("decisions.md"),
-            format!("# Decisions\n\n## Session: s1 ({}) [ttl:7d] [confidence:high]\n\nContent.\n\n", now),
-        ).unwrap();
+            format!(
+                "# Decisions\n\n## Session: s1 ({}) [ttl:7d] [confidence:high]\n\nContent.\n\n",
+                now
+            ),
+        )
+        .unwrap();
 
         let count = apply_ttl_adjustments(&config, "test", &state).unwrap();
         assert_eq!(count, 0, "Empty Q-table should produce zero changes");

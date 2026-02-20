@@ -50,7 +50,6 @@ use commands::graph::{
     cmd_graph_build, cmd_graph_hubs, cmd_graph_path, cmd_graph_query, cmd_graph_viz,
 };
 use commands::heal::cmd_heal;
-use commands::reflect::{cmd_reflect, cmd_reflect_all};
 use commands::hive::cmd_hive;
 use commands::hooks::{cmd_hooks_install, cmd_hooks_status, cmd_hooks_uninstall};
 use commands::knowledge::{cmd_forget, cmd_regen};
@@ -60,6 +59,7 @@ use commands::learning::{
 };
 use commands::manual::{cmd_add, cmd_lookup, cmd_promote, cmd_review};
 use commands::observe::cmd_observe;
+use commands::reflect::{cmd_reflect, cmd_reflect_all};
 use commands::sync::{
     cmd_sync_clone, cmd_sync_history, cmd_sync_init_repo, cmd_sync_list, cmd_sync_pull,
     cmd_sync_pull_repo, cmd_sync_push, cmd_sync_push_repo,
@@ -833,10 +833,7 @@ fn cmd_inject(
             0.0
         };
 
-        eprintln!(
-            "\n{} Token efficiency report:",
-            "Measure:".cyan().bold()
-        );
+        eprintln!("\n{} Token efficiency report:", "Measure:".cyan().bold());
         eprintln!("  Injected tokens (est.): {:>7}", injected_tokens);
         eprintln!("  Full context (est.):    {:>7}", full_tokens);
         eprintln!("  Token savings:          {:>6.1}%", savings_pct.max(0.0));

@@ -180,7 +180,9 @@ fn lookup_boost(
 /// Returns a value in (0, 1] — never fully decays to 0.
 fn fadem_retention(strength: Option<f32>, age_days: f32) -> f32 {
     let s = strength.unwrap_or(1.0).clamp(0.1, 5.0);
-    (-age_days / (s * 30.0_f32)).exp().clamp(f32::MIN_POSITIVE, 1.0)
+    (-age_days / (s * 30.0_f32))
+        .exp()
+        .clamp(f32::MIN_POSITIVE, 1.0)
 }
 
 /// Compute hybrid importance score: 40% recency + 60% learned boost, then multiply by FadeMem retention.
@@ -988,7 +990,11 @@ mod fadem_tests {
     #[test]
     fn test_fadem_retention_fresh_block() {
         let r = fadem_retention(Some(1.0), 0.0);
-        assert!((r - 1.0).abs() < 0.001, "Fresh block should have retention ≈ 1.0, got {}", r);
+        assert!(
+            (r - 1.0).abs() < 0.001,
+            "Fresh block should have retention ≈ 1.0, got {}",
+            r
+        );
     }
 
     #[test]
@@ -1002,8 +1008,15 @@ mod fadem_tests {
     fn test_fadem_retention_high_strength_decays_slower() {
         let r_high = fadem_retention(Some(5.0), 30.0);
         let r_low = fadem_retention(Some(1.0), 30.0);
-        assert!(r_high > 0.8, "High strength should retain well, got {}", r_high);
-        assert!(r_high > r_low, "High strength decays slower than low strength");
+        assert!(
+            r_high > 0.8,
+            "High strength should retain well, got {}",
+            r_high
+        );
+        assert!(
+            r_high > r_low,
+            "High strength decays slower than low strength"
+        );
     }
 
     #[test]

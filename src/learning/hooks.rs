@@ -33,12 +33,7 @@ pub fn post_ingest_hook(config: &Config, project: &str) -> Result<()> {
         .unwrap_or(75);
     let avg_query_time = 100; // Would need actual timing instrumentation
     let stale_knowledge = compute_stale_percentage(&config.memory_dir, project);
-    let storage_size = compute_dir_size_mb(
-        &config
-            .memory_dir
-            .join("knowledge")
-            .join(project),
-    );
+    let storage_size = compute_dir_size_mb(&config.memory_dir.join("knowledge").join(project));
 
     progress::record_metrics(
         &mut state,
@@ -186,16 +181,16 @@ pub fn post_recall_hook(
             };
 
             // Combined read-modify-write: increment access_count AND boost strength
-            use crate::extractor::knowledge::{parse_session_blocks, build_header, reconstruct_blocks};
+            use crate::extractor::knowledge::{
+                build_header, parse_session_blocks, reconstruct_blocks,
+            };
             let (preamble, mut blocks) = parse_session_blocks(&content);
             let mut modified = false;
 
             for block in &mut blocks {
                 if block.session_id == bare_id {
                     block.access_count = Some(block.access_count.unwrap_or(0) + 1);
-                    let new_strength = (block
-                        .strength
-                        .unwrap_or(crate::config::INITIAL_STRENGTH)
+                    let new_strength = (block.strength.unwrap_or(crate::config::INITIAL_STRENGTH)
                         + crate::config::STRENGTH_RECALL_BOOST)
                         .min(crate::config::STRENGTH_MAX);
                     block.strength = Some(new_strength);
@@ -326,9 +321,7 @@ fn train_ttl_q_table_from_knowledge(
                 // Choose a reward-action pair based on observed state
                 let (action, reward): (TTLAction, f32) =
                     match (&ttl_state.importance_tier, &ttl_state.recency_tier) {
-                        (ImportanceTier::High, RecencyTier::Recent) => {
-                            (TTLAction::Extend30d, 0.8)
-                        }
+                        (ImportanceTier::High, RecencyTier::Recent) => (TTLAction::Extend30d, 0.8),
                         (ImportanceTier::High, _) => (TTLAction::Extend14d, 0.7),
                         (ImportanceTier::Medium, RecencyTier::Stale) => (TTLAction::Extend7d, 0.4),
                         (ImportanceTier::Medium, _) => (TTLAction::Extend7d, 0.5),

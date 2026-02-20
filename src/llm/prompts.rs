@@ -336,8 +336,7 @@ pub const SYSTEM_QA_ASSISTANT: &str = "You are a precise Q&A assistant over a de
     If the answer is not found in the knowledge, say exactly: 'Not found in knowledge base.'";
 
 /// Concise QA system prompt for benchmark evaluation (LoCoMo-style short answers)
-pub const SYSTEM_QA_CONCISE: &str =
-    "You are a precise technical Q&A assistant. \
+pub const SYSTEM_QA_CONCISE: &str = "You are a precise technical Q&A assistant. \
      Answer using ONLY information explicitly stated in the provided knowledge. \
      Rules: \
      (1) Give a SHORT answer: 1-15 words maximum. \

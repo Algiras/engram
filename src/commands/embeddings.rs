@@ -171,9 +171,17 @@ pub fn cmd_search_semantic(
 
         if let Some(proj) = project {
             // Search specific project (filtered)
-            let results =
-                search_project_filtered(&config.memory_dir, proj, query, &provider, top_k, &filter, Some(&llm_client), verbose)
-                    .await?;
+            let results = search_project_filtered(
+                &config.memory_dir,
+                proj,
+                query,
+                &provider,
+                top_k,
+                &filter,
+                Some(&llm_client),
+                verbose,
+            )
+            .await?;
 
             println!(
                 "{} Semantic search results for '{}':\n",
@@ -314,7 +322,10 @@ async fn search_project_filtered(
         {
             Ok(hypothetical) => {
                 if verbose {
-                    println!("  HyDE: {}", hypothetical.trim().chars().take(120).collect::<String>());
+                    println!(
+                        "  HyDE: {}",
+                        hypothetical.trim().chars().take(120).collect::<String>()
+                    );
                 }
                 format!("{}\n\nQuery: {}", hypothetical.trim(), query)
             }

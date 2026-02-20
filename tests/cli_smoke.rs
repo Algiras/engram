@@ -154,7 +154,11 @@ fn reflect_all_exits_zero_with_no_projects() {
 fn reflect_with_knowledge_shows_quality_score() {
     use std::fs;
     let tmp = TempDir::new().unwrap();
-    let knowledge_dir = tmp.path().join("memory").join("knowledge").join("test-proj");
+    let knowledge_dir = tmp
+        .path()
+        .join("memory")
+        .join("knowledge")
+        .join("test-proj");
     fs::create_dir_all(&knowledge_dir).unwrap();
 
     let now = chrono::Utc::now().to_rfc3339();
@@ -174,15 +178,27 @@ fn reflect_with_knowledge_shows_quality_score() {
         .clone();
 
     let text = String::from_utf8_lossy(&output);
-    assert!(text.contains("Quality Score"), "Should show quality score; got: {}", text);
-    assert!(text.contains("test-proj"), "Should mention project name; got: {}", text);
+    assert!(
+        text.contains("Quality Score"),
+        "Should show quality score; got: {}",
+        text
+    );
+    assert!(
+        text.contains("test-proj"),
+        "Should mention project name; got: {}",
+        text
+    );
 }
 
 #[test]
 fn reflect_all_shows_table_with_project() {
     use std::fs;
     let tmp = TempDir::new().unwrap();
-    let knowledge_dir = tmp.path().join("memory").join("knowledge").join("my-project");
+    let knowledge_dir = tmp
+        .path()
+        .join("memory")
+        .join("knowledge")
+        .join("my-project");
     fs::create_dir_all(&knowledge_dir).unwrap();
 
     let now = chrono::Utc::now().to_rfc3339();
@@ -202,6 +218,14 @@ fn reflect_all_shows_table_with_project() {
         .clone();
 
     let text = String::from_utf8_lossy(&output);
-    assert!(text.contains("my-project"), "Should show project in table; got: {}", text);
-    assert!(text.contains("Score"), "Should show Score column header; got: {}", text);
+    assert!(
+        text.contains("my-project"),
+        "Should show project in table; got: {}",
+        text
+    );
+    assert!(
+        text.contains("Score"),
+        "Should show Score column header; got: {}",
+        text
+    );
 }

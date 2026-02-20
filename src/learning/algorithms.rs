@@ -125,13 +125,18 @@ impl TTLQLearning {
 
     /// Encode a (state, action) pair as a string key for the HashMap.
     fn q_key(state: &TTLState, action: &TTLAction) -> String {
-        format!("{:?}:{:?}:{:?}|{:?}",
-            state.importance_tier, state.usage_frequency_tier, state.recency_tier, action)
+        format!(
+            "{:?}:{:?}:{:?}|{:?}",
+            state.importance_tier, state.usage_frequency_tier, state.recency_tier, action
+        )
     }
 
     /// Get Q-value for state-action pair
     fn get_q_value(&self, state: &TTLState, action: &TTLAction) -> f32 {
-        *self.q_table.get(&Self::q_key(state, action)).unwrap_or(&0.0)
+        *self
+            .q_table
+            .get(&Self::q_key(state, action))
+            .unwrap_or(&0.0)
     }
 
     /// Random action for exploration
@@ -345,7 +350,10 @@ mod tests {
         q.update(state.clone(), action, reward, next_state);
 
         let q_value = q.get_q_value(&state, &action);
-        assert!(q_value > 0.0, "Q-value should be positive after positive reward update");
+        assert!(
+            q_value > 0.0,
+            "Q-value should be positive after positive reward update"
+        );
     }
 
     #[test]
