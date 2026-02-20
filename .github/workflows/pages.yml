@@ -3,7 +3,10 @@ name: Deploy to GitHub Pages
 on:
   push:
     branches: [master]
-    paths: [site/**]
+    paths:
+      - site/**
+      - eval/report/**
+      - eval/domain_results_*.json
   workflow_dispatch:
 
 permissions:
@@ -16,16 +19,59 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  build-report:
+    name: Render Quarto eval report (HTML + PDF)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install Python deps
+        run: pip install -r eval/report/requirements.txt
+
+      - name: Install Quarto
+        uses: quarto-dev/quarto-actions/setup@v2
+        with:
+          version: "1.8.26"
+
+      - name: Install TinyTeX (for PDF)
+        run: quarto install tinytex --no-prompt
+
+      - name: Render HTML report
+        working-directory: eval/report
+        run: quarto render index.qmd --to html
+
+      - name: Render PDF report
+        working-directory: eval/report
+        run: quarto render index.qmd --to pdf || echo "PDF render failed (non-fatal)"
+
+      - name: Copy report into site
+        run: |
+          mkdir -p site/eval
+          cp eval/report/_site/index.html site/eval/index.html
+          # copy any PDF produced
+          pdf=$(find eval/report -name "*.pdf" | head -1)
+          if [ -n "$pdf" ]; then
+            cp "$pdf" site/eval/report.pdf
+            echo "PDF copied: $pdf"
+          fi
+
+      - name: Upload site artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
   deploy:
+    name: Deploy to GitHub Pages
+    needs: build-report
     runs-on: ubuntu-latest
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/configure-pages@v5
-      - uses: actions/upload-pages-artifact@v3
-        with:
-          path: site
       - id: deployment
         uses: actions/deploy-pages@v4

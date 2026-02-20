@@ -1,0 +1,48 @@
+/* engram eval report styles */
+
+.metric-card {
+  display: inline-block;
+  background: #f8f9fa;
+  border-left: 4px solid #0d6efd;
+  border-radius: 6px;
+  padding: 1rem 1.5rem;
+  margin: 0.5rem;
+  min-width: 160px;
+  text-align: center;
+}
+.metric-card.gold { border-color: #ffc107; }
+.metric-card.green { border-color: #198754; }
+.metric-card.grey { border-color: #6c757d; }
+
+.metric-value {
+  font-size: 2.2rem;
+  font-weight: 700;
+  line-height: 1.1;
+}
+.metric-label {
+  font-size: 0.8rem;
+  color: #6c757d;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-top: 0.2rem;
+}
+
+.sota-banner {
+  background: linear-gradient(135deg, #0d6efd22, #19875422);
+  border: 1px solid #0d6efd44;
+  border-radius: 10px;
+  padding: 1.5rem 2rem;
+  margin: 1.5rem 0;
+  text-align: center;
+}
+
+.improvement-tag {
+  display: inline-block;
+  background: #d1e7dd;
+  color: #0f5132;
+  border-radius: 4px;
+  padding: 0.15rem 0.5rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  margin-left: 0.4rem;
+}

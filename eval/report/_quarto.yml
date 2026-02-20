@@ -1,0 +1,16 @@
+project:
+  type: default
+  output-dir: _site
+
+format:
+  html:
+    theme: cosmo
+    toc: true
+    toc-depth: 3
+    number-sections: false
+    smooth-scroll: true
+    code-fold: true
+    fig-width: 9
+    fig-height: 5
+    embed-resources: true
+    css: styles.css
