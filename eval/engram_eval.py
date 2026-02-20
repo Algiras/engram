@@ -2,25 +2,26 @@
 """
 engram Domain Eval — the eval that actually measures engram improvement.
 
-Tests the FULL pipeline:
-  1. Knowledge is already in engram (from real Claude Code sessions)
-  2. Ask questions derived from that knowledge
-  3. Measure whether engram can retrieve and answer correctly
-
-This is the eval to run after every change to verify we're getting better.
+Modes:
+  Default (engram RAG):  tests the FULL engram pipeline — retrieval + synthesis
+  --full-context:        passes ALL knowledge directly to LLM, bypassing retrieval
+                         → upper bound / ceiling score; gap vs engram = retrieval loss
 
 Usage:
-    # Generate dataset first (one-time, ~15min)
-    python eval/gen_qa_dataset.py --project Personal --output eval/qa_dataset.json
+    # Run engram RAG eval
+    python eval/engram_eval.py --project Personal --dataset eval/qa_dataset.json --use-judge
 
-    # Run eval
-    python eval/engram_eval.py --project Personal --dataset eval/qa_dataset.json
+    # Run full-context ceiling (10M context = perfect retrieval)
+    python eval/engram_eval.py --project Personal --dataset eval/qa_dataset.json \
+        --full-context --use-judge
+
+    # Compare both (shows retrieval gap)
+    python eval/engram_eval.py --project Personal --dataset eval/qa_dataset.json \
+        --full-context --use-judge --prev eval/domain_results_v1.json
 
     # Quick smoke test (10 questions per category)
-    python eval/engram_eval.py --project Personal --dataset eval/qa_dataset.json --max-per-cat 10
-
-    # With LLM judge (matches semantic accuracy)
-    python eval/engram_eval.py --project Personal --dataset eval/qa_dataset.json --use-judge
+    python eval/engram_eval.py --project Personal --dataset eval/qa_dataset.json \
+        --max-per-cat 10 --full-context --use-judge
 """
 
 import argparse
@@ -108,6 +109,77 @@ def llm_judge(question: str, gold, prediction: str, api_key: str, model: str) ->
         api_key, model,
     )
     return 1.0 if resp.strip().upper().startswith("YES") else 0.0
+
+
+# ---------------------------------------------------------------------------
+# Full-context (ceiling) answering
+# ---------------------------------------------------------------------------
+
+def load_full_knowledge(project: str) -> str:
+    """Load all knowledge files for a project into a single context string."""
+    from pathlib import Path
+    knowledge_dir = Path.home() / "memory" / "knowledge" / project
+    categories = ["decisions", "solutions", "patterns", "bugs", "insights",
+                  "questions", "procedures"]
+    parts = []
+    for cat in categories:
+        path = knowledge_dir / f"{cat}.md"
+        if path.exists():
+            content = path.read_text().strip()
+            if content:
+                parts.append(content)
+    return "\n\n---\n\n".join(parts)
+
+
+FULL_CONTEXT_SYSTEM = (
+    "You are a precise technical assistant. Answer the question using ONLY the provided "
+    "knowledge base. Give a SHORT answer: 1-15 words. Use exact names, values, and terms "
+    "from the knowledge. If the answer is not in the knowledge, say: Not found."
+)
+
+FULL_CONTEXT_PROMPT = """{knowledge}
+
+---
+QUESTION: {question}
+
+Short answer (1-15 words):"""
+
+
+def ask_full_context(question: str, full_knowledge: str,
+                     api_key: str, model: str = "gemini-2.5-flash") -> str:
+    """Answer a question with the full knowledge base in context — no retrieval."""
+    prompt = FULL_CONTEXT_PROMPT.format(
+        knowledge=full_knowledge[:900_000],  # Stay within context limit
+        question=question,
+    )
+    # Use flash model for speed (28K tokens × 385 questions = manageable)
+    effective_max = 4096 if "2.5-pro" in model else 256
+    payload = json.dumps({
+        "systemInstruction": {"parts": [{"text": FULL_CONTEXT_SYSTEM}]},
+        "contents": [{"parts": [{"text": prompt}]}],
+        "generationConfig": {"temperature": 0.0, "maxOutputTokens": effective_max},
+    }).encode()
+    url = (
+        f"https://generativelanguage.googleapis.com/v1beta/models/"
+        f"{model}:generateContent?key={api_key}"
+    )
+    req = urllib.request.Request(
+        url, data=payload,
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=60) as resp:
+            result = json.loads(resp.read())
+        for part in result["candidates"][0].get("content", {}).get("parts", []):
+            if "text" in part and part["text"].strip():
+                ans = part["text"].strip()
+                if "not found" in ans.lower():
+                    return ""
+                return ans
+        return ""
+    except Exception as e:
+        return ""
 
 
 # ---------------------------------------------------------------------------
@@ -202,6 +274,19 @@ def print_report(f1_by_cat: dict, judge_by_cat: dict, elapsed: float,
     print()
     print(f"  Not found / wrong: {not_found}/{len(all_f1)} "
           f"({not_found/len(all_f1)*100:.1f}%)")
+
+    # Show retrieval gap vs ceiling if prev is the full-context result
+    if prev_results and prev_results.get("label", "").find("FULL-CONTEXT") != -1:
+        ceiling_f1 = prev_results.get("overall_f1", 0)
+        ceiling_j = prev_results.get("overall_judge", 0)
+        if ceiling_f1 > 0:
+            pct_f1 = overall_f1 / ceiling_f1 * 100
+            pct_j = overall_judge / ceiling_j * 100 if ceiling_j > 0 else 0
+            print()
+            print(f"  Retrieval efficiency vs ceiling:")
+            print(f"    Token-F1:  {overall_f1:.1f} / {ceiling_f1:.1f} = {pct_f1:.0f}% of ceiling")
+            if all_judge:
+                print(f"    LLM-judge: {overall_judge:.1f} / {ceiling_j:.1f} = {pct_j:.0f}% of ceiling")
     print("╚══════════════════════════════════════════════════════╝")
 
 
@@ -221,6 +306,8 @@ def main():
     ap.add_argument("--top-k", type=int, default=8)
     ap.add_argument("--use-judge", action="store_true",
                     help="Score with LLM-as-a-Judge (semantic accuracy)")
+    ap.add_argument("--full-context", action="store_true",
+                    help="Upper bound: answer with ALL knowledge in context (no retrieval)")
     ap.add_argument("--max-per-cat", type=int, default=None,
                     help="Limit questions per category (quick test)")
     ap.add_argument("--categories",
@@ -268,13 +355,27 @@ def main():
 
     label_parts = [
         f"project={args.project}",
-        f"t={args.threshold} k={args.top_k}",
     ]
-    if args.model:
-        label_parts.append(f"model={args.model}")
+    if args.full_context:
+        label_parts.append("FULL-CONTEXT (ceiling)")
+    else:
+        label_parts.append(f"t={args.threshold} k={args.top_k}")
+        if args.model:
+            label_parts.append(f"model={args.model}")
     if args.use_judge:
         label_parts.append("judge")
     label = " | ".join(label_parts)
+
+    # Load full knowledge once if needed
+    full_knowledge = None
+    fc_model = "gemini-2.5-flash"  # Fast + large context
+    if args.full_context:
+        if not api_key:
+            print("ERROR: GEMINI_API_KEY required for --full-context", file=sys.stderr)
+            sys.exit(1)
+        full_knowledge = load_full_knowledge(args.project)
+        tokens_est = len(full_knowledge) // 4
+        print(f"  Full context: {len(full_knowledge):,} chars (~{tokens_est:,} tokens)")
 
     print(f"engram Domain Eval")
     print(f"  Project:   {args.project}")
@@ -291,11 +392,14 @@ def main():
         gold = qa["answer"]
         category = qa["category"]
 
-        prediction = ask_engram(
-            binary, args.project, question,
-            threshold=args.threshold, top_k=args.top_k,
-            concise=True, model=args.model,
-        )
+        if args.full_context:
+            prediction = ask_full_context(question, full_knowledge, api_key, fc_model)
+        else:
+            prediction = ask_engram(
+                binary, args.project, question,
+                threshold=args.threshold, top_k=args.top_k,
+                concise=True, model=args.model,
+            )
 
         f1 = token_f1(prediction, gold)
         f1_by_cat[category].append(f1)
