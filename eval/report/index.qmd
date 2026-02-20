@@ -394,11 +394,38 @@ display(fig)
 plt.close(fig)
 ```
 
-**Bugs and patterns** have the largest gaps (~11 pts each). Both categories have high surface-form variation — the semantic content is often correct but exact token overlap is low. Two directions that address this:
+**Bugs and patterns** have the largest gaps (~11 pts each). Both categories have high surface-form variation — the semantic content is often correct but exact token overlap is low.
 
-1. **Cross-encoder re-ranking.** After retrieving top-k candidates, a small cross-encoder re-scores them using full pairwise attention. Unlike bi-encoder similarity, cross-encoders see both query and candidate together, making them much better at semantic relevance than token overlap.
+---
 
-2. **Query expansion.** Generate multiple query variants from the original question and merge result lists with RRF. Particularly useful for short, ambiguous bug queries where a single embedding may land in the wrong region.
+## Future directions
+
+### Near-term: closing the bugs/patterns gap
+
+**Cross-encoder re-ranking.** After retrieving top-k candidates with the current HyDE + BM25 hybrid pipeline, a lightweight cross-encoder re-scores each candidate with full pairwise attention (query + entry seen together). Unlike bi-encoder cosine similarity, cross-encoders can catch semantic relevance that surface form misses — directly addressing the bugs/patterns gap.
+
+**Query expansion.** Generate 2–3 query variants from the original question, retrieve independently, merge with RRF. Helps short ambiguous bug queries where a single embedding lands in the wrong region of the vector space.
+
+### Longer-term: recursive retrieval
+
+Current engram retrieval is one-shot: embed query → fetch top-k → answer. MIT's Recursive Language Model (RLM) work (2024) demonstrates a fundamentally different approach where the model **navigates** the knowledge base iteratively:
+
+```
+1. Fetch category index (what does engram know about X?)
+2. Model identifies which specific entries to fetch next
+3. Fetch only those entries
+4. Answer with minimal, relevant context
+```
+
+RLM(GPT-4o-mini) outperforms plain GPT-4o by **114%** on long-document QA and maintains a 49% advantage at 263k-token documents — using a cheaper model. The gains come entirely from task decomposition and targeted reading, not from a larger context window.
+
+Engram's MCP layer already exposes the primitives for this: `index` returns a compact map (~100 tokens), `recall(session_ids=[...])` fetches specific blocks. A recursive retrieval mode would wire these together into a multi-step answering loop rather than a single injection pass — likely the highest-leverage architectural improvement available.
+
+| Technique | Addresses | Effort | Expected gain |
+|---|---|---|---|
+| Cross-encoder re-ranking | bugs, patterns gap | Medium | +5–8 F1 |
+| Query expansion | not-found rate | Low | +2–4 F1 |
+| Recursive retrieval (RLM-style) | all categories at scale | High | unknown, high ceiling |
 
 ---
 
