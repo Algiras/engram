@@ -5,14 +5,17 @@ date: today
 ---
 
 ```{python}
+%matplotlib inline
 import json, pathlib, warnings
 import pandas as pd
 import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
 import seaborn as sns
 import numpy as np
+from IPython.display import display
 
 warnings.filterwarnings("ignore")
+plt.rcParams["figure.dpi"] = 120
 
 # ── styling ────────────────────────────────────────────────────────────────
 plt.rcParams.update({
@@ -149,7 +152,8 @@ ax.set_ylim(0, 80)
 ax.set_ylabel("Score", fontsize=11)
 ax.legend(loc="upper left", fontsize=10, framealpha=0.9)
 fig.tight_layout()
-plt.show()
+display(fig)
+plt.close(fig)
 ```
 
 ### Technique 1 — HyDE: bridging the vocabulary gap (+14.9 F1)
@@ -212,7 +216,8 @@ for bar, val in zip(bars, bar_vals):
 ax.set_ylabel("ΔF1 vs previous version", fontsize=11)
 ax.set_ylim(-4, 18)
 fig.tight_layout()
-plt.show()
+display(fig)
+plt.close(fig)
 ```
 
 **v5 → v6 also bundled two dataset fixes** that are worth separating from the retrieval improvement:
@@ -260,7 +265,8 @@ ax.set_ylim(0, 100)
 ax.set_ylabel("Token F1", fontsize=11)
 ax.legend(fontsize=10, framealpha=0.9)
 fig.tight_layout()
-plt.show()
+display(fig)
+plt.close(fig)
 ```
 
 **Key observations:**
@@ -292,7 +298,8 @@ for bar, val in zip(bars, nfr_vals):
 ax.set_ylabel("Questions with no retrieved answer (%)", fontsize=11)
 ax.set_ylim(0, 25)
 fig.tight_layout()
-plt.show()
+display(fig)
+plt.close(fig)
 ```
 
 Before BM25, 18.4% of queries returned nothing — the dense index had no match above the similarity threshold. After adding BM25 hybrid, the not-found rate dropped to **13.2%**, recovering ~20 additional questions per run. These tend to be exact-term queries: specific function names, error messages, version strings.
@@ -347,7 +354,8 @@ for bar, val in zip(bars, gap.values()):
 ax.set_ylabel("v6b F1 − Ceiling F1", fontsize=11)
 ax.set_title("Remaining gap to ceiling (positive = surpassed ceiling)", fontsize=11)
 fig.tight_layout()
-plt.show()
+display(fig)
+plt.close(fig)
 ```
 
 **Bugs and patterns** have the largest gaps (~11 pts each). Both categories have high surface-form variation — the semantic content is often correct but exact token overlap is low. Two directions that address this:
