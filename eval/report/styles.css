@@ -32,11 +32,21 @@ h3 { color: #2d2d5e; }
 .callout { border-radius: 8px; }
 
 /* ── table polish ──────────────────────────────────────────────────── */
-table { width: 100%; border-collapse: collapse; font-size: .9rem; margin: 1.2rem 0; }
-thead th { background: #16213e; color: #fff; padding: .55rem .85rem; text-align: left; }
+table { width: 100%; max-width: 800px; border-collapse: collapse; font-size: .9rem; margin: 1.2rem 0; }
+thead th { background: #16213e; color: #fff; padding: .55rem .85rem; text-align: center; white-space: nowrap; }
+thead th:first-child { text-align: left; }
 tbody tr:nth-child(even) { background: #f5f6fa; }
 tbody tr.highlight { background: #fff8e7; font-weight: 600; }
-tbody td { padding: .5rem .85rem; border-bottom: 1px solid #e8e8f0; }
+tbody td { padding: .5rem .85rem; border-bottom: 1px solid #e8e8f0; text-align: center; }
+tbody td:first-child { text-align: left; font-weight: 600; }
+
+/* pandas styled tables */
+.dataframe { width: 100%; max-width: 800px; border-collapse: collapse; font-size: .9rem; margin: 1.2rem 0; }
+.dataframe th { background: #16213e; color: #fff; padding: .55rem .85rem; text-align: center; white-space: nowrap; }
+.dataframe td { padding: .5rem .85rem; border-bottom: 1px solid #e8e8f0; text-align: center; }
+
+/* fixed-width images */
+img.quarto-figure { max-width: 800px; width: 100%; }
 
 /* ── technique timeline ────────────────────────────────────────────── */
 .timeline { list-style: none; padding: 0; margin: 1.5rem 0; position: relative; }

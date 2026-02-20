@@ -121,6 +121,7 @@ This report shows how three techniques address these failure modes — and docum
 
 ```{python}
 #| fig-cap: "F1 and judge scores across all versions. Dashed lines = ceiling upper bounds."
+#| out-width: 800px
 
 labels = list(V.keys())
 f1s    = [v["f1"]    for v in V.values()]
@@ -129,7 +130,7 @@ cf1    = V["Ceiling"]["f1"]
 cj     = V["Ceiling"]["judge"]
 x      = np.arange(len(labels))
 
-fig, ax = plt.subplots(figsize=(11, 4.5))
+fig, ax = plt.subplots(figsize=(10, 4))
 
 ax.axhspan(cf1 - 1, cf1 + 1, alpha=0.08, color=BLUE,  zorder=0)
 ax.axhspan(cj  - 1, cj  + 1, alpha=0.08, color=RED,   zorder=0)
@@ -195,6 +196,7 @@ The constant 60 dampens rank sensitivity, making the fusion robust to small posi
 
 ```{python}
 #| fig-cap: "F1 change at each version. Most gains come from v2→v3 (HyDE) and v5→v6 (BM25 hybrid)."
+#| out-width: 800px
 
 prev   = [None] + f1s[:-1]
 deltas = [round(f - p, 1) if p else 0.0 for f, p in zip(f1s, prev)]
@@ -231,6 +233,7 @@ plt.close(fig)
 
 ```{python}
 #| fig-cap: "Token F1 by category for four reference points: baseline, v3-full (HyDE only), v6b (full stack), ceiling."
+#| out-width: 800px
 
 run_cfg = [
     ("Baseline", LIGHT,  "//"),
@@ -282,6 +285,7 @@ plt.close(fig)
 
 ```{python}
 #| fig-cap: "Fraction of questions where the retriever returned no answer. BM25 hybrid reduced this by ~5 points."
+#| out-width: 800px
 
 versions_nfr = {k: v for k, v in V.items() if v["nfr"] is not None and k != "Ceiling"}
 nfr_labels   = list(versions_nfr.keys())
@@ -325,7 +329,14 @@ for name, v in V.items():
     })
 
 df = pd.DataFrame(rows)
-print(df.to_markdown(index=False))
+display(df.style
+    .set_properties(**{"text-align": "center"})
+    .set_properties(subset=["Version"], **{"text-align": "left", "font-weight": "bold"})
+    .apply(lambda x: ["background: #fff8e7; font-weight:600" if v == "v6b"
+                       else "color:#aaa; font-style:italic" if v == "Ceiling"
+                       else "" for v in x], subset=["Version"])
+    .hide(axis="index")
+)
 ```
 
 ---
@@ -334,6 +345,7 @@ print(df.to_markdown(index=False))
 
 ```{python}
 #| fig-cap: "Gap between v6b and ceiling per category. Negative = still below ceiling."
+#| out-width: 800px
 
 gap = {
     c: V["v6b"]["cats"].get(c, {}).get("f1", 0) - V["Ceiling"]["cats"].get(c, {}).get("f1", 0)
