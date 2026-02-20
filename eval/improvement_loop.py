@@ -245,7 +245,7 @@ def main():
 
         print(f"\n  Running eval ({args.max_per_cat or 'full'} questions per cat)...")
         start = time.time()
-        rc, out, err = run(eval_cmd, timeout=1200)
+        rc, out, err = run(eval_cmd, timeout=3600)
         elapsed = time.time() - start
 
         if rc != 0:
