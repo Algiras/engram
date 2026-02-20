@@ -2,15 +2,23 @@ project:
   type: default
   output-dir: _site
 
+execute:
+  echo: false
+  warning: false
+  message: false
+
 format:
   html:
-    theme: cosmo
+    theme: flatly
     toc: true
     toc-depth: 3
+    toc-title: "Contents"
     number-sections: false
     smooth-scroll: true
-    code-fold: true
-    fig-width: 9
+    fig-width: 10
     fig-height: 5
     embed-resources: true
     css: styles.css
+    include-in-header:
+      text: |
+        <meta name="description" content="engram SOTA evaluation report — domain knowledge retrieval benchmark">
