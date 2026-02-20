@@ -229,7 +229,7 @@ class EngramRunner:
         ]
         if use_graph:
             args.append("--use-graph")
-        rc, stdout, _ = self._run(*args, timeout=30)
+        rc, stdout, _ = self._run(*args, timeout=120)
         if rc != 0 or "Not found in knowledge base" in stdout:
             return ""
         lines = [l for l in stdout.strip().splitlines()
@@ -454,8 +454,8 @@ def main():
                     choices=["gemini", "openai", "ollama"])
     ap.add_argument("--extract-model", default="gemini-2.5-pro",
                     help="Gemini model for fact extraction (default: gemini-2.5-pro)")
-    ap.add_argument("--qa-model", default="gemini-2.5-pro",
-                    help="Model for engram ask synthesis (default: gemini-2.5-pro)")
+    ap.add_argument("--qa-model", default="gemini-2.5-flash",
+                    help="Model for engram ask synthesis (default: gemini-2.5-flash)")
     ap.add_argument("--judge-model", default="gemini-2.5-flash",
                     help="Model for LLM-as-a-Judge (default: gemini-2.5-flash — fast)")
     ap.add_argument("--strategy", default="atomic",
