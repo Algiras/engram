@@ -1,0 +1,12 @@
+{
+  "history": [
+    {
+      "iteration": 1,
+      "f1": 54.175718986730594,
+      "judge": 15.0,
+      "threshold": 0.15,
+      "top_k": 12
+    }
+  ],
+  "target": 13.5
+}
