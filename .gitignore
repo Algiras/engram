@@ -6,4 +6,5 @@
 .vscode/
 .idea/
 .claude/
+!.claude/agents/
 /memory-explainer-video
