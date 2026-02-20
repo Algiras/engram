@@ -302,8 +302,8 @@ def main():
     ap.add_argument("--model", default="",
                     help="LLM model override for engram ask (default: use configured)")
     ap.add_argument("--judge-model", default="gemini-2.5-flash")
-    ap.add_argument("--threshold", type=float, default=0.2)
-    ap.add_argument("--top-k", type=int, default=8)
+    ap.add_argument("--threshold", type=float, default=0.15)
+    ap.add_argument("--top-k", type=int, default=12)
     ap.add_argument("--use-judge", action="store_true",
                     help="Score with LLM-as-a-Judge (semantic accuracy)")
     ap.add_argument("--full-context", action="store_true",
@@ -418,9 +418,13 @@ def main():
     # Build results dict
     all_f1 = [s for v in f1_by_cat.values() for s in v]
     all_judge = [s for v in judge_by_cat.values() for s in v]
+    not_found = sum(1 for v in f1_by_cat.values() for s in v if s == 0.0)
     results = {
         "overall_f1": _avg(all_f1),
         "overall_judge": _avg(all_judge),
+        "not_found_rate": not_found / len(all_f1) * 100 if all_f1 else 0,
+        "not_found_count": not_found,
+        "total_questions": len(all_f1),
         "elapsed": elapsed,
         "label": label,
         "by_category": {
