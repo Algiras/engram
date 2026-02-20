@@ -5,3 +5,4 @@ nbformat>=5.0
 nbclient>=0.9
 jupyter-client>=8.0
 ipykernel>=6.0
+jinja2>=3.0
