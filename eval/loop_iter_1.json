@@ -1,0 +1,56 @@
+{
+  "overall_f1": 54.175718986730594,
+  "overall_judge": 15.0,
+  "not_found_rate": 15.0,
+  "not_found_count": 18,
+  "total_questions": 120,
+  "elapsed": 587.8318150043488,
+  "label": "project=Personal | t=0.15 k=12 | judge",
+  "by_category": {
+    "decisions": {
+      "f1": 50.80835487929309,
+      "judge": 10.0,
+      "n": 20
+    },
+    "solutions": {
+      "f1": 54.92196821169835,
+      "judge": 5.0,
+      "n": 20
+    },
+    "patterns": {
+      "f1": 56.037271878448344,
+      "judge": 20.0,
+      "n": 20
+    },
+    "bugs": {
+      "f1": 48.89916405433647,
+      "judge": 20.0,
+      "n": 20
+    },
+    "insights": {
+      "f1": 54.116741703429014,
+      "judge": 35.0,
+      "n": 20
+    },
+    "procedures": {
+      "f1": 60.27081319317824,
+      "judge": 0.0,
+      "n": 20
+    }
+  },
+  "args": {
+    "project": "Personal",
+    "dataset": "eval/qa_dataset.json",
+    "engram": "/Users/algimantask/Projects/claude-memory/target/release/engram",
+    "model": "",
+    "judge_model": "gemini-2.5-flash",
+    "threshold": 0.15,
+    "top_k": 12,
+    "use_judge": true,
+    "full_context": false,
+    "max_per_cat": 20,
+    "categories": "decisions,solutions,patterns,bugs,insights,procedures",
+    "output": "eval/loop_iter_1.json",
+    "prev": "eval/domain_results_v3.json"
+  }
+}

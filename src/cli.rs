@@ -107,6 +107,9 @@ pub enum Commands {
         /// Token budget for smart inject (default: 1500)
         #[arg(long, default_value = "1500")]
         budget: usize,
+        /// Measure and report token efficiency vs. full-context baseline
+        #[arg(long)]
+        measure_tokens: bool,
     },
 
     /// Manage Claude Code hooks for automatic memory integration
@@ -427,17 +430,25 @@ pub enum Commands {
         #[arg(long)]
         project: Option<String>,
 
-        /// Maximum knowledge entries to retrieve (default: 5)
-        #[arg(long, default_value = "5")]
+        /// Maximum knowledge entries to retrieve (default: 12)
+        #[arg(long, default_value = "12")]
         top_k: usize,
 
-        /// Minimum similarity threshold for semantic search 0.0–1.0 (default: 0.4)
-        #[arg(long, default_value = "0.4")]
+        /// Minimum similarity threshold for semantic search 0.0–1.0 (default: 0.15)
+        #[arg(long, default_value = "0.15")]
         threshold: f32,
 
         /// LLM provider override (anthropic, openai, ollama)
         #[arg(long)]
         provider: Option<String>,
+
+        /// Use graph-augmented retrieval (traverses 2-hop entity neighbors for multi-hop QA)
+        #[arg(long)]
+        use_graph: bool,
+
+        /// Return a short answer (1-10 words) — better for benchmark evaluation
+        #[arg(long)]
+        concise: bool,
     },
 
     /// Show named entity cards for a project (libraries, tools, APIs extracted from sessions)

@@ -335,6 +335,26 @@ pub const SYSTEM_QA_ASSISTANT: &str = "You are a precise Q&A assistant over a de
     Cite 1-3 session IDs used. \
     If the answer is not found in the knowledge, say exactly: 'Not found in knowledge base.'";
 
+/// Concise QA system prompt for benchmark evaluation (LoCoMo-style short answers)
+pub const SYSTEM_QA_CONCISE: &str =
+    "You are a precise technical Q&A assistant. \
+     Answer using ONLY information explicitly stated in the provided knowledge. \
+     Rules: \
+     (1) Give a SHORT answer: 1-15 words maximum. \
+     (2) Copy exact names, values, file paths, and technical terms directly from the knowledge. \
+     (3) For 'how was X fixed' → state the fix directly. \
+     (4) For 'what was decided about X' → state the decision directly. \
+     (5) No explanation, no preamble, no 'The answer is'. Just the answer. \
+     (6) If the answer is not in the knowledge, respond exactly: Not found in knowledge base.";
+
+pub fn ask_concise_prompt(question: &str, context: &str) -> String {
+    format!(
+        "KNOWLEDGE:\n{context}\n\n\
+         QUESTION: {question}\n\n\
+         Answer (copy exact terms from knowledge, 1-15 words max):"
+    )
+}
+
 pub fn ask_prompt(question: &str, context: &str) -> String {
     format!(
         "QUESTION: {question}\n\nKNOWLEDGE:\n{context}\n\n\
