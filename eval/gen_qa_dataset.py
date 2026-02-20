@@ -25,10 +25,13 @@ from pathlib import Path
 # Gemini helper
 # ---------------------------------------------------------------------------
 
-def gemini_call(prompt: str, api_key: str, model: str = "gemini-2.5-pro") -> str:
+def gemini_call(prompt: str, api_key: str, model: str = "gemini-2.5-pro",
+                max_tokens: int = 2048) -> str:
+    # Thinking models (2.5-pro) need extra tokens for internal reasoning
+    effective_max = max(max_tokens, 4096) if "2.5-pro" in model else max_tokens
     payload = json.dumps({
         "contents": [{"parts": [{"text": prompt}]}],
-        "generationConfig": {"temperature": 0.2, "maxOutputTokens": 1024},
+        "generationConfig": {"temperature": 0.2, "maxOutputTokens": effective_max},
     }).encode()
     url = (
         f"https://generativelanguage.googleapis.com/v1beta/models/"
@@ -40,7 +43,7 @@ def gemini_call(prompt: str, api_key: str, model: str = "gemini-2.5-pro") -> str
         method="POST",
     )
     try:
-        with urllib.request.urlopen(req, timeout=60) as resp:
+        with urllib.request.urlopen(req, timeout=120) as resp:
             result = json.loads(resp.read())
         candidate = result["candidates"][0]
         for part in candidate.get("content", {}).get("parts", []):
@@ -56,72 +59,85 @@ def gemini_call(prompt: str, api_key: str, model: str = "gemini-2.5-pro") -> str
 # ---------------------------------------------------------------------------
 
 CATEGORY_PROMPTS = {
-    "decisions": """Given this technical decision record from a software project, generate {n} specific questions that can be answered from the text.
+    "decisions": """Given this technical decision record, generate {n} questions that are DIRECTLY and COMPLETELY answerable from the text below.
 
-Focus on: what was decided, why it was decided, what alternatives were considered.
-Questions should require reading the content — not answerable from the question alone.
+Rules:
+- Every question must have a clear, specific answer in the content
+- Do NOT ask about things the content doesn't mention
+- Focus on: what was decided, why, what the alternatives were, what the context was
+- Questions should be natural ("What was decided about X?" not "Please describe...")
 
-Format: one question per line, no numbering.
-
-CONTENT:
-{content}
-
-Questions:""",
-
-    "solutions": """Given this problem-solution record from a software project, generate {n} specific questions.
-
-Focus on: what the problem was, how it was solved, the key insight.
-Questions should be specific enough that the answer is clearly in the content.
-
-Format: one question per line, no numbering.
+Format: one question per line, no numbering, end each with ?
 
 CONTENT:
 {content}
 
 Questions:""",
 
-    "patterns": """Given this codebase pattern/convention record, generate {n} specific questions.
+    "solutions": """Given this problem-solution record, generate {n} questions DIRECTLY answerable from the text.
 
-Focus on: what the pattern is, where it's used, how it works.
-Questions should target non-obvious details a developer would need to know.
+Rules:
+- Every question must have a specific answer in the content
+- Focus on: what the problem was, how it was solved, the key insight, the fix
+- Questions like "How was X fixed?", "What caused X?", "What was the solution to X?"
 
-Format: one question per line, no numbering.
-
-CONTENT:
-{content}
-
-Questions:""",
-
-    "bugs": """Given this bug record from a software project, generate {n} specific questions.
-
-Focus on: what the bug was, its root cause, how it was fixed.
-Questions should be specific and answerable from the content.
-
-Format: one question per line, no numbering.
+Format: one question per line, end each with ?
 
 CONTENT:
 {content}
 
 Questions:""",
 
-    "insights": """Given this technical insight record, generate {n} specific questions.
+    "patterns": """Given this codebase pattern record, generate {n} questions DIRECTLY answerable from the text.
 
-Focus on: what the insight is, why it matters, when it applies.
-Questions should probe understanding of the non-obvious realization.
+Rules:
+- Every question must have a specific answer in the content
+- Focus on: the pattern name, how it works, which files use it, why it exists
+- Questions like "What pattern is used for X?", "How does X work?", "Which files use X?"
 
-Format: one question per line, no numbering.
+Format: one question per line, end each with ?
 
 CONTENT:
 {content}
 
 Questions:""",
 
-    "procedures": """Given this workflow/procedure record, generate {n} specific questions.
+    "bugs": """Given this bug record, generate {n} questions DIRECTLY answerable from the text.
 
-Focus on: what the steps are, when to use this procedure, what it accomplishes.
-Questions should be practical and answerable from the content.
+Rules:
+- Every question must have a specific answer in the content
+- Focus on: what went wrong, the root cause, the fix applied
+- Questions like "What was the bug in X?", "What caused X?", "How was X fixed?"
 
-Format: one question per line, no numbering.
+Format: one question per line, end each with ?
+
+CONTENT:
+{content}
+
+Questions:""",
+
+    "insights": """Given this technical insight record, generate {n} questions DIRECTLY answerable from the text.
+
+Rules:
+- Every question must have a specific answer in the content
+- Focus on: the insight itself, why it's non-obvious, when it applies
+- Questions like "What is the key insight about X?", "Why does X behave this way?"
+
+Format: one question per line, end each with ?
+
+CONTENT:
+{content}
+
+Questions:""",
+
+    "procedures": """Given this procedure/workflow record, generate {n} questions DIRECTLY answerable from the text.
+
+Rules:
+- Every question must have a specific answer in the content
+- Focus on: the steps, what the procedure accomplishes, when to use it
+- Questions like "What are the steps to X?", "How do you X?", "What does step N do?"
+
+Format: one question per line, end each with ?
 
 CONTENT:
 {content}
@@ -130,7 +146,8 @@ Questions:""",
 }
 
 ANSWER_PROMPT = """Given this content, answer the following question in 1-15 words.
-Be specific and use exact terms from the content. No explanation.
+Use exact terms, names, and values from the content. No explanation.
+If the content does not contain enough information to answer, say: SKIP
 
 CONTENT:
 {content}
@@ -158,11 +175,16 @@ def generate_qa_pairs(content: str, category: str, session_id: str,
     if not raw or raw.startswith("[error"):
         return []
 
-    questions = [
-        line.strip().lstrip("•-*").strip()
-        for line in raw.splitlines()
-        if line.strip() and len(line.strip()) > 10 and "?" in line
-    ]
+    questions = []
+    for line in raw.splitlines():
+        line = re.sub(r"^\d+[.)]\s*", "", line.strip()).lstrip("•-*").strip()
+        if len(line) > 10:
+            # Accept lines that look like questions (end with ? or contain question words)
+            if "?" in line or any(
+                line.lower().startswith(w)
+                for w in ["what", "why", "how", "when", "where", "which", "who"]
+            ):
+                questions.append(line if line.endswith("?") else line + "?")
 
     qa_pairs = []
     for question in questions[:n_questions]:
@@ -174,6 +196,11 @@ def generate_qa_pairs(content: str, category: str, session_id: str,
             continue
         # Clean the answer
         answer = answer_raw.strip().strip('"').strip("'")
+        # Skip questions the LLM itself couldn't answer from the content
+        skip_phrases = ["skip", "content does not", "not specified", "not mentioned",
+                        "not provided", "no information", "cannot answer", "not stated"]
+        if any(p in answer.lower() for p in skip_phrases):
+            continue
         if len(answer) > 100:  # Too long = LLM went off-script
             continue
         qa_pairs.append({
@@ -219,7 +246,8 @@ def main():
     ap.add_argument("--questions-per-block", type=int, default=3)
     ap.add_argument("--max-blocks", type=int, default=None,
                     help="Limit blocks per category (for quick test runs)")
-    ap.add_argument("--model", default="gemini-2.5-pro")
+    ap.add_argument("--model", default="gemini-2.5-flash",
+                    help="Model for QA generation (default: gemini-2.5-flash)")
     ap.add_argument("--output", default="eval/qa_dataset.json")
     args = ap.parse_args()
 
