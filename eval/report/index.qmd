@@ -117,6 +117,30 @@ This report shows how three techniques address these failure modes — and docum
 
 ---
 
+## Landscape comparison
+
+The persistent memory space has several active systems. None publish results on the same benchmark or metric as this evaluation, so the table below compares **architecture and retrieval design** rather than numbers.
+
+| System | Storage model | Retrieval technique | Knowledge structure | Open benchmark |
+|---|---|---|---|---|
+| **engram (v6b)** | Flat markdown files per category | HyDE + BM25 hybrid + RRF | 6 domain categories (decisions, solutions, patterns, bugs, insights, procedures) | ✅ this report |
+| **Mem0** | Vector store + entity graph | Dense semantic search | Flat fact extraction, entity-linked | ❌ proprietary LOCOMO subset |
+| **MemGPT / Letta** | Hierarchical paged context | In-context paging + retrieval | Conversation segments | ❌ internal only |
+| **Zep** | Graph + vector hybrid | Graph-guided semantic search | Entity/relationship extraction | ❌ no public dataset |
+| **Naive RAG** | Vector store (flat) | Dense cosine only | No structure | varies |
+
+**Key architectural differences vs dense-only systems:**
+
+- *Category-aware extraction* — engram routes each insight to a typed bucket at write time. At retrieval time, the search space is smaller and topic-coherent; competing with an unsorted flat store is a known source of retrieval noise.
+- *HyDE* — most deployed systems embed the raw query. Generating a hypothetical answer first and embedding *that* consistently outperforms raw-query embedding on knowledge-base QA (Gao et al., 2023), especially when question and answer phrasing diverge.
+- *BM25 hybrid* — Mem0 and Zep use pure vector search. Exact-term queries (function names, version strings, error codes) are systematically underserved by dense retrieval alone; BM25 hybrid closes that gap.
+
+::: {.callout-note}
+**Reproducibility.** The 386-question evaluation dataset is available in `eval/domain_*.json`. Other systems can run the same questions against their retrieval stack and report Token F1 and LLM Judge for a direct comparison.
+:::
+
+---
+
 ## How each technique contributes
 
 ```{python}
