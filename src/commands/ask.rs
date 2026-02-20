@@ -20,9 +20,32 @@ pub fn cmd_ask(
     use_graph: bool,
     concise: bool,
 ) -> Result<()> {
-    // 1. Semantic search (graceful error → empty)
+    // 1. HyDE: generate a hypothetical answer to improve semantic search signal
+    // Uses a small LLM call to produce a document that "would answer" the query,
+    // then embeds query + hypothetical together for better recall.
+    let search_signal: String = {
+        let client = LlmClient::new(&config.llm);
+        let rt = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .map_err(|e| MemoryError::Config(format!("tokio runtime: {}", e)))?;
+        match rt.block_on(client.chat(
+            crate::llm::prompts::SYSTEM_HYDE_GENERATOR,
+            &crate::llm::prompts::hyde_prompt(query),
+        )) {
+            Ok(hypothetical) => {
+                if verbose {
+                    eprintln!("{} HyDE: {}", "Ask:".cyan(), hypothetical.trim().chars().take(100).collect::<String>());
+                }
+                format!("{}\n\nQuery: {}", hypothetical.trim(), query)
+            }
+            Err(_) => query.to_string(), // fallback to raw query
+        }
+    };
+
+    // 2. Semantic search using HyDE-enhanced signal
     let mut entries: Vec<SmartEntry> =
-        smart_search_sync(project, &config.memory_dir, query, top_k, threshold)
+        smart_search_sync(project, &config.memory_dir, &search_signal, top_k, threshold)
             .unwrap_or_else(|_| vec![]);
     let used_semantic = !entries.is_empty();
 

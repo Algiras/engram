@@ -430,12 +430,12 @@ pub enum Commands {
         #[arg(long)]
         project: Option<String>,
 
-        /// Maximum knowledge entries to retrieve (default: 5)
-        #[arg(long, default_value = "5")]
+        /// Maximum knowledge entries to retrieve (default: 12)
+        #[arg(long, default_value = "12")]
         top_k: usize,
 
-        /// Minimum similarity threshold for semantic search 0.0–1.0 (default: 0.4)
-        #[arg(long, default_value = "0.4")]
+        /// Minimum similarity threshold for semantic search 0.0–1.0 (default: 0.15)
+        #[arg(long, default_value = "0.15")]
         threshold: f32,
 
         /// LLM provider override (anthropic, openai, ollama)
