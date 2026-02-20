@@ -140,7 +140,8 @@ impl EmbeddingStore {
         results.into_iter().take(top_k).collect()
     }
 
-    /// Search with text query (requires provider to generate embedding)
+    /// Search with text query (requires provider to generate embedding).
+    /// When `hybrid=true`, combines dense + BM25 via Reciprocal Rank Fusion.
     pub async fn search_text(
         &self,
         query: &str,
@@ -148,7 +149,120 @@ impl EmbeddingStore {
         top_k: usize,
     ) -> Result<Vec<(f32, &EmbeddedChunk)>> {
         let query_embedding = provider.embed(query).await?;
-        Ok(self.search(&query_embedding, top_k))
+        Ok(self.hybrid_search(&query_embedding, query, top_k))
+    }
+
+    /// BM25 lexical search over chunk texts.
+    ///
+    /// Standard BM25 with k1=1.5, b=0.75. Tokenises on whitespace + punctuation
+    /// (lowercase). Returns up to `top_k` chunks sorted by descending score,
+    /// only including those whose BM25 score > 0 (i.e. at least one query term
+    /// appears in the chunk).
+    pub fn bm25_search(&self, query: &str, top_k: usize) -> Vec<(f32, &EmbeddedChunk)> {
+        if self.chunks.is_empty() {
+            return vec![];
+        }
+
+        let k1: f32 = 1.5;
+        let b: f32 = 0.75;
+
+        // Tokenise helper: split on non-alphanumeric, lowercase, skip stop words
+        let tokenise = |text: &str| -> Vec<String> {
+            text.split(|c: char| !c.is_alphanumeric() && c != '_')
+                .filter(|t| t.len() > 1)
+                .map(|t| t.to_lowercase())
+                .collect()
+        };
+
+        let query_terms: Vec<String> = tokenise(query);
+        if query_terms.is_empty() {
+            return vec![];
+        }
+
+        // Pre-tokenise all chunks
+        let tokenised: Vec<Vec<String>> = self.chunks.iter().map(|c| tokenise(&c.text)).collect();
+        let n = tokenised.len() as f32;
+        let avg_dl = tokenised.iter().map(|t| t.len()).sum::<usize>() as f32 / n;
+
+        // IDF per query term: log((N - df + 0.5) / (df + 0.5) + 1)
+        let idf: Vec<f32> = query_terms
+            .iter()
+            .map(|term| {
+                let df = tokenised.iter().filter(|t| t.contains(term)).count() as f32;
+                ((n - df + 0.5) / (df + 0.5) + 1.0).ln()
+            })
+            .collect();
+
+        // Score each chunk
+        let mut scored: Vec<(f32, &EmbeddedChunk)> = self
+            .chunks
+            .iter()
+            .enumerate()
+            .filter_map(|(i, chunk)| {
+                let tokens = &tokenised[i];
+                let dl = tokens.len() as f32;
+                let score: f32 = query_terms
+                    .iter()
+                    .zip(idf.iter())
+                    .map(|(term, &idf_val)| {
+                        let tf = tokens
+                            .iter()
+                            .filter(|t| t.as_str() == term.as_str())
+                            .count() as f32;
+                        idf_val * (tf * (k1 + 1.0)) / (tf + k1 * (1.0 - b + b * dl / avg_dl))
+                    })
+                    .sum();
+                if score > 0.0 {
+                    Some((score, chunk))
+                } else {
+                    None
+                }
+            })
+            .collect();
+
+        scored.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(std::cmp::Ordering::Equal));
+        scored.into_iter().take(top_k).collect()
+    }
+
+    /// Hybrid search: combine dense (embedding) + BM25 via Reciprocal Rank Fusion.
+    ///
+    /// RRF score = 1/(k+rank_dense) + 1/(k+rank_bm25)  where k=60 (standard).
+    /// Returns top_k chunks by fused score. Requires an already-computed
+    /// query embedding to avoid an extra async call.
+    pub fn hybrid_search(
+        &self,
+        query_embedding: &[f32],
+        query: &str,
+        top_k: usize,
+    ) -> Vec<(f32, &EmbeddedChunk)> {
+        const K: f32 = 60.0;
+        let candidate_k = (top_k * 3).max(30);
+
+        // Dense ranking
+        let dense = self.search(query_embedding, candidate_k);
+        // BM25 ranking
+        let bm25 = self.bm25_search(query, candidate_k);
+
+        // Build chunk-id → RRF score map
+        let mut rrf: std::collections::HashMap<&str, f32> = std::collections::HashMap::new();
+        for (rank, (_, chunk)) in dense.iter().enumerate() {
+            *rrf.entry(chunk.id.as_str()).or_insert(0.0) += 1.0 / (K + rank as f32 + 1.0);
+        }
+        for (rank, (_, chunk)) in bm25.iter().enumerate() {
+            *rrf.entry(chunk.id.as_str()).or_insert(0.0) += 1.0 / (K + rank as f32 + 1.0);
+        }
+
+        // Collect, sort by RRF score
+        let id_to_chunk: std::collections::HashMap<&str, &EmbeddedChunk> =
+            self.chunks.iter().map(|c| (c.id.as_str(), c)).collect();
+
+        let mut results: Vec<(f32, &EmbeddedChunk)> = rrf
+            .into_iter()
+            .filter_map(|(id, score)| id_to_chunk.get(id).map(|c| (score, *c)))
+            .collect();
+
+        results.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(std::cmp::Ordering::Equal));
+        results.into_iter().take(top_k).collect()
     }
 
     /// Get statistics

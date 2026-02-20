@@ -1,0 +1,367 @@
+{
+  "project": "Personal",
+  "model": "gemini-2.5-flash",
+  "qa_pairs": [
+    {
+      "question": "When should the \"Refactoring the `engram` codebase to centralize category definitions\" procedure be used?",
+      "answer": "Refactoring the `engram` codebase to centralize category definitions.",
+      "category": "procedures",
+      "session_id": "a812a67e-cd92-4e08-b78a-c8d9ed06246b",
+      "source_content": "- **Steps**:\n 1. Add `CATEGORIES`, `CATEGORY_FILES`, and `STRENGTH` constants to `config.rs`.\n 2. Update `vcs/mod.rs` to re-export `CATEGORIES` from `config.rs`.\n 3. Update `daemon.rs` to use `CATEGORY_FILES` from `config.rs`.\n 4. Update `learning/hooks.rs` to use `CATEGORIES` from `config.rs`.\n 5. "
+    },
+    {
+      "question": "What is the first step in the \"Refactoring the `engram` codebase to centralize category definitions\" procedure?",
+      "answer": "Add `CATEGORIES`, `CATEGORY_FILES`, and `STRENGTH` constants to `config.rs`.",
+      "category": "procedures",
+      "session_id": "a812a67e-cd92-4e08-b78a-c8d9ed06246b",
+      "source_content": "- **Steps**:\n 1. Add `CATEGORIES`, `CATEGORY_FILES`, and `STRENGTH` constants to `config.rs`.\n 2. Update `vcs/mod.rs` to re-export `CATEGORIES` from `config.rs`.\n 3. Update `daemon.rs` to use `CATEGORY_FILES` from `config.rs`.\n 4. Update `learning/hooks.rs` to use `CATEGORIES` from `config.rs`.\n 5. "
+    },
+    {
+      "question": "Which file is updated in step 2 of the \"Refactoring the `engram` codebase to centralize category definitions\" procedure?",
+      "answer": "`vcs/mod.rs`",
+      "category": "procedures",
+      "session_id": "a812a67e-cd92-4e08-b78a-c8d9ed06246b",
+      "source_content": "- **Steps**:\n 1. Add `CATEGORIES`, `CATEGORY_FILES`, and `STRENGTH` constants to `config.rs`.\n 2. Update `vcs/mod.rs` to re-export `CATEGORIES` from `config.rs`.\n 3. Update `daemon.rs` to use `CATEGORY_FILES` from `config.rs`.\n 4. Update `learning/hooks.rs` to use `CATEGORIES` from `config.rs`.\n 5. "
+    },
+    {
+      "question": "What is the first step in the 'Adding Hooks Health Check' procedure?",
+      "answer": "Add `MissingHooks` variant to `IssueCategory` enum in `src/health.rs`.",
+      "category": "procedures",
+      "session_id": "104a822f-f2ac-42b3-8237-c745f64e8562",
+      "source_content": "**Procedure 1: Adding Hooks Health Check**\n\n*   **Steps**:\n    1.  Add `MissingHooks` variant to `IssueCategory` enum in `src/health.rs`.\n    2.  Add `check_hooks_health(home: &Path) -> Vec<Issue>` function to `src/health.rs` to check for missing hook scripts and registrations.\n    3.  Add `heal_hoo"
+    },
+    {
+      "question": "Which file is modified in step 3 of the 'Adding Hooks Health Check' procedure?",
+      "answer": "src/daemon.rs",
+      "category": "procedures",
+      "session_id": "104a822f-f2ac-42b3-8237-c745f64e8562",
+      "source_content": "**Procedure 1: Adding Hooks Health Check**\n\n*   **Steps**:\n    1.  Add `MissingHooks` variant to `IssueCategory` enum in `src/health.rs`.\n    2.  Add `check_hooks_health(home: &Path) -> Vec<Issue>` function to `src/health.rs` to check for missing hook scripts and registrations.\n    3.  Add `heal_hoo"
+    },
+    {
+      "question": "What command is run by `heal_hooks_if_needed(log)` in the 'Adding Hooks Health Check' procedure if hooks are missing?",
+      "answer": "`engram hooks install`",
+      "category": "procedures",
+      "session_id": "104a822f-f2ac-42b3-8237-c745f64e8562",
+      "source_content": "**Procedure 1: Adding Hooks Health Check**\n\n*   **Steps**:\n    1.  Add `MissingHooks` variant to `IssueCategory` enum in `src/health.rs`.\n    2.  Add `check_hooks_health(home: &Path) -> Vec<Issue>` function to `src/health.rs` to check for missing hook scripts and registrations.\n    3.  Add `heal_hoo"
+    },
+    {
+      "question": "What is the first command in the procedure to \"build and test the engram project, and check the status of the hooks\"?",
+      "answer": "`cd /Users/algimantask/Projects/claude-memory`",
+      "category": "procedures",
+      "session_id": "a64fbe58-9ea7-4fc5-9d87-7816a1b97856",
+      "source_content": "1. **Steps**:\n   1. `cd /Users/algimantask/Projects/claude-memory`\n   2. `cargo build 2>&1 | head -60`\n   3. `cargo test 2>&1 | tail -20`\n   4. `engram hooks status 2>&1`\n2. **When to use**: To build and test the engram project, and check the status of the hooks. After making changes to the engram c"
+    },
+    {
+      "question": "When should the procedure for \"building and testing the engram project\" be used after making changes to the engram codebase?",
+      "answer": "After making changes to the engram codebase.",
+      "category": "procedures",
+      "session_id": "a64fbe58-9ea7-4fc5-9d87-7816a1b97856",
+      "source_content": "1. **Steps**:\n   1. `cd /Users/algimantask/Projects/claude-memory`\n   2. `cargo build 2>&1 | head -60`\n   3. `cargo test 2>&1 | tail -20`\n   4. `engram hooks status 2>&1`\n2. **When to use**: To build and test the engram project, and check the status of the hooks. After making changes to the engram c"
+    },
+    {
+      "question": "Which command is executed second in the procedure to \"install or reinstall engram hooks\"?",
+      "answer": "`engram hooks status 2>&1`",
+      "category": "procedures",
+      "session_id": "a64fbe58-9ea7-4fc5-9d87-7816a1b97856",
+      "source_content": "1. **Steps**:\n   1. `cd /Users/algimantask/Projects/claude-memory`\n   2. `cargo build 2>&1 | head -60`\n   3. `cargo test 2>&1 | tail -20`\n   4. `engram hooks status 2>&1`\n2. **When to use**: To build and test the engram project, and check the status of the hooks. After making changes to the engram c"
+    },
+    {
+      "question": "When should the 'Bug Fixing and Code Improvement Workflow' be used?",
+      "answer": "When addressing multiple related issues in Engram v0.3.5.",
+      "category": "procedures",
+      "session_id": "3297fa6e-ae3d-42c9-8eda-b69a2eccdb31",
+      "source_content": "**Procedure 1: Bug Fixing and Code Improvement Workflow**\n\n- **Steps**:\n1. Create tasks for each issue category: Inject gap, Panic risks, Manual add dedup gap, Gemini endpoint bug.\n2. Read relevant source code files.\n3. Edit source code files to implement fixes.\n4. Update task statuses to \"in_progre"
+    },
+    {
+      "question": "Which command is used for running tests in the 'Bug Fixing and Code Improvement Workflow'?",
+      "answer": "`cargo test`",
+      "category": "procedures",
+      "session_id": "3297fa6e-ae3d-42c9-8eda-b69a2eccdb31",
+      "source_content": "**Procedure 1: Bug Fixing and Code Improvement Workflow**\n\n- **Steps**:\n1. Create tasks for each issue category: Inject gap, Panic risks, Manual add dedup gap, Gemini endpoint bug.\n2. Read relevant source code files.\n3. Edit source code files to implement fixes.\n4. Update task statuses to \"in_progre"
+    },
+    {
+      "question": "What is the first step in the 'Implementing a New Feature' procedure?",
+      "answer": "Add a new error variant in `src/error.rs` if needed.",
+      "category": "procedures",
+      "session_id": "77bfa532-d7bf-4609-b448-7e1bb505945f",
+      "source_content": "**Procedure 1: Implementing a New Feature (VCS in this case)**\n\n- **Steps**:\n 1. Add a new error variant in `src/error.rs` if needed.\n 2. Create a new module directory (e.g., `src/vcs/`) and `mod.rs` file.\n 3. Add the new module to `src/lib.rs`.\n 4. Create CLI handlers in `src/commands/vcs.rs`.\n 5. "
+    },
+    {
+      "question": "Which file is updated in step 8 of the 'Implementing a New Feature' procedure?",
+      "answer": "`Cargo.toml`",
+      "category": "procedures",
+      "session_id": "77bfa532-d7bf-4609-b448-7e1bb505945f",
+      "source_content": "**Procedure 1: Implementing a New Feature (VCS in this case)**\n\n- **Steps**:\n 1. Add a new error variant in `src/error.rs` if needed.\n 2. Create a new module directory (e.g., `src/vcs/`) and `mod.rs` file.\n 3. Add the new module to `src/lib.rs`.\n 4. Create CLI handlers in `src/commands/vcs.rs`.\n 5. "
+    },
+    {
+      "question": "What command is used to build the project in the 'Implementing a New Feature' procedure?",
+      "answer": "`cargo build`",
+      "category": "procedures",
+      "session_id": "77bfa532-d7bf-4609-b448-7e1bb505945f",
+      "source_content": "**Procedure 1: Implementing a New Feature (VCS in this case)**\n\n- **Steps**:\n 1. Add a new error variant in `src/error.rs` if needed.\n 2. Create a new module directory (e.g., `src/vcs/`) and `mod.rs` file.\n 3. Add the new module to `src/lib.rs`.\n 4. Create CLI handlers in `src/commands/vcs.rs`.\n 5. "
+    },
+    {
+      "question": "When should the procedure for \"Implementing the 'Three Feature Sprint (v0.3.4)'\" be used?",
+      "answer": "Implementing the \"Three Feature Sprint (v0.3.4)\".",
+      "category": "procedures",
+      "session_id": "78f470d5-16cd-4dc9-8734-98c9ba447fcd",
+      "source_content": "1. **Steps**:\n   1. Add new prompts to `src/llm/prompts.rs`.\n   2. Add Phase 2 contradiction block in `tool_reflect` in `src/mcp/server.rs`.\n   3. Add `--summarize` flag to `Forget` in `src/cli.rs`.\n   4. Update `cmd_forget` signature, `StaleEntry`, and add summarize path in `src/commands/knowledge."
+    },
+    {
+      "question": "What is the first step in the procedure for \"Implementing the 'Three Feature Sprint (v0.3.4)'\"?",
+      "answer": "Add new prompts to `src/llm/prompts.rs`.",
+      "category": "procedures",
+      "session_id": "78f470d5-16cd-4dc9-8734-98c9ba447fcd",
+      "source_content": "1. **Steps**:\n   1. Add new prompts to `src/llm/prompts.rs`.\n   2. Add Phase 2 contradiction block in `tool_reflect` in `src/mcp/server.rs`.\n   3. Add `--summarize` flag to `Forget` in `src/cli.rs`.\n   4. Update `cmd_forget` signature, `StaleEntry`, and add summarize path in `src/commands/knowledge."
+    },
+    {
+      "question": "Which file is updated to add the `--summarize` flag to `Forget` in the \"Three Feature Sprint (v0.3.4)\" implementation procedure?",
+      "answer": "`src/cli.rs`",
+      "category": "procedures",
+      "session_id": "78f470d5-16cd-4dc9-8734-98c9ba447fcd",
+      "source_content": "1. **Steps**:\n   1. Add new prompts to `src/llm/prompts.rs`.\n   2. Add Phase 2 contradiction block in `tool_reflect` in `src/mcp/server.rs`.\n   3. Add `--summarize` flag to `Forget` in `src/cli.rs`.\n   4. Update `cmd_forget` signature, `StaleEntry`, and add summarize path in `src/commands/knowledge."
+    },
+    {
+      "question": "What is the first step in the procedure for adding the Ask variant?",
+      "answer": "Add `Ask` variant to `EventType` in `tracker.rs`.",
+      "category": "procedures",
+      "session_id": "7394ec14-532a-4030-bce9-a68385724d6d",
+      "source_content": "1. **Steps**:\n   1. Add `Ask` variant to `EventType` in `tracker.rs`.\n   2. Add `Ask` arm to exhaustive match in `diff.rs`.\n   3. Append to `prompts.rs`.\n   4. Create `src/commands/ask.rs`.\n   5. Add `pub mod ask` to `commands/mod.rs`.\n   6. Add `Ask` variant to `cli.rs`.\n   7. Update `main.rs` (imp"
+    },
+    {
+      "question": "Which file is created in step 4 of the procedure for adding the Ask variant?",
+      "answer": "`src/commands/ask.rs`",
+      "category": "procedures",
+      "session_id": "7394ec14-532a-4030-bce9-a68385724d6d",
+      "source_content": "1. **Steps**:\n   1. Add `Ask` variant to `EventType` in `tracker.rs`.\n   2. Add `Ask` arm to exhaustive match in `diff.rs`.\n   3. Append to `prompts.rs`.\n   4. Create `src/commands/ask.rs`.\n   5. Add `pub mod ask` to `commands/mod.rs`.\n   6. Add `Ask` variant to `cli.rs`.\n   7. Update `main.rs` (imp"
+    },
+    {
+      "question": "What actions are performed in step 10 of the procedure for adding the Ask variant?",
+      "answer": "Run `fmt`, `clippy`, and tests.",
+      "category": "procedures",
+      "session_id": "7394ec14-532a-4030-bce9-a68385724d6d",
+      "source_content": "1. **Steps**:\n   1. Add `Ask` variant to `EventType` in `tracker.rs`.\n   2. Add `Ask` arm to exhaustive match in `diff.rs`.\n   3. Append to `prompts.rs`.\n   4. Create `src/commands/ask.rs`.\n   5. Add `pub mod ask` to `commands/mod.rs`.\n   6. Add `Ask` variant to `cli.rs`.\n   7. Update `main.rs` (imp"
+    },
+    {
+      "question": "When should the procedure for \"Implementing a new feature or modifying existing functionality\" be used?",
+      "answer": "Implementing a new feature or modifying existing functionality.",
+      "category": "procedures",
+      "session_id": "68bbfedb-7f70-4a7d-a8a5-0fbc1586076c",
+      "source_content": "1. **Steps**:\n    1.  Update the relevant file (e.g., `cli.rs`, `main.rs`, `commands/knowledge.rs`) to add or modify functionality.\n    2.  Check for necessary imports (e.g., `chrono`) and add them if missing. Determine if existing usages are full paths or require `use` statements.\n    3.  Implement"
+    },
+    {
+      "question": "Which files are examples of relevant files to update in the first step when \"Implementing a new feature or modifying existing functionality\"?",
+      "answer": "`cli.rs`, `main.rs`, `commands/knowledge.rs`",
+      "category": "procedures",
+      "session_id": "68bbfedb-7f70-4a7d-a8a5-0fbc1586076c",
+      "source_content": "1. **Steps**:\n    1.  Update the relevant file (e.g., `cli.rs`, `main.rs`, `commands/knowledge.rs`) to add or modify functionality.\n    2.  Check for necessary imports (e.g., `chrono`) and add them if missing. Determine if existing usages are full paths or require `use` statements.\n    3.  Implement"
+    },
+    {
+      "question": "What field should be included in `tracker.rs` in the first step of the procedure that starts with \"Update `tracker.rs` to include new event types\"?",
+      "answer": "`tokens_consumed` field",
+      "category": "procedures",
+      "session_id": "68bbfedb-7f70-4a7d-a8a5-0fbc1586076c",
+      "source_content": "1. **Steps**:\n    1.  Update the relevant file (e.g., `cli.rs`, `main.rs`, `commands/knowledge.rs`) to add or modify functionality.\n    2.  Check for necessary imports (e.g., `chrono`) and add them if missing. Determine if existing usages are full paths or require `use` statements.\n    3.  Implement"
+    },
+    {
+      "question": "What is the purpose of the procedure for \"Implementing richer observation types\"?",
+      "answer": "Implementing richer observation types (bugs, insights, questions) in the application.",
+      "category": "procedures",
+      "session_id": "c86a5be0-9417-45ed-8590-3548a2255a4b",
+      "source_content": "1.  **Steps**:\n    1.  Extend `Add` command `category` value_parser in `src/cli.rs`.\n    2.  Add arms for the 3 new types in `cmd_add` in `src/commands/manual.rs`.\n    3.  Add `bugs_prompt()`, `insights_prompt()` and `questions_prompt()` in `src/llm/prompts.rs`.\n    4.  Extend `extract_and_merge_kno"
+    },
+    {
+      "question": "When should the procedure for \"Implementing hybrid search filters\" be used?",
+      "answer": "Implementing hybrid search filters with options for filtering by date, category, and file.",
+      "category": "procedures",
+      "session_id": "c86a5be0-9417-45ed-8590-3548a2255a4b",
+      "source_content": "1.  **Steps**:\n    1.  Extend `Add` command `category` value_parser in `src/cli.rs`.\n    2.  Add arms for the 3 new types in `cmd_add` in `src/commands/manual.rs`.\n    3.  Add `bugs_prompt()`, `insights_prompt()` and `questions_prompt()` in `src/llm/prompts.rs`.\n    4.  Extend `extract_and_merge_kno"
+    },
+    {
+      "question": "What is the first step in the procedure for \"Implementing auto-capture of observations\"?",
+      "answer": "Create `src/commands/observe.rs`.",
+      "category": "procedures",
+      "session_id": "c86a5be0-9417-45ed-8590-3548a2255a4b",
+      "source_content": "1.  **Steps**:\n    1.  Extend `Add` command `category` value_parser in `src/cli.rs`.\n    2.  Add arms for the 3 new types in `cmd_add` in `src/commands/manual.rs`.\n    3.  Add `bugs_prompt()`, `insights_prompt()` and `questions_prompt()` in `src/llm/prompts.rs`.\n    4.  Extend `extract_and_merge_kno"
+    },
+    {
+      "question": "Which file is modified in step 1 of the 'Implementing Provider Config Features (Steps 1-8)' procedure?",
+      "answer": "`src/auth/mod.rs`",
+      "category": "procedures",
+      "session_id": "5e46348f-ffe0-4e18-814a-4fc363f1acf6",
+      "source_content": "**Procedure 1: Implementing Provider Config Features (Steps 1-8)**\n\n- **Steps**:\n    1. Add `embed_provider` to `AuthStore` in `src/auth/mod.rs`.\n    2. Add `chat_minimal` to `LlmClient` in `src/llm/client.rs` by refactoring `max_tokens`. Update OpenAI and Gemini private methods to accept `max_token"
+    },
+    {
+      "question": "When should the 'Implementing Provider Config Features (Steps 1-8)' procedure be used?",
+      "answer": "When implementing the CLI commands for provider configuration and testing.",
+      "category": "procedures",
+      "session_id": "5e46348f-ffe0-4e18-814a-4fc363f1acf6",
+      "source_content": "**Procedure 1: Implementing Provider Config Features (Steps 1-8)**\n\n- **Steps**:\n    1. Add `embed_provider` to `AuthStore` in `src/auth/mod.rs`.\n    2. Add `chat_minimal` to `LlmClient` in `src/llm/client.rs` by refactoring `max_tokens`. Update OpenAI and Gemini private methods to accept `max_token"
+    },
+    {
+      "question": "What is added to `src/tui/ui.rs` in step 2 of the 'Implementing Provider Config Features (Steps 9-10)' procedure?",
+      "answer": "Config to tab bar, `render_config`, and `render_model_input_overlay`.",
+      "category": "procedures",
+      "session_id": "5e46348f-ffe0-4e18-814a-4fc363f1acf6",
+      "source_content": "**Procedure 1: Implementing Provider Config Features (Steps 1-8)**\n\n- **Steps**:\n    1. Add `embed_provider` to `AuthStore` in `src/auth/mod.rs`.\n    2. Add `chat_minimal` to `LlmClient` in `src/llm/client.rs` by refactoring `max_tokens`. Update OpenAI and Gemini private methods to accept `max_token"
+    },
+    {
+      "question": "When should the 'Wiring the `--verbose` flag into commands' procedure be used?",
+      "answer": "When a new global `--verbose` flag is added to the CLI and needs to be wired into existing commands.",
+      "category": "procedures",
+      "session_id": "65c48460-9168-4d5f-ac65-16dac931dd47",
+      "source_content": "**Procedure 1: Wiring the `--verbose` flag into commands**\n\n- **Steps**:\n 1. Add `verbose: bool` parameter to the function signature of the target command functions (e.g., `cmd_ingest`, `cmd_recall`, `cmd_context`, `cmd_regen`, `cmd_embed`, `cmd_search_semantic`).\n 2. Update the command implementati"
+    },
+    {
+      "question": "What parameter should be added to the function signature in step 1 of the 'Wiring the `--verbose` flag into commands' procedure?",
+      "answer": "`verbose: bool`",
+      "category": "procedures",
+      "session_id": "65c48460-9168-4d5f-ac65-16dac931dd47",
+      "source_content": "**Procedure 1: Wiring the `--verbose` flag into commands**\n\n- **Steps**:\n 1. Add `verbose: bool` parameter to the function signature of the target command functions (e.g., `cmd_ingest`, `cmd_recall`, `cmd_context`, `cmd_regen`, `cmd_embed`, `cmd_search_semantic`).\n 2. Update the command implementati"
+    },
+    {
+      "question": "Which file is modified in step 3 of the 'Wiring the `--verbose` flag into commands' procedure?",
+      "answer": "src/main.rs",
+      "category": "procedures",
+      "session_id": "65c48460-9168-4d5f-ac65-16dac931dd47",
+      "source_content": "**Procedure 1: Wiring the `--verbose` flag into commands**\n\n- **Steps**:\n 1. Add `verbose: bool` parameter to the function signature of the target command functions (e.g., `cmd_ingest`, `cmd_recall`, `cmd_context`, `cmd_regen`, `cmd_embed`, `cmd_search_semantic`).\n 2. Update the command implementati"
+    },
+    {
+      "question": "When should the procedure for 'implementing a plan with defined tasks and file modifications' be used?",
+      "answer": "When implementing a plan with defined tasks and file modifications.",
+      "category": "procedures",
+      "session_id": "12ef59e6-8cca-4251-99bd-bd6c47ad60b8",
+      "source_content": "1.  **Steps**:\n    1.  Read relevant files to understand the current state.\n    2.  Create a task list.\n    3.  Implement the tasks.\n    4.  Update task status to \"in_progress\".\n    5.  Edit files to implement changes.\n    6.  Update task status to \"completed\".\n    **When to use**: When implementing"
+    },
+    {
+      "question": "What is the first step in the procedure for 'implementing a plan with defined tasks and file modifications'?",
+      "answer": "Read relevant files to understand the current state.",
+      "category": "procedures",
+      "session_id": "12ef59e6-8cca-4251-99bd-bd6c47ad60b8",
+      "source_content": "1.  **Steps**:\n    1.  Read relevant files to understand the current state.\n    2.  Create a task list.\n    3.  Implement the tasks.\n    4.  Update task status to \"in_progress\".\n    5.  Edit files to implement changes.\n    6.  Update task status to \"completed\".\n    **When to use**: When implementing"
+    },
+    {
+      "question": "What is the second step in the procedure that begins with 'Read the file to be modified'?",
+      "answer": "Grep",
+      "category": "procedures",
+      "session_id": "12ef59e6-8cca-4251-99bd-bd6c47ad60b8",
+      "source_content": "1.  **Steps**:\n    1.  Read relevant files to understand the current state.\n    2.  Create a task list.\n    3.  Implement the tasks.\n    4.  Update task status to \"in_progress\".\n    5.  Edit files to implement changes.\n    6.  Update task status to \"completed\".\n    **When to use**: When implementing"
+    },
+    {
+      "question": "What is the first step in the described task management procedure?",
+      "answer": "Create a new task with description.",
+      "category": "procedures",
+      "session_id": "9cca2398-ebe7-4145-8d70-81a62043efe8",
+      "source_content": "1. **Steps**:\n    1. Create a new task with description.\n    2. Update the task status to \"in_progress\".\n    3. Implement the changes related to the task.\n    4. Update the task status to \"completed\".\n    5. Repeat for all tasks.\n    6. Verify the changes.\n    \n    **When to use**: Implementing a pl"
+    },
+    {
+      "question": "What is the task status updated to after implementing changes in the described task management procedure?",
+      "answer": "completed",
+      "category": "procedures",
+      "session_id": "9cca2398-ebe7-4145-8d70-81a62043efe8",
+      "source_content": "1. **Steps**:\n    1. Create a new task with description.\n    2. Update the task status to \"in_progress\".\n    3. Implement the changes related to the task.\n    4. Update the task status to \"completed\".\n    5. Repeat for all tasks.\n    6. Verify the changes.\n    \n    **When to use**: Implementing a pl"
+    },
+    {
+      "question": "What is the first step in the 'Run engram ingest in the background' procedure?",
+      "answer": "Create a shell script (e.g., `/tmp/engram-ingest-bg.sh`).",
+      "category": "procedures",
+      "session_id": "5ba42b53-98d1-4f7d-bc44-f2c94dfc4dab",
+      "source_content": "1. **Run engram ingest in the background (manual workaround)**\n   1. **Steps**:\n     1. Create a shell script (e.g., `/tmp/engram-ingest-bg.sh`) that:\n        - Sets a log file path.\n        - Echoes start time to the log.\n        - Executes `engram ingest` with output redirected to the log.\n     2."
+    },
+    {
+      "question": "Which command is used to run the script in the background in the 'Run engram ingest in the background' procedure?",
+      "answer": "`nohup /tmp/engram-ingest-bg.sh > /dev/null 2>&1 &`",
+      "category": "procedures",
+      "session_id": "5ba42b53-98d1-4f7d-bc44-f2c94dfc4dab",
+      "source_content": "1. **Run engram ingest in the background (manual workaround)**\n   1. **Steps**:\n     1. Create a shell script (e.g., `/tmp/engram-ingest-bg.sh`) that:\n        - Sets a log file path.\n        - Echoes start time to the log.\n        - Executes `engram ingest` with output redirected to the log.\n     2."
+    },
+    {
+      "question": "When should the 'Run engram ingest in the background' procedure be used?",
+      "answer": "To process a large backlog of sessions without blocking the terminal.",
+      "category": "procedures",
+      "session_id": "5ba42b53-98d1-4f7d-bc44-f2c94dfc4dab",
+      "source_content": "1. **Run engram ingest in the background (manual workaround)**\n   1. **Steps**:\n     1. Create a shell script (e.g., `/tmp/engram-ingest-bg.sh`) that:\n        - Sets a log file path.\n        - Echoes start time to the log.\n        - Executes `engram ingest` with output redirected to the log.\n     2."
+    },
+    {
+      "question": "When should the \"Install a binary from a GitHub release manually\" procedure be used?",
+      "answer": "When an automated install script fails, or when you need more control over the installation process.",
+      "category": "procedures",
+      "session_id": "6fe64f62-64d6-4a0e-bdbe-f1ba76e5f9c5",
+      "source_content": "1. **Install a binary from a GitHub release manually**\n   1. List releases on GitHub (optional): `gh release list --repo <org>/<repo> --limit 5`\n   2. Download the desired release asset using `gh release download <version> --repo <org>/<repo> --pattern \"<asset_pattern>\" --dir <destination_dir>`. If "
+    },
+    {
+      "question": "Which command is used to extract the downloaded archive in step 4 of the \"Install a binary from a GitHub release manually\" procedure?",
+      "answer": "`tar`",
+      "category": "procedures",
+      "session_id": "6fe64f62-64d6-4a0e-bdbe-f1ba76e5f9c5",
+      "source_content": "1. **Install a binary from a GitHub release manually**\n   1. List releases on GitHub (optional): `gh release list --repo <org>/<repo> --limit 5`\n   2. Download the desired release asset using `gh release download <version> --repo <org>/<repo> --pattern \"<asset_pattern>\" --dir <destination_dir>`. If "
+    },
+    {
+      "question": "When should the 'Building and Running the `engram reflect` command' procedure be used?",
+      "answer": "To generate a memory quality report for a specific project using the `engram reflect` command.",
+      "category": "procedures",
+      "session_id": "8f15a23c-1e97-44b6-babf-c4e53ac83e2f",
+      "source_content": "**Procedure 1: Building and Running the `engram reflect` command**\n\n- **Steps**:\n 1. `cd /Users/algimantask/Projects/claude-memory` (Navigate to the project directory)\n 2. `cargo build 2>&1` (Build the project)\n 3. `cargo run -- reflect <project_name> 2>&1` (Run the `engram reflect` command for a sp"
+    },
+    {
+      "question": "What is the first step in the 'Building and Running the `engram reflect` command' procedure?",
+      "answer": "`cd /Users/algimantask/Projects/claude-memory`",
+      "category": "procedures",
+      "session_id": "8f15a23c-1e97-44b6-babf-c4e53ac83e2f",
+      "source_content": "**Procedure 1: Building and Running the `engram reflect` command**\n\n- **Steps**:\n 1. `cd /Users/algimantask/Projects/claude-memory` (Navigate to the project directory)\n 2. `cargo build 2>&1` (Build the project)\n 3. `cargo run -- reflect <project_name> 2>&1` (Run the `engram reflect` command for a sp"
+    },
+    {
+      "question": "Which command is used to build the project in the 'Building and Running the `engram reflect` command' procedure?",
+      "answer": "`cargo build 2>&1`",
+      "category": "procedures",
+      "session_id": "8f15a23c-1e97-44b6-babf-c4e53ac83e2f",
+      "source_content": "**Procedure 1: Building and Running the `engram reflect` command**\n\n- **Steps**:\n 1. `cd /Users/algimantask/Projects/claude-memory` (Navigate to the project directory)\n 2. `cargo build 2>&1` (Build the project)\n 3. `cargo run -- reflect <project_name> 2>&1` (Run the `engram reflect` command for a sp"
+    },
+    {
+      "question": "What is the purpose of the 'Fixing Engram v0.3.5 Issues' procedure?",
+      "answer": "Fixing Engram v0.3.5 Issues.",
+      "category": "procedures",
+      "session_id": "93999c5b-97ac-4896-82b2-62dbed606242",
+      "source_content": "1. **Fixing Engram v0.3.5 Issues**\n   - **Steps**:\n     1.  Read relevant source files (inject.rs, commands/manual.rs, commands/sync.rs, mcp/server.rs, embeddings/provider.rs, extractor/knowledge.rs).\n     2.  Edit source files to apply fixes (inject.rs, mcp/server.rs, commands/sync.rs, commands/man"
+    },
+    {
+      "question": "What command is used to run build checks in the 'Fixing Engram v0.3.5 Issues' procedure?",
+      "answer": "`cargo fmt && cargo clippy -- -D warnings`",
+      "category": "procedures",
+      "session_id": "93999c5b-97ac-4896-82b2-62dbed606242",
+      "source_content": "1. **Fixing Engram v0.3.5 Issues**\n   - **Steps**:\n     1.  Read relevant source files (inject.rs, commands/manual.rs, commands/sync.rs, mcp/server.rs, embeddings/provider.rs, extractor/knowledge.rs).\n     2.  Edit source files to apply fixes (inject.rs, mcp/server.rs, commands/sync.rs, commands/man"
+    },
+    {
+      "question": "Which file is updated in the final step of the 'Fixing Engram v0.3.5 Issues' procedure?",
+      "answer": "CHANGELOG",
+      "category": "procedures",
+      "session_id": "93999c5b-97ac-4896-82b2-62dbed606242",
+      "source_content": "1. **Fixing Engram v0.3.5 Issues**\n   - **Steps**:\n     1.  Read relevant source files (inject.rs, commands/manual.rs, commands/sync.rs, mcp/server.rs, embeddings/provider.rs, extractor/knowledge.rs).\n     2.  Edit source files to apply fixes (inject.rs, mcp/server.rs, commands/sync.rs, commands/man"
+    },
+    {
+      "question": "When should the procedure for a \"marketplace.json no longer present\" error be used?",
+      "answer": "When a marketplace refresh fails with a \"marketplace.json no longer present\" error.",
+      "category": "procedures",
+      "session_id": "f5c3ee8e-14f2-45c8-96a5-d5e1b5cbdc9c",
+      "source_content": "1. **Steps**:\n    1.  `cd` to the local clone of the marketplace repository (e.g., `/Users/algimantask/.claude/plugins/marketplaces/claudius`).\n    2.  Run `git fetch origin` to sync the remote tracking ref.\n    3.  Verify `.claude-plugin/marketplace.json` is valid JSON.\n    4.  Update `lastUpdated`"
+    },
+    {
+      "question": "What is the first step in the procedure for resolving a marketplace refresh failure?",
+      "answer": "`cd` to the local clone of the marketplace repository.",
+      "category": "procedures",
+      "session_id": "f5c3ee8e-14f2-45c8-96a5-d5e1b5cbdc9c",
+      "source_content": "1. **Steps**:\n    1.  `cd` to the local clone of the marketplace repository (e.g., `/Users/algimantask/.claude/plugins/marketplaces/claudius`).\n    2.  Run `git fetch origin` to sync the remote tracking ref.\n    3.  Verify `.claude-plugin/marketplace.json` is valid JSON.\n    4.  Update `lastUpdated`"
+    },
+    {
+      "question": "Which file is updated in step 4 of the procedure for a marketplace refresh failure?",
+      "answer": "`known_marketplaces.json`",
+      "category": "procedures",
+      "session_id": "f5c3ee8e-14f2-45c8-96a5-d5e1b5cbdc9c",
+      "source_content": "1. **Steps**:\n    1.  `cd` to the local clone of the marketplace repository (e.g., `/Users/algimantask/.claude/plugins/marketplaces/claudius`).\n    2.  Run `git fetch origin` to sync the remote tracking ref.\n    3.  Verify `.claude-plugin/marketplace.json` is valid JSON.\n    4.  Update `lastUpdated`"
+    }
+  ],
+  "total": 51,
+  "by_category": {
+    "procedures": 51
+  }
+}

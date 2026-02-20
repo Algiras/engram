@@ -134,8 +134,13 @@ Questions:""",
 
 Rules:
 - Every question must have a specific answer in the content
-- Focus on: the steps, what the procedure accomplishes, when to use it
-- Questions like "What are the steps to X?", "How do you X?", "What does step N do?"
+- ALWAYS include the procedure name or a key distinguishing phrase in the question so it is unambiguous
+- NEVER ask "when should this procedure be used?" without naming the procedure
+- Focus on: the steps, what the procedure accomplishes, when to use it, which commands/files are involved
+- Good examples: "What is the first step in the 'Add Hooks Health Check' procedure?",
+  "When should the 'engram ingest in the background' procedure be used?",
+  "Which file is modified in step 2 of the provider config procedure?"
+- Bad examples: "What is the first step?", "When should this procedure be used?"
 
 Format: one question per line, end each with ?
 

@@ -1364,9 +1364,35 @@ fn clean_extraction(text: &str) -> Option<String> {
     .any(|p| lower.contains(p));
 
     if is_placeholder {
+        return None;
+    }
+
+    // Strip resolver keyword prefix if LLM accidentally echoes it.
+    // e.g. the model sometimes starts its extraction response with "ADD\n..." or
+    // "NOOP\n..." because it has seen the resolver prompt in its context.
+    let cleaned = {
+        let first_line = trimmed.lines().next().unwrap_or("").trim();
+        let is_resolver_prefix = matches!(
+            first_line.to_uppercase().as_str(),
+            "ADD" | "NOOP" | "DELETE"
+        ) || first_line.to_uppercase().starts_with("UPDATE ");
+        if is_resolver_prefix {
+            trimmed
+                .lines()
+                .skip(1)
+                .collect::<Vec<_>>()
+                .join("\n")
+                .trim()
+                .to_string()
+        } else {
+            trimmed.to_string()
+        }
+    };
+
+    if cleaned.is_empty() {
         None
     } else {
-        Some(trimmed.to_string())
+        Some(cleaned)
     }
 }
 
