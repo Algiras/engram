@@ -57,7 +57,7 @@ use commands::learning::{
     cmd_learn_dashboard, cmd_learn_feedback, cmd_learn_optimize, cmd_learn_reset,
     cmd_learn_simulate,
 };
-use commands::manual::{cmd_add, cmd_lookup, cmd_promote, cmd_review};
+use commands::manual::{cmd_add, cmd_drain, cmd_lookup, cmd_promote, cmd_review};
 use commands::observe::cmd_observe;
 use commands::reflect::{cmd_reflect, cmd_reflect_all};
 use commands::sync::{
@@ -102,10 +102,11 @@ fn main() -> Result<()> {
         no_auto_clean,
         smart,
         budget,
+        lines,
         measure_tokens,
     } = cli.command
     {
-        return cmd_inject(project, full, no_auto_clean, smart, budget, measure_tokens);
+        return cmd_inject(project, full, no_auto_clean, smart, budget, lines, measure_tokens);
     }
 
     // Lookup operates on knowledge files — no Config/LLM auth needed
@@ -133,6 +134,23 @@ fn main() -> Result<()> {
     // Review operates on knowledge files — no Config/LLM auth needed
     if let Commands::Review { project, all } = cli.command {
         return cmd_review(&project, all);
+    }
+
+    // Drain operates on knowledge files — no Config/LLM auth needed
+    if let Commands::Drain {
+        project,
+        dry_run,
+        category,
+    } = cli.command
+    {
+        let project_name = project
+            .or_else(|| {
+                std::env::current_dir()
+                    .ok()
+                    .and_then(|p| p.file_name().map(|n| n.to_string_lossy().to_string()))
+            })
+            .unwrap_or_else(|| "default".to_string());
+        return cmd_drain(&project_name, dry_run, category.as_deref());
     }
 
     // Promote operates on knowledge files — no Config/LLM auth needed
@@ -581,6 +599,7 @@ fn main() -> Result<()> {
         | Commands::Lookup { .. }
         | Commands::Add { .. }
         | Commands::Review { .. }
+        | Commands::Drain { .. }
         | Commands::Promote { .. }
         | Commands::Mcp { .. }
         | Commands::Export { .. }
@@ -649,6 +668,7 @@ fn cmd_inject(
     no_auto_clean: bool,
     smart: bool,
     budget: usize,
+    lines: Option<usize>,
     measure_tokens: bool,
 ) -> Result<()> {
     let home = dirs::home_dir()
@@ -745,12 +765,13 @@ fn cmd_inject(
                 project_name
             );
             (
-                inject::build_compact_memory(
+                inject::build_compact_memory_with_budget(
                     &project_name,
                     &context_content,
                     &raw_preferences,
                     &raw_shared,
                     &memory_dir,
+                    lines,
                 )?,
                 "compact (fallback)",
             )
@@ -787,12 +808,13 @@ fn cmd_inject(
         )
     } else {
         (
-            inject::build_compact_memory(
+            inject::build_compact_memory_with_budget(
                 &project_name,
                 &context_content,
                 &raw_preferences,
                 &raw_shared,
                 &memory_dir,
+                lines,
             )?,
             "compact",
         )

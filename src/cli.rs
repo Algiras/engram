@@ -107,6 +107,10 @@ pub enum Commands {
         /// Token budget for smart inject (default: 1500)
         #[arg(long, default_value = "1500")]
         budget: usize,
+        /// Line budget for compact inject (default: 180). Scales all sections proportionally.
+        /// Useful for long-context models: e.g. --lines 500 for ~3x more context.
+        #[arg(long)]
+        lines: Option<usize>,
         /// Measure and report token efficiency vs. full-context baseline
         #[arg(long)]
         measure_tokens: bool,
@@ -167,6 +171,20 @@ pub enum Commands {
         /// Show full content and include expired entries
         #[arg(long)]
         all: bool,
+    },
+
+    /// Bulk-promote all inbox entries to their respective knowledge category files
+    Drain {
+        /// Project name (defaults to basename of current directory)
+        project: Option<String>,
+
+        /// Preview what would be promoted without writing anything
+        #[arg(long)]
+        dry_run: bool,
+
+        /// Only drain entries of this category (e.g. decisions, bugs)
+        #[arg(long)]
+        category: Option<String>,
     },
 
     /// Promote an inbox entry into project/global long-term memory

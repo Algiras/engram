@@ -124,7 +124,7 @@ pub const BUDGET_PREFERENCES: usize = 25;
 pub const BUDGET_PROJECT: usize = 60;
 pub const BUDGET_SHARED: usize = 40;
 pub const BUDGET_PACKS: usize = 20;
-pub const BUDGET_GUIDE: usize = 15;
+pub const BUDGET_GUIDE: usize = 30;
 pub const BUDGET_GLOBAL: usize = 40;
 
 /// Load learned importance boosts from learning state (graceful fallback to empty HashMap)
@@ -863,6 +863,19 @@ For detailed knowledge beyond this summary:
 - `engram recall <project>` - full project context with pack knowledge
 - `engram search-semantic <query>` - semantic/vector search
 
+### Progressive Recall (MCP / long-context pattern)
+
+For infinite-context workflows use the hierarchy: **index → recall → search**.
+1. `engram inject --lines 360` - scale compact budget (2× default) for large context windows
+2. Via MCP: call `index` tool (~100 tokens) to get a map, then `recall(session_ids=[...])` for specifics
+3. `engram inject --smart` - semantic search injects only what's relevant to current git context
+
+### Maintenance
+
+- `engram drain <project>` - bulk-promote all inbox entries to knowledge files
+- `engram consolidate <project>` - detect and merge near-duplicate entries
+- `engram forget <project> --stale 90d` - prune entries not accessed in 90 days
+
 ## Sharing & Collaboration
 
 - `engram sync push <project>` - share knowledge to private GitHub Gist (backup/collaboration)
@@ -881,13 +894,49 @@ pub fn build_compact_memory(
     raw_shared: &Option<String>,
     memory_dir: &Path,
 ) -> crate::Result<String> {
+    build_compact_memory_with_budget(
+        project_name,
+        context_content,
+        raw_preferences,
+        raw_shared,
+        memory_dir,
+        None,
+    )
+}
+
+/// Build compact MEMORY.md with an optional line budget override.
+/// When `line_budget` is provided, all section budgets scale proportionally
+/// relative to the default COMPACT_MAX_LINES (180). Example: `line_budget=360`
+/// doubles every section budget, giving 2x more context for long-context models.
+pub fn build_compact_memory_with_budget(
+    project_name: &str,
+    context_content: &str,
+    raw_preferences: &Option<String>,
+    raw_shared: &Option<String>,
+    memory_dir: &Path,
+    line_budget: Option<usize>,
+) -> crate::Result<String> {
+    // Scale section budgets proportionally when a custom line budget is requested
+    let scale = line_budget
+        .map(|n| n as f64 / COMPACT_MAX_LINES as f64)
+        .unwrap_or(1.0_f64);
+    let scaled = |base: usize| -> usize { ((base as f64 * scale).round() as usize).max(1) };
+
     let mut combined = String::new();
     combined.push_str("# Project Memory (auto-injected by engram)\n\n");
-    combined.push_str("<!-- Compact mode: run `engram inject --full` for complete dump -->\n\n");
+    let mode_hint = if line_budget.is_some() {
+        format!(
+            "<!-- Compact mode ({}L budget): run `engram inject --full` for complete dump -->\n\n",
+            line_budget.unwrap()
+        )
+    } else {
+        "<!-- Compact mode: run `engram inject --full` for complete dump -->\n\n".to_string()
+    };
+    combined.push_str(&mode_hint);
 
     // 1. Project context first (most valuable)
     combined.push_str(&format!("## Project: {}\n\n", project_name));
-    combined.push_str(&trim_to_budget(context_content, BUDGET_PROJECT));
+    combined.push_str(&trim_to_budget(context_content, scaled(BUDGET_PROJECT)));
     combined.push_str("\n\n---\n\n");
 
     // 2. Consolidated preferences (deduplicated, importance-sorted)
@@ -895,14 +944,14 @@ pub fn build_compact_memory(
         let prefs = compact_preferences(raw_prefs, memory_dir, project_name);
         if !prefs.is_empty() {
             combined.push_str("## User Preferences (consolidated)\n\n");
-            combined.push_str(&trim_to_budget(&prefs, BUDGET_PREFERENCES));
+            combined.push_str(&trim_to_budget(&prefs, scaled(BUDGET_PREFERENCES)));
             combined.push_str("\n\n---\n\n");
         }
     }
 
     // 3. Shared memory (trimmed to budget, importance-prioritized)
     if let Some(raw_sh) = raw_shared {
-        let shared = compact_shared(raw_sh, BUDGET_SHARED, memory_dir, project_name);
+        let shared = compact_shared(raw_sh, scaled(BUDGET_SHARED), memory_dir, project_name);
         if !shared.is_empty() {
             combined.push_str("## Shared Knowledge\n\n");
             combined.push_str(&shared);
@@ -914,7 +963,7 @@ pub fn build_compact_memory(
     let global_knowledge = read_global_knowledge(memory_dir);
     if let Some(ref gk) = global_knowledge {
         combined.push_str("## Global Knowledge\n\n");
-        combined.push_str(&trim_to_budget(gk, BUDGET_GLOBAL));
+        combined.push_str(&trim_to_budget(gk, scaled(BUDGET_GLOBAL)));
         combined.push_str("\n\n---\n\n");
     }
 

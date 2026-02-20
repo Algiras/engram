@@ -168,6 +168,7 @@ pub async fn resolve_update(
 // ── Session block parsing ──────────────────────────────────────────────
 
 /// A parsed session block from a knowledge file
+#[derive(Clone)]
 pub struct SessionBlock {
     pub session_id: String,
     pub timestamp: String,

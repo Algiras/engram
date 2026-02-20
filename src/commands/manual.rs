@@ -286,6 +286,236 @@ fn append_session_entry(path: &Path, header: &str, content: &str) -> Result<()> 
     Ok(())
 }
 
+// ── Drain command ──────────────────────────────────────────────────────
+
+/// Bulk-promote all inbox entries to their respective knowledge category files.
+/// Category is inferred from the session_id suffix (e.g., `abc123:decisions`) or
+/// the `- category: X` metadata line in the block content.
+pub fn cmd_drain(project: &str, dry_run: bool, category_filter: Option<&str>) -> Result<()> {
+    use extractor::knowledge::{parse_session_blocks, reconstruct_blocks};
+
+    let home = dirs::home_dir()
+        .ok_or_else(|| error::MemoryError::Config("Could not determine home directory".into()))?;
+    let memory_dir = home.join("memory");
+    let project_dir = memory_dir.join("knowledge").join(project);
+    let inbox_path = project_dir.join("inbox.md");
+
+    if !inbox_path.exists() {
+        println!(
+            "{} No inbox found for '{}'.",
+            "Not found:".yellow(),
+            project
+        );
+        return Ok(());
+    }
+
+    let inbox_content = std::fs::read_to_string(&inbox_path)?;
+    let (preamble, blocks) = parse_session_blocks(&inbox_content);
+
+    if blocks.is_empty() {
+        println!("{} Inbox is already empty for '{}'.", "✓".green(), project);
+        return Ok(());
+    }
+
+    // Infer category for a block: session_id suffix, then content metadata line
+    let infer_category = |block: &extractor::knowledge::SessionBlock| -> Option<String> {
+        // 1. Try session_id suffix (e.g., "abc123:decisions")
+        if let Some(suffix) = block.session_id.rsplit(':').next() {
+            let suffix = suffix.trim().to_lowercase();
+            if matches!(
+                suffix.as_str(),
+                "decisions"
+                    | "solutions"
+                    | "patterns"
+                    | "bugs"
+                    | "insights"
+                    | "questions"
+                    | "procedures"
+                    | "preferences"
+            ) {
+                return Some(suffix);
+            }
+        }
+        // 2. Try `- category: X` line in content
+        for line in block.content.lines() {
+            let trimmed = line.trim();
+            if let Some(rest) = trimmed.strip_prefix("- category:") {
+                let cat = rest.trim().to_lowercase();
+                if matches!(
+                    cat.as_str(),
+                    "decisions"
+                        | "solutions"
+                        | "patterns"
+                        | "bugs"
+                        | "insights"
+                        | "questions"
+                        | "procedures"
+                        | "preferences"
+                ) {
+                    return Some(cat);
+                }
+            }
+        }
+        None
+    };
+
+    let now = chrono::Utc::now().format("%Y-%m-%dT%H:%M:%SZ").to_string();
+
+    let mut promoted = 0usize;
+    let mut skipped = 0usize;
+    let mut unknown = 0usize;
+    let mut remaining_blocks: Vec<extractor::knowledge::SessionBlock> = Vec::new();
+
+    for block in &blocks {
+        let Some(cat) = infer_category(block) else {
+            println!(
+                "  {} {} (no category inferred — keeping in inbox)",
+                "?".yellow(),
+                block.session_id
+            );
+            unknown += 1;
+            remaining_blocks.push(block.clone());
+            continue;
+        };
+
+        // Apply category filter if specified
+        if let Some(filter) = category_filter {
+            if cat != filter {
+                remaining_blocks.push(block.clone());
+                skipped += 1;
+                continue;
+            }
+        }
+
+        // Determine target file
+        let (target_file, target_title, is_global) = if cat == "preferences" {
+            (
+                memory_dir
+                    .join("knowledge")
+                    .join("_global")
+                    .join("preferences.md"),
+                "Preferences",
+                true,
+            )
+        } else {
+            let filename = match cat.as_str() {
+                "decisions" => "decisions.md",
+                "solutions" => "solutions.md",
+                "patterns" => "patterns.md",
+                "bugs" => "bugs.md",
+                "insights" => "insights.md",
+                "questions" => "questions.md",
+                "procedures" => "procedures.md",
+                _ => "decisions.md",
+            };
+            let title = match cat.as_str() {
+                "decisions" => "Decisions",
+                "solutions" => "Solutions",
+                "patterns" => "Patterns",
+                "bugs" => "Bugs",
+                "insights" => "Insights",
+                "questions" => "Questions",
+                "procedures" => "Procedures",
+                _ => "Knowledge",
+            };
+            (project_dir.join(filename), title, false)
+        };
+
+        let preview = block.content.lines().next().unwrap_or("").trim();
+        let preview = if preview.len() > 60 {
+            format!("{}…", &preview[..60])
+        } else {
+            preview.to_string()
+        };
+
+        if dry_run {
+            println!(
+                "  {} {} → {} ({})",
+                "would promote".cyan(),
+                block.session_id,
+                if is_global { format!("_global/{}", target_file.file_name().unwrap_or_default().to_string_lossy()) } else { cat.clone() },
+                preview
+            );
+            promoted += 1;
+            continue;
+        }
+
+        // Ensure target file exists
+        let dir = target_file.parent().unwrap();
+        std::fs::create_dir_all(dir)?;
+        init_knowledge_file(&target_file, target_title)?;
+
+        // Build a new session header preserving TTL/confidence/strength if present
+        let header_parts: Vec<String> = {
+            let mut parts = vec![format!(
+                "\n\n## Session: {}:{} ({})",
+                block.session_id, cat, now
+            )];
+            if let Some(ref ttl) = block.ttl {
+                parts.push(format!(" [ttl:{}]", ttl));
+            }
+            if let Some(ref conf) = block.confidence {
+                parts.push(format!(" [confidence:{}]", conf));
+            }
+            if let Some(strength) = block.strength {
+                parts.push(format!(" [strength:{:.1}]", strength));
+            }
+            parts
+        };
+        let header = header_parts.join("") + "\n\n";
+        append_session_entry(&target_file, &header, block.content.trim())?;
+
+        println!(
+            "  {} {} → {}",
+            "✓".green(),
+            block.session_id,
+            cat
+        );
+        promoted += 1;
+        // Entry removed from inbox by not adding to remaining_blocks
+    }
+
+    if !dry_run && promoted > 0 {
+        // Rebuild inbox with only entries that couldn't be categorized or were filtered
+        let rebuilt = reconstruct_blocks(&preamble, &remaining_blocks);
+        std::fs::write(&inbox_path, rebuilt)?;
+
+        // Invalidate context.md so next regen picks up the new entries
+        let context_path = project_dir.join("context.md");
+        if context_path.exists() {
+            std::fs::remove_file(&context_path)?;
+        }
+    }
+
+    println!();
+    if dry_run {
+        println!(
+            "{} Dry run: {} entries would be promoted ({} unknown, {} skipped by filter).",
+            "Summary:".cyan().bold(),
+            promoted,
+            unknown,
+            skipped
+        );
+        println!("  Re-run without --dry-run to apply.");
+    } else {
+        println!(
+            "{} Promoted {} entries from inbox → knowledge files ({} unknown kept, {} skipped).",
+            "Done!".green().bold(),
+            promoted,
+            unknown,
+            skipped
+        );
+        if promoted > 0 {
+            println!(
+                "  Run '{}' to regenerate context.",
+                format!("engram regen {}", project).cyan()
+            );
+        }
+    }
+
+    Ok(())
+}
+
 // ── Lookup command ──────────────────────────────────────────────────────
 
 pub fn cmd_lookup(project: &str, query: &str, include_all: bool) -> Result<()> {
