@@ -1,0 +1,56 @@
+{
+  "overall_f1": 60.4711630670402,
+  "overall_judge": 16.321243523316063,
+  "not_found_rate": 13.21243523316062,
+  "not_found_count": 51,
+  "total_questions": 386,
+  "elapsed": 2206.813493013382,
+  "label": "project=Personal | t=0.15 k=12 | judge",
+  "by_category": {
+    "decisions": {
+      "f1": 67.05835166459634,
+      "judge": 15.277777777777779,
+      "n": 72
+    },
+    "solutions": {
+      "f1": 62.98919636840306,
+      "judge": 16.867469879518072,
+      "n": 83
+    },
+    "patterns": {
+      "f1": 59.77644407835992,
+      "judge": 8.955223880597014,
+      "n": 67
+    },
+    "bugs": {
+      "f1": 46.20828227871795,
+      "judge": 23.52941176470588,
+      "n": 51
+    },
+    "insights": {
+      "f1": 50.256116967467214,
+      "judge": 25.806451612903224,
+      "n": 62
+    },
+    "procedures": {
+      "f1": 74.66746909806726,
+      "judge": 7.8431372549019605,
+      "n": 51
+    }
+  },
+  "args": {
+    "project": "Personal",
+    "dataset": "eval/qa_dataset.json",
+    "engram": "./target/release/engram",
+    "model": "",
+    "judge_model": "gemini-2.5-flash",
+    "threshold": 0.15,
+    "top_k": 12,
+    "use_judge": true,
+    "full_context": false,
+    "max_per_cat": null,
+    "categories": "decisions,solutions,patterns,bugs,insights,procedures",
+    "output": "eval/results/run_20260220_155700.json",
+    "prev": "eval/results/run_20260220_134656.json"
+  }
+}
