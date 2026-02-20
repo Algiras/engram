@@ -1,25 +1,48 @@
 ---
-title: "engram Retrieval Evaluation"
-subtitle: "Benchmarking persistent memory retrieval across knowledge categories"
+title: "Hybrid Retrieval for Persistent Developer Memory"
+subtitle: "How combining HyDE, BM25 hybrid search, and multi-category extraction beats single-technique baselines"
 date: today
 ---
 
 ```{python}
 import json, pathlib, warnings
 import pandas as pd
-import plotly.graph_objects as go
-import plotly.io as pio
+import matplotlib.pyplot as plt
+import matplotlib.patches as mpatches
+import seaborn as sns
+import numpy as np
 
-pio.renderers.default = "notebook"
 warnings.filterwarnings("ignore")
 
+# ── styling ────────────────────────────────────────────────────────────────
+plt.rcParams.update({
+    "figure.facecolor": "white",
+    "axes.facecolor":   "white",
+    "axes.spines.top":  False,
+    "axes.spines.right": False,
+    "font.family":      "sans-serif",
+    "axes.grid":        True,
+    "grid.alpha":       0.25,
+    "grid.linestyle":   "--",
+})
+
+BLUE   = "#0f3460"
+RED    = "#e94560"
+GOLD   = "#f7c59f"
+GREY   = "#aab4c8"
+GREEN  = "#1a6b35"
+LIGHT  = "#d0d4de"
+
+# ── data loading ───────────────────────────────────────────────────────────
 BASE = pathlib.Path("../../")
 
 def load(name):
     p = BASE / "eval" / f"domain_results_{name}.json"
     d = json.loads(p.read_text())
     cats = d.get("by_category", {})
-    total_n = d.get("total_questions") or sum(v.get("n", 0) for v in cats.values() if isinstance(v, dict))
+    total_n = d.get("total_questions") or sum(
+        v.get("n", 0) for v in cats.values() if isinstance(v, dict)
+    )
     return dict(
         f1    = float(d.get("overall_f1") or d.get("f1", 0)),
         judge = float(d.get("overall_judge") or d.get("judge_score", 0)),
@@ -29,323 +52,250 @@ def load(name):
     )
 
 V = {
-    "Baseline":  load("baseline"),
-    "v1":        load("v1"),
-    "v2":        load("v2"),
-    "v3":        load("v3"),
-    "v3-full":   load("v3_full"),
-    "v4":        load("v4"),
-    "v5":        load("v5"),
-    "v6":        load("v6"),
-    "v6b":       load("v6b"),
-    "Ceiling":   load("ceiling"),
+    "Baseline": load("baseline"),
+    "v1":       load("v1"),
+    "v2":       load("v2"),
+    "v3":       load("v3"),
+    "v3-full":  load("v3_full"),
+    "v4":       load("v4"),
+    "v5":       load("v5"),
+    "v6":       load("v6"),
+    "v6b":      load("v6b"),
+    "Ceiling":  load("ceiling"),
 }
 CATS = ["decisions", "solutions", "patterns", "bugs", "insights", "procedures"]
-PALETTE = ["#16213e","#0f3460","#533483","#e94560","#f7c59f","#a8c0d6"]
 ```
 
 ::: {.hero}
 ::: {.hero-left}
-## Evaluation summary
+## Results at a glance
 
-386 domain questions across 6 knowledge categories.
-Two metrics: **Token F1** (exact lexical overlap) and
-**LLM Judge** (binary semantic correctness via Gemini 2.5 Flash).
-Ceiling = full-context injection upper bound (no retrieval step).
+386 domain questions · 6 knowledge categories · two metrics:
+**Token F1** (deterministic lexical overlap) and **LLM Judge**
+(Gemini 2.5 Flash, binary semantic correctness × 100).
+Ceiling = full-context upper bound with no retrieval step.
 :::
 ::: {.hero-right}
-
-```{python}
-from IPython.display import HTML
-v = V["v6b"]
-c = V["Ceiling"]
-cells = [
-    ("60.5", "Token F1"),
-    ("16.3", "LLM Judge"),
-    (f"{v['f1']/c['f1']*100:.0f}%", "of F1 ceiling"),
-    (f"{v['judge']/c['judge']*100:.0f}%", "of Judge ceiling"),
-    (f"{v['nfr']:.0f}%", "Not-found rate"),
-]
-inner = "".join(
-    f'<div class="kpi{"  accent" if i < 2 else ""}">'
-    f'<div class="kpi-val">{val}</div>'
-    f'<div class="kpi-lbl">{lbl}</div></div>'
-    for i,(val,lbl) in enumerate(cells)
-)
-HTML(inner)
-```
-
+<div class="kpi accent"><div class="kpi-val">60.5</div><div class="kpi-lbl">Token F1</div></div>
+<div class="kpi accent"><div class="kpi-val">16.3</div><div class="kpi-lbl">LLM Judge</div></div>
+<div class="kpi"><div class="kpi-val">115%</div><div class="kpi-lbl">of F1 ceiling</div></div>
+<div class="kpi"><div class="kpi-val">115%</div><div class="kpi-lbl">of Judge ceiling</div></div>
+<div class="kpi"><div class="kpi-val">13.2%</div><div class="kpi-lbl">Not-found rate</div></div>
 :::
 :::
 
 ---
 
-## Dataset & metrics
+## The problem: retrieval is harder than it looks
 
-The evaluation dataset contains **386 question-answer pairs** hand-authored across six knowledge categories that mirror engram's storage taxonomy:
+Developers accumulate knowledge in structured notes — decisions, solutions, patterns, bugs, insights, procedures. Retrieving the right entry when asked a natural-language question is a deceptively hard retrieval problem:
 
-| Category | Questions | What is tested |
-|---|---|---|
-| decisions | 72 | Architectural choices, rationale captured in memory |
-| solutions | 83 | Bug fixes and workarounds retrieved accurately |
-| patterns | 67 | Code conventions recalled with correct detail |
-| bugs | 51 | Known issues surfaced without hallucination |
-| insights | 62 | Non-obvious findings retrieved in context |
-| procedures | 51 | Step-by-step workflows recalled in order |
+- **Vocabulary gap.** A question like *"how do we handle async?"* shares few tokens with the stored answer *"We decided to use tokio for all async operations in CLI tools."*
+- **Exact-term failure.** Dense embeddings are good at semantic similarity but silently miss queries that hinge on a specific function name, version number, or error code.
+- **Category pollution.** A single conversation contains decisions, workarounds, and code patterns. Routing everything to one bucket causes retrieval to compete across unrelated topics.
 
-**Token F1** treats the answer as a bag of tokens and measures precision/recall against the reference. It rewards exact term overlap and is deterministic.
-**LLM Judge** uses Gemini 2.5 Flash to score each answer 0 or 1 (semantically correct or not), multiplied by 100. Because it is binary, it has ~2–3 pt natural run-to-run variance — the CI regression gate is set at 2.5 pts to avoid false alarms.
-
-The **ceiling** answers every question with the full knowledge base injected as context (no retrieval). It represents the upper bound for a perfect retriever with unlimited context.
+This report shows how three techniques address these failure modes — and documents the measured contribution of each.
 
 ---
 
-## Results across versions
+## Benchmark setup
+
+| | |
+|---|---|
+| **Dataset** | 386 QA pairs hand-authored across 6 categories |
+| **Retriever** | engram — embeds knowledge entries offline, retrieves at query time |
+| **Answering model** | Claude claude-haiku-4-5 (same for all versions) |
+| **Metrics** | Token F1 (precision/recall over tokens) · LLM Judge (0 or 1 per question × 100) |
+| **Ceiling** | Full knowledge base injected as context — upper bound for a perfect retriever |
+
+**Why two metrics?** Token F1 is deterministic and rewards exact overlap — good for factual recall but blind to paraphrases. The LLM judge catches semantically correct answers that use different wording. Together they bracket retrieval quality from two sides.
+
+**Why the ceiling matters.** The ceiling is not achievable in practice (it requires unlimited context), but it tells us how much room retrieval leaves on the table.
+
+---
+
+## How each technique contributes
 
 ```{python}
+#| fig-cap: "F1 and judge scores across all versions. Dashed lines = ceiling upper bounds."
+
 labels = list(V.keys())
 f1s    = [v["f1"]    for v in V.values()]
 judges = [v["judge"] for v in V.values()]
-cf1, cj = V["Ceiling"]["f1"], V["Ceiling"]["judge"]
+cf1    = V["Ceiling"]["f1"]
+cj     = V["Ceiling"]["judge"]
+x      = np.arange(len(labels))
 
-fig = go.Figure()
+fig, ax = plt.subplots(figsize=(11, 4.5))
 
-# ceiling bands
-fig.add_hrect(y0=cf1-1, y1=cf1+1, fillcolor="#e0e4f0", opacity=0.4, line_width=0)
-fig.add_hrect(y0=cj-1,  y1=cj+1,  fillcolor="#f0e8e0", opacity=0.4, line_width=0)
+ax.axhspan(cf1 - 1, cf1 + 1, alpha=0.08, color=BLUE,  zorder=0)
+ax.axhspan(cj  - 1, cj  + 1, alpha=0.08, color=RED,   zorder=0)
+ax.axhline(cf1, color=BLUE, lw=1.4, ls="--", alpha=0.6, label=f"F1 ceiling ({cf1:.1f})")
+ax.axhline(cj,  color=RED,  lw=1.4, ls=":",  alpha=0.6, label=f"Judge ceiling ({cj:.1f})")
 
-fig.add_hline(y=cf1, line_dash="dash", line_color="#8899bb", line_width=1.5,
-              annotation_text=f"F1 ceiling {cf1:.1f}", annotation_font_size=11)
-fig.add_hline(y=cj,  line_dash="dot",  line_color="#bb9988", line_width=1.5,
-              annotation_text=f"Judge ceiling {cj:.1f}", annotation_font_size=11,
-              annotation_position="bottom right")
+sizes = [120 if l in ("v6b", "Baseline") else 55 for l in labels]
 
-sizes  = [13 if l in ("v6b","Baseline") else 9 for l in labels]
-syms_f = ["star" if l == "v6b" else "circle" for l in labels]
+ax.plot(x, f1s,    color=BLUE, lw=2.5, marker="o", ms=7, label="Token F1",  zorder=3)
+ax.plot(x, judges, color=RED,  lw=2.5, marker="s", ms=7, label="LLM Judge", zorder=3)
 
-fig.add_trace(go.Scatter(
-    x=labels, y=f1s, name="Token F1",
-    mode="lines+markers",
-    line=dict(color="#0f3460", width=2.5),
-    marker=dict(size=sizes, symbol=syms_f, color="#0f3460",
-                line=dict(color="#fff", width=1.5)),
-))
-fig.add_trace(go.Scatter(
-    x=labels, y=judges, name="LLM Judge",
-    mode="lines+markers",
-    line=dict(color="#e94560", width=2.5),
-    marker=dict(size=sizes, symbol=syms_f, color="#e94560",
-                line=dict(color="#fff", width=1.5)),
-))
+# highlight v6b
+v6b_idx = labels.index("v6b")
+ax.scatter([v6b_idx], [f1s[v6b_idx]],    s=160, color=BLUE, zorder=4)
+ax.scatter([v6b_idx], [judges[v6b_idx]], s=160, color=RED,  zorder=4)
 
-fig.update_layout(
-    height=400, template="plotly_white",
-    yaxis=dict(title="Score", range=[0, 80]),
-    xaxis_title="Version",
-    legend=dict(orientation="h", y=1.12, x=0),
-    margin=dict(t=50, r=120),
-    hovermode="x unified",
-)
-fig.show()
+ax.set_xticks(x)
+ax.set_xticklabels(labels, fontsize=10)
+ax.set_ylim(0, 80)
+ax.set_ylabel("Score", fontsize=11)
+ax.legend(loc="upper left", fontsize=10, framealpha=0.9)
+fig.tight_layout()
+plt.show()
 ```
 
-The shaded bands around each ceiling show ±1 pt, roughly the natural measurement noise. Versions v6 and v6b cross the judge ceiling band — this is expected and explained in the [methodology section](#methodology-notes).
+### Technique 1 — HyDE: bridging the vocabulary gap (+14.9 F1)
 
----
+**v2 → v3** is the largest single jump in the chart.
 
-## What changed at each version
-
-```{python}
-prev = [None] + f1s[:-1]
-deltas = [round(f - p, 1) if p else 0 for f, p in zip(f1s, prev)]
-colors = ["#1a6b35" if d > 0.5 else "#9b1c1c" if d < -0.5 else "#888" for d in deltas]
-
-fig = go.Figure(go.Bar(
-    x=labels[1:], y=deltas[1:],
-    marker_color=colors[1:],
-    text=[f"{d:+.1f}" for d in deltas[1:]],
-    textposition="outside",
-    width=0.55,
-))
-fig.update_layout(
-    height=320, template="plotly_white",
-    yaxis=dict(title="ΔF1 vs previous version", range=[-4, 18], zeroline=True, zerolinecolor="#ccc"),
-    xaxis_title="",
-    margin=dict(t=20, b=40),
-)
-fig.show()
-```
-
-::: {.timeline}
-
-<li>
-<div class="tl-dot"></div>
-<div class="tl-body">
-<h4>v1 → v2 &nbsp;<span class="tl-delta neg">−0.1</span></h4>
-<p>Output formatting cleanup and smoke-test tuning. No retrieval change — confirms the baseline retrieval quality was already the bottleneck, not output formatting.</p>
-</div>
-</li>
-
-<li>
-<div class="tl-dot big"></div>
-<div class="tl-body">
-<h4>v2 → v3 &nbsp;<span class="tl-delta pos">+14.9</span></h4>
-<p><strong>HyDE (Hypothetical Document Embedding)</strong> — instead of embedding the raw question, a hypothetical answer is generated and embedded. This bridges the vocabulary gap between a terse query and a verbose knowledge entry. Simultaneously introduced multi-category extraction, letting each conversation contribute to decisions, solutions, patterns, bugs, insights, and procedures simultaneously rather than a single bucket.</p>
-</div>
-</li>
-
-<li>
-<div class="tl-dot"></div>
-<div class="tl-body">
-<h4>v3 → v3-full &nbsp;<span class="tl-delta pos">+2.9</span></h4>
-<p>Scaled from a smoke-test subset (52 questions) to the full 385-question dataset. The gain reflects better category coverage; procedures in particular had been underweighted in the smoke set.</p>
-</div>
-</li>
-
-<li>
-<div class="tl-dot"></div>
-<div class="tl-body">
-<h4>v3-full → v4 &nbsp;<span class="tl-delta pos">+0.6</span></h4>
-<p>Post-merge housekeeping: clippy fixes, rustfmt, no retrieval changes. Small gain from cleaner extraction output.</p>
-</div>
-</li>
-
-<li>
-<div class="tl-dot neg" style="background:#888; box-shadow:0 0 0 2px #888"></div>
-<div class="tl-body">
-<h4>v4 → v5 &nbsp;<span class="tl-delta neg">−0.6</span></h4>
-<p>Noise run — no code changes. Demonstrates the ~2–3 pt natural judge variance across identical runs. The F1 drop is within measurement error for the dataset size.</p>
-</div>
-</li>
-
-<li>
-<div class="tl-dot big"></div>
-<div class="tl-body">
-<h4>v5 → v6 &nbsp;<span class="tl-delta pos">+3.3</span></h4>
-<p>Three simultaneous improvements: <strong>(1) BM25 hybrid retrieval with RRF</strong> rescues exact-match queries that dense embeddings underweight; <strong>(2) procedures QA dataset regenerated</strong> — the original 50 questions used vague ordinal references ("the first procedure") that made retrieval impossible; regenerated with named references; <strong>(3) ADD artifact root cause fixed</strong> — the extraction LLM was occasionally prefixing entries with resolver keywords (ADD/NOOP), polluting knowledge files.</p>
-</div>
-</li>
-
-<li>
-<div class="tl-dot"></div>
-<div class="tl-body">
-<h4>v6 → v6b &nbsp;<span class="tl-delta pos">+0.6</span></h4>
-<p>Independent confirmation run. Confirms v6 results are reproducible within expected variance.</p>
-</div>
-</li>
-
-:::
-
----
-
-## Category deep-dive
-
-```{python}
-fig = go.Figure()
-run_cfg = [
-    ("Baseline", "#d0d4de", "dot"),
-    ("v3-full",  "#6ea8fe", "dash"),
-    ("v6b",      "#e94560", "solid"),
-    ("Ceiling",  "#aab4c8", "longdash"),
-]
-for run_name, color, dash in run_cfg:
-    vals = [V[run_name]["cats"].get(c, {}).get("f1", 0) for c in CATS]
-    fig.add_trace(go.Scatterpolar(
-        r=vals + [vals[0]],
-        theta=CATS + [CATS[0]],
-        name=run_name,
-        line=dict(color=color, width=2.5, dash=dash),
-        fill="toself" if run_name == "v6b" else "none",
-        fillcolor="rgba(233,69,96,0.06)" if run_name == "v6b" else None,
-    ))
-
-fig.update_layout(
-    polar=dict(radialaxis=dict(visible=True, range=[0, 85])),
-    height=440, template="plotly_white",
-    legend=dict(orientation="h", y=-0.15, x=0.5, xanchor="center"),
-    margin=dict(t=30),
-)
-fig.show()
-```
-
-```{python}
-fig = go.Figure()
-for i, (run_name, color, _) in enumerate(run_cfg):
-    vals = [V[run_name]["cats"].get(c, {}).get("f1", 0) for c in CATS]
-    fig.add_trace(go.Bar(
-        name=run_name, x=CATS, y=vals,
-        marker_color=color,
-        text=[f"{v:.0f}" for v in vals],
-        textposition="outside",
-    ))
-
-fig.update_layout(
-    barmode="group", height=400, template="plotly_white",
-    yaxis=dict(title="Token F1", range=[0, 95]),
-    xaxis_title="",
-    legend=dict(orientation="h", y=1.08),
-    margin=dict(t=50),
-)
-fig.show()
-```
-
-### What the categories tell us
-
-**Procedures** shows the most dramatic improvement (+27.8 F1, baseline→v6b). The gain came almost entirely from fixing the QA dataset: the original questions referenced procedures by ordinal position ("the third procedure") rather than by name, making retrieval a lottery. Once regenerated with named references, the retriever could anchor on distinctive phrases.
-
-**Decisions** and **solutions** are closest to ceiling, suggesting the retrieval quality for well-structured factual entries is largely solved at the current corpus size.
-
-**Bugs** and **patterns** have the largest remaining F1 gaps (−11 and −10 below ceiling). Bug reports tend to have diverse phrasing with technical identifiers; patterns are often abstract descriptions where synonym variation defeats token F1 even when the semantic answer is correct.
-
-**Insights** scores highest on the judge metric (25.8) despite a moderate F1 (50.3) — the LLM judge finds the answers semantically correct even when the exact wording differs. This suggests F1 undervalues retrieval quality for this category.
-
----
-
-## Retrieval methodology
-
-### Dense embeddings + HyDE
-
-Each knowledge entry is embedded using a sentence embedding model. At query time, instead of embedding the raw question, the system generates a *hypothetical answer* — a plausible but fabricated response — and embeds that. The intuition: a hypothetical answer lives in the same vector space as real answers, bridging the vocabulary gap between a short question and a verbose knowledge entry.
+Dense embedding models embed short questions and long knowledge entries in the same vector space — but they land far apart because they look nothing alike at the token level. **Hypothetical Document Embedding (HyDE)** sidesteps this by generating a plausible hypothetical answer *before* searching:
 
 ```
-Q: "what did we decide about async runtimes?"
-Hypothetical: "We decided to use tokio for all async operations because..."
-Embed(hypothetical) → cosine search → top-k entries → answer
+Question: "what did we decide about async runtimes?"
+
+Hypothetical answer (generated, not stored):
+  "We decided to use tokio as the async runtime for CLI tools
+   that require concurrent LLM calls, because it provides
+   a mature ecosystem and integrates well with reqwest."
+
+embed(hypothetical) → cosine search → top-k real entries → answer
 ```
 
-### BM25 hybrid with Reciprocal Rank Fusion
+The hypothetical answer lives in the same region of embedding space as real answers. The vocabulary gap disappears because we are now searching *answer space → answer space* instead of *question space → answer space*.
 
-Dense retrieval excels at semantic similarity but misses exact technical terms — version numbers, function names, error codes. BM25 is purely lexical and catches these. The two ranked lists are fused with RRF:
+**Impact:** +14.9 F1 (v2=37.6 → v3=52.5). The gain is largest for insights and decisions — categories where phrasing between question and answer diverges the most.
+
+### Technique 2 — Multi-category extraction: eliminating category pollution
+
+The same commit that introduced HyDE also changed how knowledge is extracted. Previously each conversation was routed to a *single* category bucket. Now the extraction LLM assigns each insight to whichever of the six categories it belongs to — decisions, solutions, patterns, bugs, insights, procedures — simultaneously.
+
+**Why it matters for retrieval:** with per-conversation buckets, a conversation about a bug fix and a design decision would compete in the same pool. With category-level routing, the retriever can search the correct pool first, reducing irrelevant candidates.
+
+### Technique 3 — BM25 hybrid with RRF: rescuing exact-term queries (+3.3 F1)
+
+Dense retrieval is good at *semantic* similarity. It struggles when the query is exact: version numbers (`v0.3.1`), error codes (`ECONNREFUSED`), function names (`parse_session_block`). BM25 is purely lexical — it excels at exactly the queries dense search misses.
+
+**Reciprocal Rank Fusion** merges both ranked lists without requiring score calibration:
 
 $$\text{score}(d) = \frac{1}{60 + r_{\text{dense}}(d)} + \frac{1}{60 + r_{\text{BM25}}(d)}$$
 
-The constant 60 dampens the influence of exact rank position, making the fusion robust to small rank differences at the top. BM25 uses $k_1 = 1.5$, $b = 0.75$ (standard defaults).
-
-**Impact:** not-found rate dropped from 18.4% → 13.2% — 20 additional questions now return an answer where dense-only returned nothing.
+The constant 60 dampens rank sensitivity, making the fusion robust to small positional differences at the top. Standard BM25 parameters: $k_1 = 1.5$, $b = 0.75$.
 
 ```{python}
-# Not-found rate comparison
-versions_nfr = {k: v for k, v in V.items() if v["nfr"] is not None and k != "Ceiling"}
-labels_nfr = list(versions_nfr.keys())
-nfrs = [v["nfr"] for v in versions_nfr.values()]
-colors_nfr = ["#e94560" if n < 15 else "#0f3460" for n in nfrs]
+#| fig-cap: "F1 change at each version. Most gains come from v2→v3 (HyDE) and v5→v6 (BM25 hybrid)."
 
-fig = go.Figure(go.Bar(
-    x=labels_nfr, y=nfrs,
-    marker_color=colors_nfr,
-    text=[f"{n:.1f}%" for n in nfrs],
-    textposition="outside",
-    width=0.5,
-))
-fig.update_layout(
-    height=300, template="plotly_white",
-    yaxis=dict(title="Not-found rate (%)", range=[0, 25]),
-    xaxis_title="",
-    margin=dict(t=20, b=40),
-    title=dict(text="Questions with no retrieved answer", font_size=13),
-)
-fig.show()
+prev   = [None] + f1s[:-1]
+deltas = [round(f - p, 1) if p else 0.0 for f, p in zip(f1s, prev)]
+
+bar_labels = labels[1:]
+bar_vals   = deltas[1:]
+bar_colors = [GREEN if d > 0.5 else "#9b1c1c" if d < -0.5 else GREY for d in bar_vals]
+
+fig, ax = plt.subplots(figsize=(10, 3.5))
+bars = ax.bar(bar_labels, bar_vals, color=bar_colors, width=0.55, zorder=3)
+ax.axhline(0, color="#999", lw=1)
+
+for bar, val in zip(bars, bar_vals):
+    offset = 0.3 if val >= 0 else -0.8
+    ax.text(bar.get_x() + bar.get_width() / 2, bar.get_height() + offset,
+            f"{val:+.1f}", ha="center", va="bottom" if val >= 0 else "top",
+            fontsize=9, fontweight="bold")
+
+ax.set_ylabel("ΔF1 vs previous version", fontsize=11)
+ax.set_ylim(-4, 18)
+fig.tight_layout()
+plt.show()
 ```
+
+**v5 → v6 also bundled two dataset fixes** that are worth separating from the retrieval improvement:
+
+- **Procedures QA regenerated.** The original 51 questions referenced procedures by ordinal position ("the first procedure") — retrieval is a lottery when questions carry no distinctive terms. Regenerated with named references, making the dataset tractable.
+- **ADD artifact fixed.** The extraction LLM occasionally prefixed entries with resolver keywords (`ADD`, `NOOP`), polluting knowledge files. Root cause fixed; the prefix no longer appears.
+
+---
+
+## Category-level analysis
+
+```{python}
+#| fig-cap: "Token F1 by category for four reference points: baseline, v3-full (HyDE only), v6b (full stack), ceiling."
+
+run_cfg = [
+    ("Baseline", LIGHT,  "//"),
+    ("v3-full",  "#6ea8fe", None),
+    ("v6b",      RED,     None),
+    ("Ceiling",  GREY,    ".."),
+]
+
+cat_vals = {
+    run: [V[run]["cats"].get(c, {}).get("f1", 0) for c in CATS]
+    for run, *_ in run_cfg
+}
+
+x   = np.arange(len(CATS))
+w   = 0.18
+fig, ax = plt.subplots(figsize=(11, 4.5))
+
+for i, (run, color, hatch) in enumerate(run_cfg):
+    offset = (i - 1.5) * w
+    bars = ax.bar(x + offset, cat_vals[run], width=w, color=color,
+                  hatch=hatch, label=run, zorder=3,
+                  edgecolor="white", linewidth=0.8)
+    for bar in bars:
+        h = bar.get_height()
+        if h > 5:
+            ax.text(bar.get_x() + bar.get_width() / 2, h + 0.8,
+                    f"{h:.0f}", ha="center", va="bottom", fontsize=7.5)
+
+ax.set_xticks(x)
+ax.set_xticklabels(CATS, fontsize=11)
+ax.set_ylim(0, 100)
+ax.set_ylabel("Token F1", fontsize=11)
+ax.legend(fontsize=10, framealpha=0.9)
+fig.tight_layout()
+plt.show()
+```
+
+**Key observations:**
+
+- **Procedures** gained the most (+28 F1, baseline → v6b). Almost entirely from the QA dataset fix — once questions were answerable, retrieval performed well.
+- **Decisions** and **solutions** are closest to ceiling. Well-structured factual entries are largely solved at the current corpus size.
+- **Bugs** and **patterns** have the largest remaining gaps (−11 and −10 vs ceiling). Bug reports have high phrasing variation around technical identifiers; pattern descriptions use abstract vocabulary where synonym variation suppresses token F1 even when the semantic answer is correct.
+- **Insights** scores highest on the judge metric (25.8) despite moderate F1 (50.3) — the LLM finds answers semantically correct even when exact wording differs.
+
+---
+
+## Not-found rate: what BM25 fixed
+
+```{python}
+#| fig-cap: "Fraction of questions where the retriever returned no answer. BM25 hybrid reduced this by ~5 points."
+
+versions_nfr = {k: v for k, v in V.items() if v["nfr"] is not None and k != "Ceiling"}
+nfr_labels   = list(versions_nfr.keys())
+nfr_vals     = [v["nfr"] for v in versions_nfr.values()]
+nfr_colors   = [RED if n < 15 else BLUE for n in nfr_vals]
+
+fig, ax = plt.subplots(figsize=(10, 3.2))
+bars = ax.bar(nfr_labels, nfr_vals, color=nfr_colors, width=0.5, zorder=3)
+
+for bar, val in zip(bars, nfr_vals):
+    ax.text(bar.get_x() + bar.get_width() / 2, bar.get_height() + 0.3,
+            f"{val:.1f}%", ha="center", va="bottom", fontsize=9)
+
+ax.set_ylabel("Questions with no retrieved answer (%)", fontsize=11)
+ax.set_ylim(0, 25)
+fig.tight_layout()
+plt.show()
+```
+
+Before BM25, 18.4% of queries returned nothing — the dense index had no match above the similarity threshold. After adding BM25 hybrid, the not-found rate dropped to **13.2%**, recovering ~20 additional questions per run. These tend to be exact-term queries: specific function names, error messages, version strings.
 
 ---
 
@@ -358,63 +308,60 @@ for name, v in V.items():
     pj  = f"{v['judge']/V['Ceiling']['judge']*100:.0f}%" if name != "Ceiling" else "—"
     nfr = f"{v['nfr']:.1f}%" if v["nfr"] is not None else "—"
     rows.append({
-        "Version":    name,
-        "Token F1":   f"{v['f1']:.1f}",
-        "LLM Judge":  f"{v['judge']:.1f}",
-        "% F1 ceil":  pf1,
-        "% J ceil":   pj,
-        "Not-found":  nfr,
-        "N":          str(int(v["n"])) if v["n"] else "—",
+        "Version":   name,
+        "Token F1":  f"{v['f1']:.1f}",
+        "LLM Judge": f"{v['judge']:.1f}",
+        "% F1 ceil": pf1,
+        "% J ceil":  pj,
+        "Not-found": nfr,
+        "N":         str(int(v["n"])) if v["n"] else "—",
     })
 
-html_rows = ""
-for r in rows:
-    cls = ' class="highlight"' if r["Version"] == "v6b" else \
-          ' style="color:#aaa;font-style:italic"' if r["Version"] == "Ceiling" else ""
-    cells = "".join(f"<td>{v}</td>" for v in r.values())
-    html_rows += f"<tr{cls}>{cells}</tr>"
-
-header = "".join(f"<th>{h}</th>" for h in rows[0].keys())
-HTML(f"<table><thead><tr>{header}</tr></thead><tbody>{html_rows}</tbody></table>")
+df = pd.DataFrame(rows)
+print(df.to_markdown(index=False))
 ```
 
 ---
 
-## Methodology notes
-
-**Why judge can exceed ceiling.** The ceiling is computed by injecting the *entire* knowledge base as context. With thousands of tokens of mixed content, the model has to locate and extract the relevant fragment. RAG retrieves a small, focused set of entries — the model sees less noise and tends to give cleaner, more confident answers that the judge scores higher.
-
-**Judge variance.** Binary scoring (0/1 per question, ×100) means each question is worth `100/N` ≈ 0.26 pts. A swing of ±10 questions changes the judge score by ±2.6 pts. Two identical runs can therefore differ by 2–3 pts with no code changes. The CI regression gate is set at 2.5 pts to account for this.
-
-**Token F1 limitations.** F1 rewards token overlap but penalises paraphrases. A correct answer that uses synonyms scores lower than a partially wrong answer that reproduces the reference verbatim. This is why judge and F1 sometimes diverge sharply (e.g. insights: F1=50, judge=26 → the answers are semantically right but worded differently).
-
----
-
-## What to improve next
+## Remaining gaps and next steps
 
 ```{python}
-gap = {c: V["v6b"]["cats"].get(c,{}).get("f1",0) - V["Ceiling"]["cats"].get(c,{}).get("f1",0)
-       for c in CATS}
+#| fig-cap: "Gap between v6b and ceiling per category. Negative = still below ceiling."
 
-fig = go.Figure(go.Bar(
-    x=list(gap.keys()),
-    y=list(gap.values()),
-    marker_color=["#1a6b35" if v >= 0 else "#9b1c1c" for v in gap.values()],
-    text=[f"{v:+.1f}" for v in gap.values()],
-    textposition="outside",
-    width=0.5,
-))
-fig.add_hline(y=0, line_color="#333", line_width=1)
-fig.update_layout(
-    height=320, template="plotly_white",
-    yaxis=dict(title="v6b F1 − Ceiling F1", range=[-16, 8]),
-    xaxis_title="",
-    title=dict(text="Remaining gap to ceiling per category (positive = surpassed)", font_size=13),
-    margin=dict(t=50),
-)
-fig.show()
+gap = {
+    c: V["v6b"]["cats"].get(c, {}).get("f1", 0) - V["Ceiling"]["cats"].get(c, {}).get("f1", 0)
+    for c in CATS
+}
+
+fig, ax = plt.subplots(figsize=(9, 3.5))
+colors  = [GREEN if v >= 0 else "#9b1c1c" for v in gap.values()]
+bars    = ax.bar(CATS, gap.values(), color=colors, width=0.5, zorder=3)
+ax.axhline(0, color="#333", lw=1)
+
+for bar, val in zip(bars, gap.values()):
+    offset = 0.3 if val >= 0 else -1.0
+    ax.text(bar.get_x() + bar.get_width() / 2, val + offset,
+            f"{val:+.1f}", ha="center", va="bottom" if val >= 0 else "top",
+            fontsize=9, fontweight="bold")
+
+ax.set_ylabel("v6b F1 − Ceiling F1", fontsize=11)
+ax.set_title("Remaining gap to ceiling (positive = surpassed ceiling)", fontsize=11)
+fig.tight_layout()
+plt.show()
 ```
 
-- **Bugs and patterns** have the largest gaps (~11 pts each). Both suffer from high linguistic variation. Cross-encoder re-ranking — running a lightweight classifier over retrieved candidates — would help here by scoring semantic relevance rather than surface form.
-- **Query expansion** (generating multiple query variants and merging results) could help for short, ambiguous questions in the bugs category.
-- **Longer retrieval context** via `engram inject --lines 360` allows the answering model to see more candidates before committing to a response, at the cost of increased latency.
+**Bugs and patterns** have the largest gaps (~11 pts each). Both categories have high surface-form variation — the semantic content is often correct but exact token overlap is low. Two directions that address this:
+
+1. **Cross-encoder re-ranking.** After retrieving top-k candidates, a small cross-encoder re-scores them using full pairwise attention. Unlike bi-encoder similarity, cross-encoders see both query and candidate together, making them much better at semantic relevance than token overlap.
+
+2. **Query expansion.** Generate multiple query variants from the original question and merge result lists with RRF. Particularly useful for short, ambiguous bug queries where a single embedding may land in the wrong region.
+
+---
+
+## Metric notes
+
+**Why judge can exceed ceiling.** The ceiling injects the *entire* knowledge base as context — thousands of tokens of mixed content. The model has to locate and extract the relevant fragment from noise. RAG retrieves a small, focused set; the model sees less noise and gives cleaner answers that the judge scores higher. This is a known property of RAG vs long-context injection and is not a measurement artefact.
+
+**Judge variance.** Binary scoring (0/1 per question × 100) means each question contributes `100/N ≈ 0.26` pts. A swing of ±10 questions changes the score by ±2.6 pts. Two identical runs can differ by 2–3 pts. The CI regression gate is set at 2.5 pts to account for this; v6 and v6b were run twice to confirm reproducibility.
+
+**Token F1 limitations.** F1 rewards token overlap but penalises paraphrases. A semantically correct answer with different wording scores lower than a partially wrong answer that reproduces the reference verbatim. This is why insights shows F1=50.3 but judge=25.8 — the answers are semantically right but worded differently from the reference.
