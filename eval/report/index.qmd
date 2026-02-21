@@ -121,24 +121,25 @@ This report shows how three techniques address these failure modes — and docum
 
 ## Landscape comparison
 
-The persistent memory space has several active systems. None publish results on the same benchmark or metric as this evaluation, so the table below compares **architecture and retrieval design** rather than numbers.
+The persistent memory space has several active systems. Benchmarks differ across projects, so direct score comparison is not always possible; the table below covers **architecture, retrieval design, and the best publicly reported numbers** for each system.
 
-| System | Storage model | Retrieval technique | Knowledge structure | Open benchmark |
+| System | Storage model | Retrieval technique | Knowledge structure | Best public result |
 |---|---|---|---|---|
-| **engram (v6b)** | Flat markdown files per category | HyDE + BM25 hybrid + RRF | 6 domain categories (decisions, solutions, patterns, bugs, insights, procedures) | ✅ this report |
-| **Mem0** | Vector store + entity graph | Dense semantic search | Flat fact extraction, entity-linked | ❌ proprietary LOCOMO subset |
-| **MemGPT / Letta** | Hierarchical paged context | In-context paging + retrieval | Conversation segments | ❌ internal only |
-| **Zep** | Graph + vector hybrid | Graph-guided semantic search | Entity/relationship extraction | ❌ no public dataset |
+| **engram (v19)** | Flat markdown files per category | HyDE → cosine; BM25 exact-term fallback (fires only on 0 cosine results) | 6 typed categories (decisions, solutions, patterns, bugs, insights, procedures) | ✅ Token F1 61.7 · Judge 50.8% — this report |
+| **Mem0** | Three-tier: vector store + entity graph + key-value | Multi-factor ranking across all three tiers; personalized reranking | Flat fact extraction, entity-linked in graph | ✅ LoCoMo: 66.9% LLM-judge (+26% vs OpenAI memory) |
+| **MemGPT / Letta** | Two-tier: in-context working memory + out-of-context external storage | Self-editing via tool calls; model explicitly loads/evicts memory pages | Conversation segments + summarised hierarchical context | ✅ LoCoMo: 74.0% (Letta Filesystem) |
+| **Zep** | Temporal knowledge graph (Graphiti engine): episode → semantic → community subgraphs | Bi-directional graph traversal + vector search over subgraphs | Entity/relationship extraction with temporal edges | ✅ DMR: 94.8% · LongMemEval: +18.5% accuracy |
 | **Naive RAG** | Vector store (flat) | Dense cosine only | No structure | varies |
 
-**Key architectural differences vs dense-only systems:**
+**Key architectural differences:**
 
-- *Category-aware extraction* — engram routes each insight to a typed bucket at write time. At retrieval time, the search space is smaller and topic-coherent; competing with an unsorted flat store is a known source of retrieval noise.
-- *HyDE* — most deployed systems embed the raw query. Generating a hypothetical answer first and embedding *that* consistently outperforms raw-query embedding on knowledge-base QA (Gao et al., 2023), especially when question and answer phrasing diverge.
-- *BM25 hybrid* — Mem0 and Zep use pure vector search. Exact-term queries (function names, version strings, error codes) are systematically underserved by dense retrieval alone; BM25 hybrid closes that gap.
+- *Category-aware extraction* — engram routes each insight to a typed bucket at write time. At retrieval time, the search space is smaller and topic-coherent; searching across an unstructured flat store is a known source of retrieval noise. Mem0, Letta, and Zep all mix structured and unstructured retrieval but do not apply upfront category routing.
+- *HyDE* — most deployed systems embed the raw query. Generating a plausible hypothetical answer first and embedding *that* bridges the vocabulary gap between short questions and long stored answers (Gao et al., 2023). Mem0 and Zep embed raw queries against their graph/vector indices.
+- *BM25 last-resort* — dense retrieval silently drops exact-term queries (function names, version strings, error codes). engram fires a keyword-match fallback only when cosine returns zero results, recovering these cases without adding noise to queries where semantic search already found results.
+- *Graph-based systems (Mem0, Zep)* trade write-time overhead (entity extraction, graph construction) for richer relationship queries. This suits long-horizon personal-assistant workloads; engram targets developer knowledge bases where write speed and human-editable plaintext matter more.
 
 ::: {.callout-note}
-**Reproducibility.** The 386-question evaluation dataset is available in `eval/domain_*.json`. Other systems can run the same questions against their retrieval stack and report Token F1 and LLM Judge for a direct comparison.
+**Reproducibility.** The 382-question evaluation dataset and all result files are available in `eval/`. Other systems can run the same questions against their retrieval stack and report Token F1 and LLM Judge for a direct comparison.
 :::
 
 ---
