@@ -4,7 +4,8 @@ use crate::analytics::tracker::{EventTracker, EventType, UsageEvent};
 use crate::config::{Config, CATEGORIES};
 use crate::error::{MemoryError, Result};
 use crate::extractor::knowledge::{
-    find_sessions_by_topic, parse_session_blocks, partition_by_expiry, strip_private_tags,
+    find_sessions_by_keywords, find_sessions_by_topic, parse_session_blocks, partition_by_expiry,
+    strip_private_tags,
 };
 use crate::inject::{build_raw_context, smart_search_sync, SmartEntry};
 use crate::llm::client::LlmClient;
@@ -147,8 +148,11 @@ pub fn cmd_ask(
         }
     }
 
-    // 2b. Lexical fallback if semantic returned fewer than 2 results
-    if entries.len() < 2 {
+    // 2b. Lexical fallback: fires ONLY when semantic returned 0 results.
+    // Uses keyword-level matching (≥3 significant words from the query) rather than
+    // full-query substring, targeting genuine zero-semantic-hit cases.
+    // Fires when entries=0 (not < 2) to avoid adding noise when cosine found 1 good entry.
+    if entries.is_empty() {
         let knowledge_dir = config.memory_dir.join("knowledge").join(project);
         for cat in crate::config::CATEGORIES {
             let path = knowledge_dir.join(format!("{}.md", cat));
@@ -156,14 +160,21 @@ pub fn cmd_ask(
                 continue;
             }
             let content = std::fs::read_to_string(&path)?;
-            let matching_ids = find_sessions_by_topic(&content, query);
-            if matching_ids.is_empty() {
+            // Require ≥3 keyword matches for precision; falls back to 2 if nothing found
+            let matching_ids = find_sessions_by_keywords(&content, query, 3);
+            // Also include full-phrase matches (rare but exact)
+            let phrase_ids = find_sessions_by_topic(&content, query);
+            let all_ids: std::collections::HashSet<String> = matching_ids
+                .into_iter()
+                .chain(phrase_ids)
+                .collect();
+            if all_ids.is_empty() {
                 continue;
             }
             let (_preamble, blocks) = parse_session_blocks(&content);
             let (active, _) = partition_by_expiry(blocks);
             for block in active {
-                if matching_ids.contains(&block.session_id)
+                if all_ids.contains(&block.session_id)
                     && !entries.iter().any(|e| e.session_id == block.session_id)
                 {
                     entries.push(SmartEntry {

@@ -91,20 +91,15 @@ def gemini_call(prompt: str, api_key: str,
         return f"[error: {e}]"
 
 
-JUDGE_PROMPT = """Does the predicted answer convey the same meaning as the gold answer for this question?
+JUDGE_PROMPT = """Question: {question}
+Gold answer: {gold}
+Predicted answer: {prediction}
 
-Question: {question}
-Gold: {gold}
-Predicted: {prediction}
+Start your response with YES or NO (nothing before it).
+YES = semantically equivalent, paraphrase, synonym, or the gold is contained in the prediction.
+NO = contradicts, completely different, or prediction is vague while gold is specific (e.g. gold=404, pred="an error").
 
-Rules:
-- YES if prediction is semantically equivalent, a paraphrase, or contains the gold answer as a substring.
-- YES if prediction uses synonyms or abbreviations that mean the same thing (e.g. "sequential" ≈ "a sequential approach").
-- YES if prediction is more detailed but still correct.
-- NO if prediction contradicts the gold or gives a completely different answer.
-- NO if prediction is vague/generic while gold requires a specific value (e.g. gold="404", pred="an error code").
-
-Reply YES or NO only."""
+YES or NO:"""
 
 
 def llm_judge(question: str, gold, prediction: str, api_key: str, model: str) -> float:
