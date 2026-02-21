@@ -687,6 +687,45 @@ pub async fn smart_search(
         }
     }
 
+    // BM25 lexical fallback: add sessions found by BM25 that cosine missed entirely.
+    // No extra API call — runs in-memory on the same store. BM25-only hits get score=threshold
+    // so they appear at the bottom of any ranked list.
+    {
+        let bm25_results = store.bm25_search(signal, top_k * 2);
+        // Normalise BM25 scores to [threshold, threshold+ε] so they sort below cosine hits
+        // but still appear in results.
+        let bm25_score = threshold; // flat score for BM25-only entries
+        for (_raw_score, chunk) in bm25_results {
+            let session_id = chunk
+                .metadata
+                .session_id
+                .clone()
+                .unwrap_or_else(|| chunk.id.clone());
+            // Only add if cosine didn't already find this session
+            if !seen.contains_key(&session_id) {
+                seen.insert(
+                    session_id.clone(),
+                    SmartEntry {
+                        category: chunk.metadata.category.clone(),
+                        session_id,
+                        preview: chunk
+                            .text
+                            .lines()
+                            .find(|l| !l.trim().is_empty())
+                            .unwrap_or("")
+                            .trim()
+                            .chars()
+                            .take(120)
+                            .collect(),
+                        content: chunk.text.clone(),
+                        score: bm25_score,
+                        selected: true,
+                    },
+                );
+            }
+        }
+    }
+
     // Also search global knowledge store (if not already searching global)
     if project != crate::config::GLOBAL_DIR {
         let global_index_path = memory_dir

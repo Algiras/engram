@@ -429,14 +429,33 @@ Extract entities:"#,
 pub const SYSTEM_HYDE_GENERATOR: &str =
     "You are a knowledge retrieval assistant. Given a search query, write a short 2-3 sentence \
      declarative knowledge entry that would directly answer or address the query. Write it as if \
-     it were already stored in a developer's memory system. Be specific and factual.";
+     it were already stored in a developer's memory system. \
+     Use precise technical vocabulary: exact function names, module paths, error codes, \
+     library names, and specific values. Prefer concrete terms over general descriptions.";
 
 /// Generate a HyDE prompt for the given search query
 pub fn hyde_prompt(query: &str) -> String {
     format!(
-        "Write a 2-3 sentence declarative memory entry that would directly answer this query:\n\
+        "Write a 2-3 sentence declarative memory entry that would directly answer this query.\n\
+         Use exact technical terms, code identifiers, error codes, and specific values.\n\
          QUERY: {query}\n\n\
          Respond with only the hypothetical knowledge entry, no preamble."
+    )
+}
+
+/// System prompt for multi-query expansion
+pub const SYSTEM_QUERY_EXPANDER: &str =
+    "You are a search query expert. Given a question, generate 2 alternative phrasings \
+     that use different vocabulary but target the same answer. \
+     Focus on technical synonyms, alternative code terms, and different angles of the same fact. \
+     Output exactly 2 lines, one alternative query per line. No numbering or preamble.";
+
+/// Generate alternative phrasings of a query for multi-query retrieval
+pub fn query_expand_prompt(query: &str) -> String {
+    format!(
+        "Generate 2 alternative search queries for finding the same information:\n\
+         ORIGINAL: {query}\n\n\
+         Output 2 lines only:"
     )
 }
 

@@ -147,7 +147,46 @@ pub fn cmd_ask(
         }
     }
 
-    // 2. Lexical fallback if semantic returned fewer than 2 results
+    // 2a. Multi-query expansion: if semantic returned fewer than 3 entries, generate
+    // 2 alternative phrasings and union their results. Targets vocabulary-mismatch misses.
+    // Conservative trigger (< 3) avoids adding noise when HyDE already found good evidence.
+    if entries.len() < 3 {
+        let client = LlmClient::new(&config.llm);
+        let rt2 = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .map_err(|e| MemoryError::Config(format!("tokio runtime: {}", e)))?;
+        if let Ok(expansions) = rt2.block_on(client.chat(
+            crate::llm::prompts::SYSTEM_QUERY_EXPANDER,
+            &crate::llm::prompts::query_expand_prompt(query),
+        )) {
+            for alt_query in expansions.lines().take(2).filter(|l| !l.trim().is_empty()) {
+                let alt_signal = format!("{}\n\nQuery: {}", alt_query.trim(), query);
+                if verbose {
+                    eprintln!(
+                        "{} expand: {}",
+                        "Ask:".cyan(),
+                        alt_query.trim().chars().take(80).collect::<String>()
+                    );
+                }
+                if let Ok(alt_entries) = smart_search_sync(
+                    project,
+                    &config.memory_dir,
+                    &alt_signal,
+                    top_k / 2,
+                    threshold,
+                ) {
+                    for e in alt_entries {
+                        if !entries.iter().any(|x| x.session_id == e.session_id) {
+                            entries.push(e);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // 2b. Lexical fallback if semantic returned fewer than 2 results
     if entries.len() < 2 {
         let knowledge_dir = config.memory_dir.join("knowledge").join(project);
         for cat in crate::config::CATEGORIES {
