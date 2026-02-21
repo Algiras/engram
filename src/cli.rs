@@ -467,6 +467,14 @@ pub enum Commands {
         /// Return a short answer (1-10 words) — better for benchmark evaluation
         #[arg(long)]
         concise: bool,
+
+        /// Use recursive retrieval: build compact index → LLM selects entries → fetch → answer
+        #[arg(long, help = "Use recursive retrieval: index → LLM selects → fetch → answer")]
+        recursive: bool,
+
+        /// Hybrid retrieval: recursive for decisions/patterns/procedures, semantic for insights/bugs/solutions
+        #[arg(long, help = "Hybrid retrieval: recursive for structured categories, semantic for conceptual")]
+        hybrid: bool,
     },
 
     /// Show named entity cards for a project (libraries, tools, APIs extracted from sessions)

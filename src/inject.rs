@@ -924,10 +924,10 @@ pub fn build_compact_memory_with_budget(
 
     let mut combined = String::new();
     combined.push_str("# Project Memory (auto-injected by engram)\n\n");
-    let mode_hint = if line_budget.is_some() {
+    let mode_hint = if let Some(budget) = line_budget {
         format!(
             "<!-- Compact mode ({}L budget): run `engram inject --full` for complete dump -->\n\n",
-            line_budget.unwrap()
+            budget
         )
     } else {
         "<!-- Compact mode: run `engram inject --full` for complete dump -->\n\n".to_string()

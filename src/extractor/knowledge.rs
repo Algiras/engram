@@ -291,6 +291,59 @@ pub fn find_sessions_by_topic(file_content: &str, query: &str) -> Vec<String> {
         .collect()
 }
 
+/// Stop words filtered out during keyword extraction.
+const STOP_WORDS: &[&str] = &[
+    "what", "when", "where", "which", "who", "whom", "why", "how",
+    "this", "that", "these", "those", "with", "from", "into", "over",
+    "after", "before", "about", "have", "does", "were", "been", "being",
+    "will", "would", "could", "should", "shall", "might", "must", "also",
+    "more", "some", "such", "than", "then", "they", "them", "their",
+    "there", "here", "just", "only", "very", "your", "using", "used",
+    "make", "made", "like", "caused", "cause", "fail", "failed",
+];
+
+/// Extract significant keywords from a query string.
+/// Returns lowercase words longer than 3 chars that are not stop words.
+pub fn extract_keywords(query: &str) -> Vec<String> {
+    query
+        .split(|c: char| !c.is_alphanumeric() && c != '-' && c != '_')
+        .map(|w| w.trim_matches(|c: char| !c.is_alphanumeric()).to_lowercase())
+        .filter(|w| w.len() > 3 && !STOP_WORDS.contains(&w.as_str()))
+        .collect()
+}
+
+/// Keyword-level lexical fallback: returns sessions matching at least `min_matches`
+/// significant keywords from the query. Falls back to 1 match if `min_matches > 1`
+/// and nothing is found.
+pub fn find_sessions_by_keywords(
+    file_content: &str,
+    query: &str,
+    min_matches: usize,
+) -> Vec<String> {
+    let keywords = extract_keywords(query);
+    if keywords.is_empty() {
+        return Vec::new();
+    }
+
+    let (_preamble, blocks) = parse_session_blocks(file_content);
+    let (active, _) = partition_by_expiry(blocks);
+
+    let mut matches: Vec<(String, usize)> = active
+        .into_iter()
+        .map(|b| {
+            let content_lower = b.content.to_lowercase();
+            let hits = keywords.iter().filter(|kw| content_lower.contains(kw.as_str())).count();
+            (b.session_id, hits)
+        })
+        .filter(|(_, hits)| *hits >= min_matches)
+        .collect();
+
+    // Sort by number of keyword hits descending (best matches first)
+    matches.sort_by(|a, b| b.1.cmp(&a.1));
+
+    matches.into_iter().map(|(id, _)| id).collect()
+}
+
 /// Parse "7d", "30d", "2w", "1h", "30m" into chrono::Duration
 pub fn parse_ttl(s: &str) -> Option<chrono::Duration> {
     let s = s.trim();

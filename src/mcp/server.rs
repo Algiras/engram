@@ -462,6 +462,37 @@ impl McpServer {
                     "required": ["project", "query"]
                 }),
             },
+            Tool {
+                name: "ask_recursive".to_string(),
+                description: "Answer a question using recursive retrieval (RLM-style): builds a compact \
+                    index of all knowledge entries, lets the LLM select which entries to read fully, \
+                    fetches full content, then synthesizes an answer. More precise than ask() for \
+                    complex or ambiguous queries. Falls back to regular ask() if selection fails.".to_string(),
+                input_schema: json!({
+                    "type": "object",
+                    "properties": {
+                        "project": { "type": "string", "description": "Project name" },
+                        "query":   { "type": "string", "description": "The question to answer" }
+                    },
+                    "required": ["project", "query"]
+                }),
+            },
+            Tool {
+                name: "ask_hybrid".to_string(),
+                description: "Answer using hybrid retrieval: recursive (index→select→fetch) for \
+                    decisions/patterns/procedures, HyDE+semantic for insights/bugs/solutions. \
+                    Both arms run in parallel and results are merged before synthesis. \
+                    Best overall accuracy across all knowledge categories.".to_string(),
+                input_schema: json!({
+                    "type": "object",
+                    "properties": {
+                        "project": { "type": "string", "description": "Project name" },
+                        "query":   { "type": "string", "description": "The question to answer" },
+                        "top_k":   { "type": "number", "description": "Max entries to retrieve (default: 5)", "default": 5 }
+                    },
+                    "required": ["project", "query"]
+                }),
+            },
         ];
 
         Response::success(id, json!({ "tools": tools }))
@@ -533,6 +564,24 @@ impl McpServer {
             }
             "ask" => {
                 let r = self.tool_ask(args);
+                if r.is_ok() {
+                    if let Ok(mut s) = self.session.lock() {
+                        s.asked += 1;
+                    }
+                }
+                r
+            }
+            "ask_recursive" => {
+                let r = self.tool_ask_recursive(args);
+                if r.is_ok() {
+                    if let Ok(mut s) = self.session.lock() {
+                        s.asked += 1;
+                    }
+                }
+                r
+            }
+            "ask_hybrid" => {
+                let r = self.tool_ask_hybrid(args);
                 if r.is_ok() {
                     if let Ok(mut s) = self.session.lock() {
                         s.asked += 1;
@@ -1783,6 +1832,228 @@ impl McpServer {
             let env_model = std::env::var("ENGRAM_LLM_MODEL").ok();
             let resolved = resolve_provider(None, env_endpoint, env_model)?;
             let client = LlmClient::new(&resolved);
+            client
+                .chat(SYSTEM_QA_ASSISTANT, &ask_prompt(query, &context_str))
+                .await
+        })?;
+
+        Ok(answer)
+    }
+
+    /// Answer a question using recursive retrieval (RLM-style).
+    fn tool_ask_recursive(&self, args: serde_json::Value) -> Result<String> {
+        use crate::auth::resolve_provider;
+        use crate::commands::ask::{build_project_index, fetch_entries_by_ids};
+        use crate::config::CATEGORIES;
+        use crate::extractor::knowledge::strip_private_tags;
+        use crate::llm::{
+            client::LlmClient,
+            prompts::{
+                ask_prompt, recursive_select_prompt, SYSTEM_QA_ASSISTANT,
+                SYSTEM_RECURSIVE_SELECTOR,
+            },
+        };
+
+        let project = args["project"]
+            .as_str()
+            .ok_or_else(|| MemoryError::Config("Missing project parameter".into()))?;
+        let query = args["query"]
+            .as_str()
+            .ok_or_else(|| MemoryError::Config("Missing query parameter".into()))?;
+
+        // 1. Build compact index (all categories)
+        let index = build_project_index(project, &self.config.memory_dir, CATEGORIES);
+        if index.is_empty() {
+            return Ok(format!(
+                "No knowledge found for '{}'. Run 'engram ingest --project {}' first.",
+                project, project
+            ));
+        }
+
+        let rt = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .map_err(|e| MemoryError::Config(format!("tokio runtime: {}", e)))?;
+
+        let env_endpoint = std::env::var("ENGRAM_LLM_ENDPOINT").ok();
+        let env_model = std::env::var("ENGRAM_LLM_MODEL").ok();
+        let resolved = resolve_provider(None, env_endpoint, env_model)?;
+        let client = LlmClient::new(&resolved);
+
+        // 2. LLM Step 1 — selection
+        let selected_ids: Vec<String> = rt
+            .block_on(client.chat(
+                SYSTEM_RECURSIVE_SELECTOR,
+                &recursive_select_prompt(query, &index),
+            ))
+            .map(|resp| {
+                use crate::commands::ask::parse_selected_ids;
+                parse_selected_ids(&resp)
+            })
+            .unwrap_or_default();
+
+        // 3. Fetch full entries
+        let entries = if !selected_ids.is_empty() {
+            fetch_entries_by_ids(project, &self.config.memory_dir, &selected_ids)
+        } else {
+            Vec::new()
+        };
+
+        // 4. Graceful degradation — fall back to tool_ask if nothing found
+        if entries.is_empty() {
+            return self.tool_ask(args);
+        }
+
+        // 5. Build context and answer
+        let context_str = entries
+            .iter()
+            .map(|e| format!("[{}:{}]\n{}", e.category, e.session_id, e.content.trim()))
+            .collect::<Vec<_>>()
+            .join("\n\n---\n\n");
+
+        let context_str = strip_private_tags(&context_str);
+
+        let answer = rt.block_on(async {
+            client
+                .chat(SYSTEM_QA_ASSISTANT, &ask_prompt(query, &context_str))
+                .await
+        })?;
+
+        Ok(answer)
+    }
+
+    /// Answer a question using hybrid retrieval.
+    fn tool_ask_hybrid(&self, args: serde_json::Value) -> Result<String> {
+        use crate::auth::resolve_provider;
+        use crate::commands::ask::{
+            build_project_index, fetch_entries_by_ids, RECURSIVE_CATEGORIES,
+        };
+        use crate::extractor::knowledge::{
+            find_sessions_by_topic, parse_session_blocks, partition_by_expiry, strip_private_tags,
+        };
+        use crate::inject::{smart_search_sync, SmartEntry};
+        use crate::llm::{
+            client::LlmClient,
+            prompts::{
+                ask_prompt, hyde_prompt, recursive_select_prompt, SYSTEM_HYDE_GENERATOR,
+                SYSTEM_QA_ASSISTANT, SYSTEM_RECURSIVE_SELECTOR,
+            },
+        };
+
+        let project = args["project"]
+            .as_str()
+            .ok_or_else(|| MemoryError::Config("Missing project parameter".into()))?;
+        let query = args["query"]
+            .as_str()
+            .ok_or_else(|| MemoryError::Config("Missing query parameter".into()))?;
+        let top_k = args["top_k"].as_u64().unwrap_or(5) as usize;
+        let threshold = 0.15_f32;
+
+        let rt = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .map_err(|e| MemoryError::Config(format!("tokio runtime: {}", e)))?;
+
+        let env_endpoint = std::env::var("ENGRAM_LLM_ENDPOINT").ok();
+        let env_model = std::env::var("ENGRAM_LLM_MODEL").ok();
+        let resolved = resolve_provider(None, env_endpoint, env_model)?;
+        let client = LlmClient::new(&resolved);
+
+        // ── Arm 1: Recursive over decisions/patterns/procedures ──────────────
+        let index = build_project_index(project, &self.config.memory_dir, RECURSIVE_CATEGORIES);
+        let mut rec_entries: Vec<SmartEntry> = Vec::new();
+
+        if !index.is_empty() {
+            let selected_ids: Vec<String> = rt
+                .block_on(client.chat(
+                    SYSTEM_RECURSIVE_SELECTOR,
+                    &recursive_select_prompt(query, &index),
+                ))
+                .map(|resp| {
+                    use crate::commands::ask::parse_selected_ids;
+                    parse_selected_ids(&resp)
+                })
+                .unwrap_or_default();
+
+            if !selected_ids.is_empty() {
+                rec_entries =
+                    fetch_entries_by_ids(project, &self.config.memory_dir, &selected_ids);
+            }
+        }
+
+        // ── Arm 2: HyDE+semantic over insights/bugs/solutions ────────────────
+        let search_signal: String = rt
+            .block_on(client.chat(SYSTEM_HYDE_GENERATOR, &hyde_prompt(query)))
+            .map(|h| format!("{}\n\nQuery: {}", h.trim(), query))
+            .unwrap_or_else(|_| query.to_string());
+
+        let mut std_entries: Vec<SmartEntry> = smart_search_sync(
+            project,
+            &self.config.memory_dir,
+            &search_signal,
+            top_k,
+            threshold,
+        )
+        .unwrap_or_default();
+
+        // Lexical fallback for standard arm — covers all categories so no question is left empty
+        if std_entries.len() < 2 {
+            let knowledge_dir = self.config.memory_dir.join("knowledge").join(project);
+            for cat in crate::config::CATEGORIES {
+                let path = knowledge_dir.join(format!("{}.md", cat));
+                if !path.exists() {
+                    continue;
+                }
+                let Ok(content) = std::fs::read_to_string(&path) else {
+                    continue;
+                };
+                let matching_ids = find_sessions_by_topic(&content, query);
+                if matching_ids.is_empty() {
+                    continue;
+                }
+                let (_preamble, blocks) = parse_session_blocks(&content);
+                let (active, _) = partition_by_expiry(blocks);
+                for block in active {
+                    if matching_ids.contains(&block.session_id)
+                        && !std_entries.iter().any(|e| e.session_id == block.session_id)
+                    {
+                        std_entries.push(SmartEntry {
+                            category: cat.to_string(),
+                            session_id: block.session_id,
+                            preview: block.preview,
+                            content: block.content,
+                            score: 0.5,
+                            selected: true,
+                        });
+                    }
+                }
+            }
+        }
+
+        // ── Merge ─────────────────────────────────────────────────────────────
+        let mut merged: Vec<SmartEntry> = rec_entries;
+        for entry in std_entries {
+            if !merged.iter().any(|e| e.session_id == entry.session_id) {
+                merged.push(entry);
+            }
+        }
+
+        // Fall back to regular ask if nothing found
+        if merged.is_empty() {
+            return self.tool_ask(args);
+        }
+
+        // ── Synthesis ─────────────────────────────────────────────────────────
+        let context_str = merged
+            .iter()
+            .take(top_k)
+            .map(|e| format!("[{}:{}]\n{}", e.category, e.session_id, e.content.trim()))
+            .collect::<Vec<_>>()
+            .join("\n\n---\n\n");
+
+        let context_str = strip_private_tags(&context_str);
+
+        let answer = rt.block_on(async {
             client
                 .chat(SYSTEM_QA_ASSISTANT, &ask_prompt(query, &context_str))
                 .await

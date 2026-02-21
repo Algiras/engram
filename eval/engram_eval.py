@@ -198,7 +198,41 @@ def ask_engram(binary: str, project: str, question: str,
     if model:
         env["ENGRAM_LLM_MODEL"] = model
 
-    result = subprocess.run(args, capture_output=True, text=True, timeout=30, env=env)
+    result = subprocess.run(args, capture_output=True, text=True, timeout=60, env=env)
+    if result.returncode != 0 or "Not found in knowledge base" in result.stdout:
+        return ""
+    lines = [l for l in result.stdout.strip().splitlines()
+             if not l.startswith("Sources:") and not l.startswith("Hint:")]
+    return "\n".join(lines).strip()
+
+
+def ask_engram_recursive(binary: str, project: str, question: str,
+                         model: str = "") -> str:
+    """Use recursive retrieval (RLM-style): index → LLM selects → fetch → answer."""
+    args = [binary, "ask", question, "--project", project, "--recursive", "--concise"]
+
+    env = {**os.environ}
+    if model:
+        env["ENGRAM_LLM_MODEL"] = model
+
+    result = subprocess.run(args, capture_output=True, text=True, timeout=120, env=env)
+    if result.returncode != 0 or "Not found in knowledge base" in result.stdout:
+        return ""
+    lines = [l for l in result.stdout.strip().splitlines()
+             if not l.startswith("Sources:") and not l.startswith("Hint:")]
+    return "\n".join(lines).strip()
+
+
+def ask_engram_hybrid(binary: str, project: str, question: str,
+                      model: str = "") -> str:
+    """Hybrid retrieval: recursive for decisions/patterns/procedures, semantic for insights/bugs/solutions."""
+    args = [binary, "ask", question, "--project", project, "--hybrid", "--concise"]
+
+    env = {**os.environ}
+    if model:
+        env["ENGRAM_LLM_MODEL"] = model
+
+    result = subprocess.run(args, capture_output=True, text=True, timeout=90, env=env)
     if result.returncode != 0 or "Not found in knowledge base" in result.stdout:
         return ""
     lines = [l for l in result.stdout.strip().splitlines()
@@ -308,6 +342,10 @@ def main():
                     help="Score with LLM-as-a-Judge (semantic accuracy)")
     ap.add_argument("--full-context", action="store_true",
                     help="Upper bound: answer with ALL knowledge in context (no retrieval)")
+    ap.add_argument("--recursive", action="store_true",
+                    help="Use recursive retrieval (RLM-style): index → LLM selects → fetch → answer")
+    ap.add_argument("--hybrid", action="store_true",
+                    help="Hybrid retrieval: recursive for structured categories, semantic for conceptual")
     ap.add_argument("--max-per-cat", type=int, default=None,
                     help="Limit questions per category (quick test)")
     ap.add_argument("--categories",
@@ -315,6 +353,8 @@ def main():
     ap.add_argument("--output", default="eval/domain_results.json")
     ap.add_argument("--prev", default=None,
                     help="Path to previous results JSON for delta comparison")
+    ap.add_argument("--save-per-question", action="store_true",
+                    help="Save per-question details (question, gold, prediction, f1) to output JSON")
     args = ap.parse_args()
 
     binary = str(Path(args.engram).resolve())
@@ -358,6 +398,14 @@ def main():
     ]
     if args.full_context:
         label_parts.append("FULL-CONTEXT (ceiling)")
+    elif args.hybrid:
+        label_parts.append("HYBRID (recursive+semantic)")
+        if args.model:
+            label_parts.append(f"model={args.model}")
+    elif args.recursive:
+        label_parts.append("RECURSIVE (RLM-style)")
+        if args.model:
+            label_parts.append(f"model={args.model}")
     else:
         label_parts.append(f"t={args.threshold} k={args.top_k}")
         if args.model:
@@ -385,6 +433,7 @@ def main():
 
     f1_by_cat: dict[str, list[float]] = defaultdict(list)
     judge_by_cat: dict[str, list[float]] = defaultdict(list)
+    per_question_log: list[dict] = []
     start = time.time()
 
     for i, qa in enumerate(qa_pairs):
@@ -394,6 +443,14 @@ def main():
 
         if args.full_context:
             prediction = ask_full_context(question, full_knowledge, api_key, fc_model)
+        elif args.hybrid:
+            prediction = ask_engram_hybrid(
+                binary, args.project, question, model=args.model,
+            )
+        elif args.recursive:
+            prediction = ask_engram_recursive(
+                binary, args.project, question, model=args.model,
+            )
         else:
             prediction = ask_engram(
                 binary, args.project, question,
@@ -404,9 +461,21 @@ def main():
         f1 = token_f1(prediction, gold)
         f1_by_cat[category].append(f1)
 
+        j = 0.0
         if args.use_judge and api_key:
             j = llm_judge(question, gold, prediction, api_key, args.judge_model)
             judge_by_cat[category].append(j)
+
+        if args.save_per_question:
+            per_question_log.append({
+                "category": category,
+                "question": question,
+                "gold": str(gold),
+                "prediction": prediction,
+                "f1": f1,
+                "judge": j,
+                "not_found": prediction == "",
+            })
 
         if (i + 1) % 20 == 0:
             done = i + 1
@@ -437,6 +506,10 @@ def main():
         },
         "args": vars(args),
     }
+    if args.save_per_question:
+        results["per_question"] = per_question_log
+        failures = [r for r in per_question_log if r["not_found"]]
+        results["failures"] = failures
 
     Path(args.output).parent.mkdir(parents=True, exist_ok=True)
     with open(args.output, "w") as f:

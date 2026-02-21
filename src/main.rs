@@ -34,7 +34,7 @@ use colored::Colorize;
 use config::Config;
 use error::Result;
 
-use commands::ask::cmd_ask;
+use commands::ask::{cmd_ask, cmd_ask_hybrid, cmd_ask_recursive};
 use commands::auth::{
     cmd_auth_embed, cmd_auth_embed_model, cmd_auth_list, cmd_auth_login, cmd_auth_logout,
     cmd_auth_model, cmd_auth_models, cmd_auth_status, cmd_auth_test,
@@ -516,6 +516,8 @@ fn main() -> Result<()> {
         threshold,
         use_graph,
         concise,
+        recursive,
+        hybrid,
         ..
     } = &cli.command
     {
@@ -525,6 +527,12 @@ fn main() -> Result<()> {
                 .and_then(|p| p.file_name().map(|n| n.to_string_lossy().to_string()))
                 .unwrap_or_else(|| "default".to_string())
         });
+        if *hybrid {
+            return cmd_ask_hybrid(&config, query, &project_name, *top_k, *threshold, cli.verbose, *concise);
+        }
+        if *recursive {
+            return cmd_ask_recursive(&config, query, &project_name, cli.verbose, *concise);
+        }
         return cmd_ask(
             &config,
             query,

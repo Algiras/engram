@@ -335,6 +335,21 @@ pub const SYSTEM_QA_ASSISTANT: &str = "You are a precise Q&A assistant over a de
     Cite 1-3 session IDs used. \
     If the answer is not found in the knowledge, say exactly: 'Not found in knowledge base.'";
 
+pub const SYSTEM_RECURSIVE_SELECTOR: &str = "\
+You are a retrieval planner for a developer knowledge base. \
+Given a question and a compact index of stored knowledge entries, \
+select the 1-5 entry IDs most likely to contain the answer. \
+Reply with ONLY a comma-separated list of session IDs, nothing else. \
+Example: abc123, def456";
+
+pub fn recursive_select_prompt(question: &str, index: &str) -> String {
+    format!(
+        "QUESTION: {question}\n\nKNOWLEDGE INDEX:\n{index}\n\n\
+         Which session IDs should be read in full to answer this question? \
+         Reply with comma-separated IDs only."
+    )
+}
+
 /// Concise QA system prompt for benchmark evaluation (LoCoMo-style short answers)
 pub const SYSTEM_QA_CONCISE: &str = "You are a precise technical Q&A assistant. \
      Answer using ONLY information explicitly stated in the provided knowledge. \
