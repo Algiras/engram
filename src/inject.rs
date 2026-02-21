@@ -639,9 +639,12 @@ pub async fn smart_search(
     let config = Config::load(None)?;
     let embed_provider = EmbeddingProvider::from_config(&config);
 
-    let results = store
-        .search_text(signal, &embed_provider, top_k * 3)
-        .await?;
+    // Embed the search signal and use cosine similarity directly.
+    // `search_text` / `hybrid_search` returns RRF scores (max ~0.033), which are
+    // incompatible with the cosine-calibrated `threshold` (default 0.15).
+    // Using raw cosine via `store.search()` keeps the threshold semantics consistent.
+    let query_embedding = embed_provider.embed(signal).await?;
+    let results = store.search(&query_embedding, top_k * 3);
 
     // Deduplicate by session_id (keep highest scoring chunk per session)
     let mut seen: std::collections::HashMap<String, SmartEntry> = std::collections::HashMap::new();
@@ -693,10 +696,8 @@ pub async fn smart_search(
         if global_index_path.exists() {
             if let Ok(global_store) = EmbeddingStore::load(&global_index_path) {
                 if !global_store.chunks.is_empty() {
-                    if let Ok(global_results) = global_store
-                        .search_text(signal, &embed_provider, top_k * 2)
-                        .await
-                    {
+                    if let Ok(global_embedding) = embed_provider.embed(signal).await {
+                        let global_results = global_store.search(&global_embedding, top_k * 2);
                         for (score, chunk) in global_results {
                             if score < threshold {
                                 continue;

@@ -1,0 +1,891 @@
+{
+  "overall_f1": 60.83778491594553,
+  "overall_judge": 16.666666666666664,
+  "not_found_rate": 6.666666666666667,
+  "not_found_count": 6,
+  "total_questions": 90,
+  "elapsed": 249.74907612800598,
+  "label": "project=Personal | t=0.15 k=12 | judge",
+  "by_category": {
+    "decisions": {
+      "f1": 62.928870611398544,
+      "judge": 26.666666666666668,
+      "n": 15
+    },
+    "solutions": {
+      "f1": 49.83240431066518,
+      "judge": 6.666666666666667,
+      "n": 15
+    },
+    "patterns": {
+      "f1": 58.33050494720975,
+      "judge": 13.333333333333334,
+      "n": 15
+    },
+    "bugs": {
+      "f1": 43.94262563409569,
+      "judge": 20.0,
+      "n": 15
+    },
+    "insights": {
+      "f1": 55.92992582466266,
+      "judge": 26.666666666666668,
+      "n": 15
+    },
+    "procedures": {
+      "f1": 94.06237816764133,
+      "judge": 6.666666666666667,
+      "n": 15
+    }
+  },
+  "args": {
+    "project": "Personal",
+    "dataset": "eval/qa_dataset.json",
+    "engram": "./target/release/engram",
+    "model": "",
+    "judge_model": "gemini-2.5-flash",
+    "threshold": 0.15,
+    "top_k": 12,
+    "use_judge": true,
+    "full_context": false,
+    "recursive": false,
+    "hybrid": false,
+    "max_per_cat": 15,
+    "categories": "decisions,solutions,patterns,bugs,insights,procedures",
+    "output": "eval/domain_results_v11_cosine.json",
+    "prev": "eval/domain_results_v10_full.json",
+    "save_per_question": true
+  },
+  "per_question": [
+    {
+      "category": "decisions",
+      "question": "What was the main decision made regarding the engram project?",
+      "gold": "Install the engram project from GitHub.",
+      "prediction": "Install the engram project from GitHub; use existing installation.",
+      "f1": 0.7692307692307693,
+      "judge": 0.0,
+      "not_found": false
+    },
+    {
+      "category": "decisions",
+      "question": "What issue caused the engram install script to fail?",
+      "gold": "GitHub API rate limiting.",
+      "prediction": "The script calls the GitHub API unauthenticated, hitting a 403 rate limit.",
+      "f1": 0.46153846153846156,
+      "judge": 0.0,
+      "not_found": false
+    },
+    {
+      "category": "decisions",
+      "question": "What alternatives were considered for installing the engram project?",
+      "gold": "Using the install script, reinstalling engram, manual download of the pre-built binary.",
+      "prediction": "Using the install script (failed).",
+      "f1": 0.39999999999999997,
+      "judge": 0.0,
+      "not_found": false
+    },
+    {
+      "category": "decisions",
+      "question": "Why was the `engram` plugin source format changed from `github:Algiras/engram`?",
+      "gold": "The `github:` source format is invalid, causing a schema validation error.",
+      "prediction": "The original `github:` source format was invalid, causing a schema validation error.",
+      "f1": 0.8421052631578948,
+      "judge": 1.0,
+      "not_found": false
+    },
+    {
+      "category": "decisions",
+      "question": "What was the purpose of updating `known_marketplaces.json` to the current date?",
+      "gold": "To ensure the refresh system treats the marketplace as current.",
+      "prediction": "To force the refresh system to recognize the marketplace as current.",
+      "f1": 0.7058823529411765,
+      "judge": 1.0,
+      "not_found": false
+    },
+    {
+      "category": "decisions",
+      "question": "What files were copied into the newly created local plugin directory for `engram`?",
+      "gold": "plugin.json, SKILL.md",
+      "prediction": "`plugin.json`, `SKILL.md`",
+      "f1": 1.0,
+      "judge": 0.0,
+      "not_found": false
+    },
+    {
+      "category": "decisions",
+      "question": "Why was the 1 unprocessed session for the `claude-memory` project ingested?",
+      "gold": "To ensure the project knowledge is up to date.",
+      "prediction": "To ensure the `claude-memory` project knowledge is up to date.",
+      "f1": 0.7777777777777777,
+      "judge": 1.0,
+      "not_found": false
+    },
+    {
+      "category": "decisions",
+      "question": "What was the purpose of creating the `feat/daemon` branch in the `engram` repository?",
+      "gold": "To implement a daemon mode for automatic session ingestion.",
+      "prediction": "To introduce a daemon mode for automatic session ingestion.",
+      "f1": 0.875,
+      "judge": 1.0,
+      "not_found": false
+    },
+    {
+      "category": "decisions",
+      "question": "Why was `current_exe()` replaced with `\"engram\"` as the command in `cmd_daemon_start` and `cmd_daemon_run`?",
+      "gold": "Because `current_exe()` returns debug binary path, becoming stale.",
+      "prediction": "`current_exe()` returns the debug binary path when running from source, which can become stale.",
+      "f1": 0.6086956521739131,
+      "judge": 0.0,
+      "not_found": false
+    },
+    {
+      "category": "decisions",
+      "question": "What is the valid range for the `--interval` argument after the new decision?",
+      "gold": "1..=1440",
+      "prediction": "The valid range for `--interval` is `1..=1440`.",
+      "f1": 0.4444444444444445,
+      "judge": 0.0,
+      "not_found": false
+    },
+    {
+      "category": "decisions",
+      "question": "What was `event::read()` replaced with?",
+      "gold": "`event::poll(Duration::from_secs(3))`",
+      "prediction": "`event::read()` was replaced with `event::poll(Duration::from_secs(3))` in the TUI.",
+      "f1": 0.631578947368421,
+      "judge": 0.0,
+      "not_found": false
+    },
+    {
+      "category": "decisions",
+      "question": "What was the decision regarding the CLI flag in `src/mcp/server.rs:643`?",
+      "gold": "Change the CLI flag from `--limit` to `--top` in `src/mcp/server.rs:643`.",
+      "prediction": "Change MCP CLI flag from `--limit` to `--top` in `src/mcp/server.rs`.",
+      "f1": 0.9230769230769231,
+      "judge": 0.0,
+      "not_found": false
+    },
+    {
+      "category": "decisions",
+      "question": "Why were `generate_embeddings()` and `build_graph()` stubs implemented in `src/health.rs`?",
+      "gold": "Doctor command claimed to generate embeddings and build graphs, but functionality stubbed.",
+      "prediction": "",
+      "f1": 0.0,
+      "judge": 0.0,
+      "not_found": true
+    },
+    {
+      "category": "decisions",
+      "question": "What approach was decided for fixing `inject.rs` regex unwraps, and what was the previously suggested approach?",
+      "gold": "Pragmatic approach; previously `OnceLock`.",
+      "prediction": "",
+      "f1": 0.0,
+      "judge": 0.0,
+      "not_found": true
+    },
+    {
+      "category": "decisions",
+      "question": "What was the reason for replacing fragile string matching in `auth status`?",
+      "gold": "To improve the robustness of error detection.",
+      "prediction": "To improve the robustness of error detection.",
+      "f1": 1.0,
+      "judge": 0.0,
+      "not_found": false
+    },
+    {
+      "category": "solutions",
+      "question": "What was the initial problem with the `engram` install script?",
+      "gold": "The initial install script for `engram` failed with a 403 (rate limit) error.",
+      "prediction": "The `engram` install script failed.",
+      "f1": 0.5333333333333333,
+      "judge": 0.0,
+      "not_found": false
+    },
+    {
+      "category": "solutions",
+      "question": "What was identified as the root cause of the `engram` install script's failure?",
+      "gold": "An unauthenticated call to the GitHub API.",
+      "prediction": "The script uses the unauthenticated GitHub API to detect the latest version, which hit a 403 rate limit error.",
+      "f1": 0.4,
+      "judge": 0.0,
+      "not_found": false
+    },
+    {
+      "category": "solutions",
+      "question": "How was the `engram` install script's failure resolved?",
+      "gold": "The assistant bypassed the script and manually downloaded and installed the binary.",
+      "prediction": "The binary was installed manually.",
+      "f1": 0.5454545454545454,
+      "judge": 0.0,
+      "not_found": false
+    },
+    {
+      "category": "solutions",
+      "question": "What caused the Claude Code refresh to fail with the \"marketplace.json no longer present\" error?",
+      "gold": "The local git clone of the marketplace had a stale remote tracking ref.",
+      "prediction": "The local git clone of the marketplace had a stale remote tracking ref.",
+      "f1": 1.0,
+      "judge": 0.0,
+      "not_found": false
+    },
+    {
+      "category": "solutions",
+      "question": "How was the invalid \"source\" format for the `engram` plugin in the `claudius` marketplace fixed?",
+      "gold": "Plugin files fetched, added locally, `marketplace.json` updated to use correct relative path.",
+      "prediction": "The `source` path in `marketplace.json` was updated to a relative path.",
+      "f1": 0.5217391304347826,
+      "judge": 0.0,
+      "not_found": false
+    },
+    {
+      "category": "solutions",
+      "question": "What key insight was gained regarding stale git tracking refs during marketplace refresh?",
+      "gold": "Stale git tracking refs can cause misleading errors during marketplace refresh.",
+      "prediction": "Stale git tracking refs can cause misleading errors during marketplace refresh.",
+      "f1": 1.0,
+      "judge": 0.0,
+      "not_found": false
+    },
+    {
+      "category": "solutions",
+      "question": "What was the problem identified with the `engram` repository?",
+      "gold": "Backlog of 695 unprocessed sessions in the `engram` repository.",
+      "prediction": "`engram add` command was silently duplicating entries when run multiple times with the same label.",
+      "f1": 0.09090909090909091,
+      "judge": 0.0,
+      "not_found": false
+    },
+    {
+      "category": "solutions",
+      "question": "How was the backlog of 695 unprocessed sessions in the `engram` repository solved?",
+      "gold": "Introduced a background ingestion process using a `nohup` script to run `engram ingest`.",
+      "prediction": "Create a background script to ingest all 695 pending sessions.",
+      "f1": 0.39999999999999997,
+      "judge": 0.0,
+      "not_found": false
+    },
+    {
+      "category": "solutions",
+      "question": "What was the key insight regarding the `engram recall` command's behavior?",
+      "gold": "The `recall` command doesn't show everything that's being used.",
+      "prediction": "Global memory is not directly surfaced by `engram recall _global`.",
+      "f1": 0.10000000000000002,
+      "judge": 0.0,
+      "not_found": false
+    },
+    {
+      "category": "solutions",
+      "question": "What was the problem with `current_exe()` after `cargo install`?",
+      "gold": "`current_exe()` returning the debug binary path instead of the installed path.",
+      "prediction": "`current_exe()` returning the debug binary path instead of the installed path after `cargo install`.",
+      "f1": 0.7826086956521738,
+      "judge": 0.0,
+      "not_found": false
+    },
+    {
+      "category": "solutions",
+      "question": "How was the issue of `current_exe()` returning the debug binary path fixed?",
+      "gold": "Replaced `std::env::current_exe()` with `\"engram\"` in `cmd_daemon_start` and `cmd_daemon_run`.",
+      "prediction": "Replace `current_exe()` with `\"engram\"` in `cmd_daemon_start` and `cmd_daemon_run`.",
+      "f1": 0.6923076923076924,
+      "judge": 0.0,
+      "not_found": false
+    },
+    {
+      "category": "solutions",
+      "question": "What was the key insight for solving the `current_exe()` problem?",
+      "gold": "Using the binary name and relying on PATH ensures the correct binary is executed.",
+      "prediction": "Using the bare binary name relies on PATH, which is more robust for user-installed applications.",
+      "f1": 0.4615384615384615,
+      "judge": 1.0,
+      "not_found": false
+    },
+    {
+      "category": "solutions",
+      "question": "How was the error type mismatch when `health.rs` `build_graph()` called `KnowledgeGraph::save` resolved?",
+      "gold": "Mapped the error type using `.map_err(|e| crate::error::Error::msg(e.to_string()))`.",
+      "prediction": "The error type was mapped to the expected `crate::error::Result` type.",
+      "f1": 0.41666666666666663,
+      "judge": 0.0,
+      "not_found": false
+    },
+    {
+      "category": "solutions",
+      "question": "What was the solution to the problem regarding the plan for `OnceLock` and safe accessors in `inject.rs`?",
+      "gold": "A pragmatic approach was taken, recognizing that the existing code was already safe.",
+      "prediction": "The existing code was deemed safe enough, and the more complex refactoring was skipped.",
+      "f1": 0.36363636363636365,
+      "judge": 0.0,
+      "not_found": false
+    },
+    {
+      "category": "solutions",
+      "question": "How was the issue with multiple instances of unwrapping on `parent()` in `installer.rs` fixed?",
+      "gold": "The code was modified to use `replace_all`.",
+      "prediction": "`.parent().unwrap()` was replaced with `.parent().map(|p| p.to_string_lossy().to_string()).unwrap_or_default()`.",
+      "f1": 0.16666666666666666,
+      "judge": 0.0,
+      "not_found": false
+    },
+    {
+      "category": "patterns",
+      "question": "What is the name of this codebase pattern?",
+      "gold": "Marketplace JSON location",
+      "prediction": "TUI screen pattern",
+      "f1": 0.0,
+      "judge": 0.0,
+      "not_found": false
+    },
+    {
+      "category": "patterns",
+      "question": "What is the purpose of the `marketplace.json` file?",
+      "gold": "This file defines available plugins.",
+      "prediction": "Defines available plugins; contains plugin name, repository URL, and version.",
+      "f1": 0.42857142857142855,
+      "judge": 0.0,
+      "not_found": false
+    },
+    {
+      "category": "patterns",
+      "question": "Where is the `marketplace.json` file expected to be located within a marketplace repository?",
+      "gold": "within a `.claude-plugin/` directory at the root of the repository.",
+      "prediction": "`.claude-plugin/` subdirectory within the repository.",
+      "f1": 0.6153846153846154,
+      "judge": 1.0,
+      "not_found": false
+    },
+    {
+      "category": "patterns",
+      "question": "What is the purpose of the \"GitHub API Usage for Version Detection\" pattern?",
+      "gold": "To determine the latest version of `engram` by querying the GitHub API.",
+      "prediction": "The initial install script attempts to determine the latest version of `engram`.",
+      "f1": 0.6,
+      "judge": 0.0,
+      "not_found": false
+    },
+    {
+      "category": "patterns",
+      "question": "How does the \"Cargo Dependency Management\" pattern work?",
+      "gold": "The system utilizes Cargo for managing dependencies, specifically for installing `engram`.",
+      "prediction": "Cargo is used for managing dependencies, specifically for installing `engram`.",
+      "f1": 0.7,
+      "judge": 1.0,
+      "not_found": false
+    },
+    {
+      "category": "patterns",
+      "question": "Which files are involved in the \"Binary Installation via `tar.gz` Archive\" pattern?",
+      "gold": "`engram-aarch64-apple-darwin.tar.gz`, `/tmp/engram-install/` directory.",
+      "prediction": "`engram-aarch64-apple-darwin.tar.gz`, `/tmp/engram-install/` directory.",
+      "f1": 0.9,
+      "judge": 0.0,
+      "not_found": false
+    },
+    {
+      "category": "patterns",
+      "question": "What is the name of the pattern that automatically ingests new sessions after they complete?",
+      "gold": "Session-end hook for auto-ingest",
+      "prediction": "Session-end hook for auto-ingest.",
+      "f1": 1.0,
+      "judge": 0.0,
+      "not_found": false
+    },
+    {
+      "category": "patterns",
+      "question": "How does the \"Global memory injection\" pattern work to make global preferences and shared knowledge available for system prompts?",
+      "gold": "Automatically injected into `MEMORY.md`.",
+      "prediction": "Global preferences are automatically injected into `MEMORY.md`, which is used in the system prompt.",
+      "f1": 0.5263157894736842,
+      "judge": 0.0,
+      "not_found": false
+    },
+    {
+      "category": "patterns",
+      "question": "Which files are used by the \"Manual background ingest workaround\" pattern?",
+      "gold": "`/tmp/engram-ingest-bg.sh`, `~/memory/ingest-*.log`",
+      "prediction": "`/tmp/engram-ingest-bg.sh`, `~/memory/ingest-*.log`",
+      "f1": 0.875,
+      "judge": 0.0,
+      "not_found": false
+    },
+    {
+      "category": "patterns",
+      "question": "What is the name of the pattern that persists the daemon's configuration?",
+      "gold": "Daemon Configuration Persistence",
+      "prediction": "Daemon Configuration Persistence",
+      "f1": 1.0,
+      "judge": 0.0,
+      "not_found": false
+    },
+    {
+      "category": "patterns",
+      "question": "How does the Log Rotation pattern work?",
+      "gold": "After each ingest cycle, if log lines exceed 5000, truncate to 2500 lines.",
+      "prediction": "The daemon log file is rotated after each ingest cycle.",
+      "f1": 0.4545454545454546,
+      "judge": 0.0,
+      "not_found": false
+    },
+    {
+      "category": "patterns",
+      "question": "Why does the Replacing `current_exe()` with `\"engram\"` pattern exist?",
+      "gold": "This ensures the correct binary is invoked via PATH, even after installation or updates.",
+      "prediction": "Replacing `current_exe()` with `\"engram\"` relies on the binary being in the PATH.",
+      "f1": 0.16666666666666669,
+      "judge": 0.0,
+      "not_found": false
+    },
+    {
+      "category": "patterns",
+      "question": "How does the \"Error Handling: Mapping `std::error::Error` to Custom Errors\" pattern work?",
+      "gold": "The code converts errors of type `Box<dyn std::error::Error>` to a custom error type.",
+      "prediction": "Standard error type is converted into a custom error type.",
+      "f1": 0.2608695652173913,
+      "judge": 0.0,
+      "not_found": false
+    },
+    {
+      "category": "patterns",
+      "question": "Which file uses the \"Pragmatic Regex Handling\" pattern?",
+      "gold": "src/inject.rs",
+      "prediction": "`src/inject.rs`",
+      "f1": 1.0,
+      "judge": 0.0,
+      "not_found": false
+    },
+    {
+      "category": "patterns",
+      "question": "What is the name of the pattern that splits a monolithic file into multiple modules by delegating function extraction to parallel agents?",
+      "gold": "Parallel Agent-Based Refactoring",
+      "prediction": "Mechanical Extraction with Parallel Agents",
+      "f1": 0.22222222222222224,
+      "judge": 0.0,
+      "not_found": false
+    },
+    {
+      "category": "bugs",
+      "question": "What endpoint is Gemini embed currently using?",
+      "gold": "v1beta",
+      "prediction": "v1beta not v1 endpoint",
+      "f1": 0.4,
+      "judge": 1.0,
+      "not_found": false
+    },
+    {
+      "category": "bugs",
+      "question": "What is the specific issue with the Gemini embed endpoint usage?",
+      "gold": "Uses v1beta not v1 endpoint.",
+      "prediction": "Gemini embed uses v1beta not v1 endpoint.",
+      "f1": 0.8333333333333333,
+      "judge": 0.0,
+      "not_found": false
+    },
+    {
+      "category": "bugs",
+      "question": "What error does the `v1` endpoint return for the `gemini-embedding-001` model?",
+      "gold": "404",
+      "prediction": "404",
+      "f1": 1.0,
+      "judge": 0.0,
+      "not_found": false
+    },
+    {
+      "category": "bugs",
+      "question": "What is the required version for the `gemini-embedding-001` endpoint?",
+      "gold": "v1beta",
+      "prediction": "v1beta, NOT v1.",
+      "f1": 0.5,
+      "judge": 0.0,
+      "not_found": false
+    },
+    {
+      "category": "bugs",
+      "question": "Which endpoint version is backward-compatible and supports all Gemini models?",
+      "gold": "v1beta",
+      "prediction": "v1beta is backward-compatible and supports all Gemini models.",
+      "f1": 0.2222222222222222,
+      "judge": 0.0,
+      "not_found": false
+    },
+    {
+      "category": "bugs",
+      "question": "What bugs were encountered?",
+      "gold": "No bugs.",
+      "prediction": "- `build_raw_context()` and `format_smart_memory()` in `src/inject.rs` covered only 3 of 6 knowledge categories.\n- `unwrap()` calls on potentially empty containers could crash the binary.\n- `cmd_add()` in `src/commands/manual.rs` appended without checking for existing session IDs, leading to duplicates.\n- Gemini embeddings API endpoint was hardcoded to `v1beta` instead of `v1`.\n- Global memory content (`_global/preferences.md` and `_global/shared.md`) was not directly surfaced by the `engram recall _global` command.\n- There was one unprocessed session for the `claude-memory` project.\n- Gemini embedding was making one API call per text instead of batching.\n- Two `unwrap()` calls in `hive/registry.rs` could cause the program to panic.\n- `tool_use_count` did not exist in the `SessionAnalytics` struct, but the code was trying to use it for verbose output.\n- The `add_empty_category` CLI smoke test was failing because clap rejects empty categories with exit code 2.\n- The `#[allow(deprecated)]` attribute was incorrectly placed on a `use` statement in the CLI smoke tests.\n- `commit --session <already-committed-id>` produces the same hash as HEAD, leading to a self-referential parent loop.\n- `log` command doesn't detect cycles, resulting in infinite printing.\n- A commit in the repository (`89d4292d.json`) was corrupted, with `parent: \"89d4292d\"` pointing to itself.\n- `cat.chars().next().unwrap()` panics on empty category.\n- `history.first().unwrap()` panics on empty history.\n- `parent().unwrap()` + `to_str().unwrap()` panics on paths.",
+      "f1": 0.0,
+      "judge": 0.0,
+      "not_found": false
+    },
+    {
+      "category": "bugs",
+      "question": "What was the bug related to `build_raw_context()` and `format_smart_memory()`?",
+      "gold": "Covered only 3 of 6 knowledge categories; bugs, insights, questions not injected.",
+      "prediction": "`build_raw_context()` and `format_smart_memory()` in `src/inject.rs` covered only 3 of 6 knowledge categories.",
+      "f1": 0.4827586206896552,
+      "judge": 0.0,
+      "not_found": false
+    },
+    {
+      "category": "bugs",
+      "question": "What was the root cause of the bug?",
+      "gold": "The code was incomplete and did not include logic to handle the missing knowledge categories.",
+      "prediction": "`bugs`, `insights`, and `questions` were not injected into MEMORY.md.",
+      "f1": 0.09523809523809525,
+      "judge": 0.0,
+      "not_found": false
+    },
+    {
+      "category": "bugs",
+      "question": "How was the bug fixed?",
+      "gold": "Updated `build_raw_context()` and `format_smart_memory()` to include 3 missing categories.",
+      "prediction": "The specifics of the fix are not detailed in the conversation, but the issue was acknowledged and resolved.",
+      "f1": 0.0,
+      "judge": 0.0,
+      "not_found": false
+    },
+    {
+      "category": "bugs",
+      "question": "What bugs were encountered?",
+      "gold": "No bugs.",
+      "prediction": "`build_raw_context()` and `format_smart_memory()` in `src/inject.rs` covered only 3 of 6 knowledge categories.\n`unwrap()` calls on potentially empty containers could crash the binary.\n`cmd_add()` in `src/commands/manual.rs` appended without checking for existing session IDs, leading to duplicates.\nGemini embeddings API endpoint was hardcoded to `v1beta` instead of `v1`.\nGemini embedding was making one API call per text instead of batching.\nTwo `unwrap()` calls in `hive/registry.rs` could cause the program to panic.\nGlobal memory content (`_global/preferences.md` and `_global/shared.md`) was not directly surfaced by the `engram recall _global` command.\nThere was one unprocessed session for the `claude-memory` project.\nThe `commands` module was not re-exported from `lib.rs`, causing a build error when the TUI tried to access it.\nThe `cargo install` command was running a cached build, resulting in an older version of the binary being installed.\n`cat.chars().next().unwrap()` panics on empty category.\n`history.first().unwrap()` panics on empty history.\n`parent().unwrap()` + `to_str().unwrap()` panics on paths.\n`commit --session <already-committed-id>` produces the same hash as HEAD, leading to a self-referential parent loop.\n`log` command doesn't detect cycles, resulting in infinite printing.\nA commit in the repository (`89d4292d.json`) was corrupted, with `parent: \"89d4292d\"` pointing to itself.\nThe `install.sh` script for engram failed.\nThe initial `git diff` output after editing `marketplace.json` in claudius was misleading.\n`tool_use_count` did not exist in the `SessionAnalytics` struct, but the code was trying to use it for verbose output.\nThe `add_empty_category` CLI smoke test was failing because clap rejects empty categories with exit code 2.\nThe `#[allow(deprecated)]` attribute was incorrectly placed on a `use` statement in the CLI smoke tests.\nMCP server passes `--limit` to CLI but CLI expects `--top`.\n`engram doctor --fix` claims to generate embeddings, but the function is a stub.\n`build_graph()` function was a stub in doctor.\n`cmd_add` could panic if the category was empty.\n`installer.rs` had parent unwraps that could cause crashes.\n`current_exe()` returns the debug binary path when running from source, and the installed path after `cargo install`, but the path may become stale if the binary is updated or the daemon is long-running.\nThe daemon was starting but immediately exiting.\nAn older version of the `engram` binary was shadowing the newer version in PATH.",
+      "f1": 0.0,
+      "judge": 0.0,
+      "not_found": false
+    },
+    {
+      "category": "bugs",
+      "question": "What was the bug identified in `learning/hooks.rs`?",
+      "gold": "Hardcoded health metrics (75, 10%) were used in `learning/hooks.rs`.",
+      "prediction": "Hardcoded health metrics (75, 10%) were used in `learning/hooks.rs`.",
+      "f1": 1.0,
+      "judge": 0.0,
+      "not_found": false
+    },
+    {
+      "category": "bugs",
+      "question": "What was the root cause of `cmd_recall` passing an empty slice of session IDs?",
+      "gold": "`collect_active_session_ids()` was not correctly collecting session IDs.",
+      "prediction": "`collect_active_session_ids()` was not correctly collecting session IDs.",
+      "f1": 0.8000000000000002,
+      "judge": 0.0,
+      "not_found": false
+    },
+    {
+      "category": "bugs",
+      "question": "What was the bug in the Q-table HashMap?",
+      "gold": "Q-table HashMap key JSON serialization failure.",
+      "prediction": "HashMap<(TTLState, TTLAction), f32> cannot be serialized to JSON \u2014 serde_json requires string map keys.",
+      "f1": 0.18181818181818182,
+      "judge": 1.0,
+      "not_found": false
+    },
+    {
+      "category": "bugs",
+      "question": "What caused the JSON serialization failure?",
+      "gold": "serde_json requires string map keys.",
+      "prediction": "serde_json requires string map keys; HashMap<(TTLState, TTLAction), f32> cannot be serialized.",
+      "f1": 0.631578947368421,
+      "judge": 1.0,
+      "not_found": false
+    },
+    {
+      "category": "bugs",
+      "question": "How was the Q-table HashMap key JSON serialization failure fixed?",
+      "gold": "Changed to HashMap<String, f32>.",
+      "prediction": "Change to HashMap<String, f32> with string key format 'ImportanceTier:FrequencyTier:RecencyTier|Action'.",
+      "f1": 0.4444444444444444,
+      "judge": 0.0,
+      "not_found": false
+    },
+    {
+      "category": "insights",
+      "question": "What capability does the PostToolUse hook enable?",
+      "gold": "Zero-effort capture without LLM cooperation",
+      "prediction": "PostToolUse hook enables zero-effort capture without LLM cooperation",
+      "f1": 0.8,
+      "judge": 0.0,
+      "not_found": false
+    },
+    {
+      "category": "insights",
+      "question": "What specific condition is not required for the PostToolUse hook to enable capture?",
+      "gold": "LLM cooperation",
+      "prediction": "LLM cooperation.",
+      "f1": 1.0,
+      "judge": 0.0,
+      "not_found": false
+    },
+    {
+      "category": "insights",
+      "question": "What level of effort is required for capture when using the PostToolUse hook?",
+      "gold": "Zero-effort",
+      "prediction": "Zero-effort.",
+      "f1": 1.0,
+      "judge": 0.0,
+      "not_found": false
+    },
+    {
+      "category": "insights",
+      "question": "What is the specific purpose of the experiment branch?",
+      "gold": "Testing that checkout preserves uncommitted knowledge added on this branch.",
+      "prediction": "Testing that checkout preserves uncommitted knowledge added on this branch.",
+      "f1": 1.0,
+      "judge": 0.0,
+      "not_found": false
+    },
+    {
+      "category": "insights",
+      "question": "What uncommitted data is being tested for preservation during a checkout operation?",
+      "gold": "uncommitted knowledge",
+      "prediction": "Uncommitted knowledge added on this branch.",
+      "f1": 0.5,
+      "judge": 0.0,
+      "not_found": false
+    },
+    {
+      "category": "insights",
+      "question": "On which branch is the test for preserving uncommitted knowledge being conducted?",
+      "gold": "Experiment branch",
+      "prediction": "Testing that checkout preserves uncommitted knowledge added on this branch.",
+      "f1": 0.16666666666666669,
+      "judge": 0.0,
+      "not_found": false
+    },
+    {
+      "category": "insights",
+      "question": "What did the 'show command' immediately reveal during dogfooding?",
+      "gold": "manual session appearing in 5 categories",
+      "prediction": "Manual session appearing in 5 categories \u2014 signals need for pre-commit dedup check.",
+      "f1": 0.631578947368421,
+      "judge": 0.0,
+      "not_found": false
+    },
+    {
+      "category": "insights",
+      "question": "What two potential solutions does the insight signal a need for in the ingest process?",
+      "gold": "pre-commit dedup check or category-assignment review",
+      "prediction": "A daemon or `--background` flag to `engram ingest`.",
+      "f1": 0.13333333333333333,
+      "judge": 0.0,
+      "not_found": false
+    },
+    {
+      "category": "insights",
+      "question": "What was the specific categorization issue identified for a manual session?",
+      "gold": "Appearing in 5 categories.",
+      "prediction": "A single \"manual\" session appeared in 5 categories simultaneously.",
+      "f1": 0.5,
+      "judge": 1.0,
+      "not_found": false
+    },
+    {
+      "category": "insights",
+      "question": "What specific configuration provides the best signal-to-noise?",
+      "gold": "Smart inject with semantic threshold 0.45",
+      "prediction": "Smart inject with semantic threshold 0.45 gives best signal-to-noise.",
+      "f1": 0.7368421052631579,
+      "judge": 1.0,
+      "not_found": false
+    },
+    {
+      "category": "insights",
+      "question": "What semantic threshold is required for smart inject to achieve the best signal-to-noise?",
+      "gold": "0.45",
+      "prediction": "Smart inject with semantic threshold 0.45 gives best signal-to-noise.",
+      "f1": 0.2857142857142857,
+      "judge": 1.0,
+      "not_found": false
+    },
+    {
+      "category": "insights",
+      "question": "What is the outcome of using smart inject with a semantic threshold of 0.45?",
+      "gold": "best signal-to-noise",
+      "prediction": "Smart inject with semantic threshold 0.45 gives best signal-to-noise.",
+      "f1": 0.5,
+      "judge": 0.0,
+      "not_found": false
+    },
+    {
+      "category": "insights",
+      "question": "What is the line truncation limit for `inject compact mode`?",
+      "gold": "60 lines",
+      "prediction": "inject compact mode truncates at 60 lines.",
+      "f1": 0.4444444444444445,
+      "judge": 1.0,
+      "not_found": false
+    },
+    {
+      "category": "insights",
+      "question": "Under what conditions do `bugs/insights/questions` appear?",
+      "gold": "if context.md is small enough OR --full is used.",
+      "prediction": "`bugs.md`, `insights.md`, `questions.md` are excluded from all inject paths.",
+      "f1": 0.0909090909090909,
+      "judge": 0.0,
+      "not_found": false
+    },
+    {
+      "category": "insights",
+      "question": "What type of knowledge does compact mode prioritize as most actionable?",
+      "gold": "decisions/solutions/patterns",
+      "prediction": "Decisions/solutions/patterns as the most actionable knowledge.",
+      "f1": 0.6,
+      "judge": 0.0,
+      "not_found": false
+    },
+    {
+      "category": "procedures",
+      "question": "When should the \"Refactoring the `engram` codebase to centralize category definitions\" procedure be used?",
+      "gold": "Refactoring the `engram` codebase to centralize category definitions.",
+      "prediction": "Refactoring the `engram` codebase to centralize category definitions.",
+      "f1": 1.0,
+      "judge": 0.0,
+      "not_found": false
+    },
+    {
+      "category": "procedures",
+      "question": "What is the first step in the \"Refactoring the `engram` codebase to centralize category definitions\" procedure?",
+      "gold": "Add `CATEGORIES`, `CATEGORY_FILES`, and `STRENGTH` constants to `config.rs`.",
+      "prediction": "Add `CATEGORIES`, `CATEGORY_FILES`, and `STRENGTH` constants to `config.rs`.",
+      "f1": 1.0,
+      "judge": 0.0,
+      "not_found": false
+    },
+    {
+      "category": "procedures",
+      "question": "Which file is updated in step 2 of the \"Refactoring the `engram` codebase to centralize category definitions\" procedure?",
+      "gold": "`vcs/mod.rs`",
+      "prediction": "`vcs/mod.rs`",
+      "f1": 1.0,
+      "judge": 1.0,
+      "not_found": false
+    },
+    {
+      "category": "procedures",
+      "question": "What is the first step in the 'Adding Hooks Health Check' procedure?",
+      "gold": "Add `MissingHooks` variant to `IssueCategory` enum in `src/health.rs`.",
+      "prediction": "Add `MissingHooks` variant to `IssueCategory` enum in `src/health.rs`.",
+      "f1": 1.0,
+      "judge": 0.0,
+      "not_found": false
+    },
+    {
+      "category": "procedures",
+      "question": "Which file is modified in step 3 of the 'Adding Hooks Health Check' procedure?",
+      "gold": "src/daemon.rs",
+      "prediction": "`src/daemon.rs`",
+      "f1": 1.0,
+      "judge": 0.0,
+      "not_found": false
+    },
+    {
+      "category": "procedures",
+      "question": "What command is run by `heal_hooks_if_needed(log)` in the 'Adding Hooks Health Check' procedure if hooks are missing?",
+      "gold": "`engram hooks install`",
+      "prediction": "`engram hooks install`",
+      "f1": 1.0,
+      "judge": 0.0,
+      "not_found": false
+    },
+    {
+      "category": "procedures",
+      "question": "What is the first command in the procedure to \"build and test the engram project, and check the status of the hooks\"?",
+      "gold": "`cd /Users/algimantask/Projects/claude-memory`",
+      "prediction": "`cd /Users/algimantask/Projects/claude-memory`",
+      "f1": 1.0,
+      "judge": 0.0,
+      "not_found": false
+    },
+    {
+      "category": "procedures",
+      "question": "When should the procedure for \"building and testing the engram project\" be used after making changes to the engram codebase?",
+      "gold": "After making changes to the engram codebase.",
+      "prediction": "After making changes to the engram codebase, to ensure the build passes and tests are successful.",
+      "f1": 0.631578947368421,
+      "judge": 0.0,
+      "not_found": false
+    },
+    {
+      "category": "procedures",
+      "question": "Which command is executed second in the procedure to \"install or reinstall engram hooks\"?",
+      "gold": "`engram hooks status 2>&1`",
+      "prediction": "`engram hooks status 2>&1`",
+      "f1": 1.0,
+      "judge": 0.0,
+      "not_found": false
+    },
+    {
+      "category": "procedures",
+      "question": "When should the 'Bug Fixing and Code Improvement Workflow' be used?",
+      "gold": "When addressing multiple related issues in Engram v0.3.5.",
+      "prediction": "When addressing multiple related issues in Engram v0.3.5.",
+      "f1": 1.0,
+      "judge": 0.0,
+      "not_found": false
+    },
+    {
+      "category": "procedures",
+      "question": "Which command is used for running tests in the 'Bug Fixing and Code Improvement Workflow'?",
+      "gold": "`cargo test`",
+      "prediction": "`cargo test`",
+      "f1": 1.0,
+      "judge": 0.0,
+      "not_found": false
+    },
+    {
+      "category": "procedures",
+      "question": "What is the first step in the 'Implementing a New Feature' procedure?",
+      "gold": "Add a new error variant in `src/error.rs` if needed.",
+      "prediction": "Add a new error variant in `src/error.rs`.",
+      "f1": 0.7777777777777777,
+      "judge": 0.0,
+      "not_found": false
+    },
+    {
+      "category": "procedures",
+      "question": "Which file is updated in step 8 of the 'Implementing a New Feature' procedure?",
+      "gold": "`Cargo.toml`",
+      "prediction": "`Cargo.toml`",
+      "f1": 1.0,
+      "judge": 0.0,
+      "not_found": false
+    },
+    {
+      "category": "procedures",
+      "question": "What command is used to build the project in the 'Implementing a New Feature' procedure?",
+      "gold": "`cargo build`",
+      "prediction": "`cargo build`",
+      "f1": 1.0,
+      "judge": 0.0,
+      "not_found": false
+    },
+    {
+      "category": "procedures",
+      "question": "When should the procedure for \"Implementing the 'Three Feature Sprint (v0.3.4)'\" be used?",
+      "gold": "Implementing the \"Three Feature Sprint (v0.3.4)\".",
+      "prediction": "Implementing the \"Three Feature Sprint (v0.3.4)\" plan, specifically features 1, 2, and 3.",
+      "f1": 0.7000000000000001,
+      "judge": 0.0,
+      "not_found": false
+    }
+  ],
+  "failures": [
+    {
+      "category": "decisions",
+      "question": "Why were `generate_embeddings()` and `build_graph()` stubs implemented in `src/health.rs`?",
+      "gold": "Doctor command claimed to generate embeddings and build graphs, but functionality stubbed.",
+      "prediction": "",
+      "f1": 0.0,
+      "judge": 0.0,
+      "not_found": true
+    },
+    {
+      "category": "decisions",
+      "question": "What approach was decided for fixing `inject.rs` regex unwraps, and what was the previously suggested approach?",
+      "gold": "Pragmatic approach; previously `OnceLock`.",
+      "prediction": "",
+      "f1": 0.0,
+      "judge": 0.0,
+      "not_found": true
+    }
+  ]
+}
