@@ -469,11 +469,17 @@ pub enum Commands {
         concise: bool,
 
         /// Use recursive retrieval: build compact index → LLM selects entries → fetch → answer
-        #[arg(long, help = "Use recursive retrieval: index → LLM selects → fetch → answer")]
+        #[arg(
+            long,
+            help = "Use recursive retrieval: index → LLM selects → fetch → answer"
+        )]
         recursive: bool,
 
         /// Hybrid retrieval: recursive for decisions/patterns/procedures, semantic for insights/bugs/solutions
-        #[arg(long, help = "Hybrid retrieval: recursive for structured categories, semantic for conceptual")]
+        #[arg(
+            long,
+            help = "Hybrid retrieval: recursive for structured categories, semantic for conceptual"
+        )]
         hybrid: bool,
     },
 

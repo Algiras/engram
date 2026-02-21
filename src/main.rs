@@ -106,7 +106,15 @@ fn main() -> Result<()> {
         measure_tokens,
     } = cli.command
     {
-        return cmd_inject(project, full, no_auto_clean, smart, budget, lines, measure_tokens);
+        return cmd_inject(
+            project,
+            full,
+            no_auto_clean,
+            smart,
+            budget,
+            lines,
+            measure_tokens,
+        );
     }
 
     // Lookup operates on knowledge files — no Config/LLM auth needed
@@ -528,7 +536,15 @@ fn main() -> Result<()> {
                 .unwrap_or_else(|| "default".to_string())
         });
         if *hybrid {
-            return cmd_ask_hybrid(&config, query, &project_name, *top_k, *threshold, cli.verbose, *concise);
+            return cmd_ask_hybrid(
+                &config,
+                query,
+                &project_name,
+                *top_k,
+                *threshold,
+                cli.verbose,
+                *concise,
+            );
         }
         if *recursive {
             return cmd_ask_recursive(&config, query, &project_name, cli.verbose, *concise);

@@ -164,10 +164,8 @@ pub fn cmd_ask(
             let matching_ids = find_sessions_by_keywords(&content, query, 3);
             // Also include full-phrase matches (rare but exact)
             let phrase_ids = find_sessions_by_topic(&content, query);
-            let all_ids: std::collections::HashSet<String> = matching_ids
-                .into_iter()
-                .chain(phrase_ids)
-                .collect();
+            let all_ids: std::collections::HashSet<String> =
+                matching_ids.into_iter().chain(phrase_ids).collect();
             if all_ids.is_empty() {
                 continue;
             }
@@ -478,7 +476,11 @@ pub fn cmd_ask_hybrid(
             .unwrap_or_default();
 
         if verbose {
-            eprintln!("{} recursive selected IDs: {:?}", "Hybrid:".cyan(), selected_ids);
+            eprintln!(
+                "{} recursive selected IDs: {:?}",
+                "Hybrid:".cyan(),
+                selected_ids
+            );
         }
         if !selected_ids.is_empty() {
             rec_entries = fetch_entries_by_ids(project, &config.memory_dir, &selected_ids);
@@ -505,9 +507,14 @@ pub fn cmd_ask_hybrid(
         }
     };
 
-    let mut std_entries: Vec<SmartEntry> =
-        smart_search_sync(project, &config.memory_dir, &search_signal, top_k, threshold)
-            .unwrap_or_default();
+    let mut std_entries: Vec<SmartEntry> = smart_search_sync(
+        project,
+        &config.memory_dir,
+        &search_signal,
+        top_k,
+        threshold,
+    )
+    .unwrap_or_default();
 
     // Lexical fallback for standard arm — covers all categories so no question is left empty
     if std_entries.len() < 2 {
@@ -559,7 +566,9 @@ pub fn cmd_ask_hybrid(
 
     // If nothing found, fall back to regular ask
     if merged.is_empty() {
-        return cmd_ask(config, query, project, top_k, threshold, verbose, false, concise);
+        return cmd_ask(
+            config, query, project, top_k, threshold, verbose, false, concise,
+        );
     }
 
     // ── Synthesis ────────────────────────────────────────────────────────────
@@ -648,8 +657,7 @@ mod tests {
 
     #[test]
     fn test_parse_ids_capped_at_five() {
-        let ids =
-            parse_selected_ids("a, b, c, d, e, f, g");
+        let ids = parse_selected_ids("a, b, c, d, e, f, g");
         assert_eq!(ids.len(), 5);
         assert_eq!(ids, vec!["a", "b", "c", "d", "e"]);
     }

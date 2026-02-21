@@ -293,13 +293,11 @@ pub fn find_sessions_by_topic(file_content: &str, query: &str) -> Vec<String> {
 
 /// Stop words filtered out during keyword extraction.
 const STOP_WORDS: &[&str] = &[
-    "what", "when", "where", "which", "who", "whom", "why", "how",
-    "this", "that", "these", "those", "with", "from", "into", "over",
-    "after", "before", "about", "have", "does", "were", "been", "being",
-    "will", "would", "could", "should", "shall", "might", "must", "also",
-    "more", "some", "such", "than", "then", "they", "them", "their",
-    "there", "here", "just", "only", "very", "your", "using", "used",
-    "make", "made", "like", "caused", "cause", "fail", "failed",
+    "what", "when", "where", "which", "who", "whom", "why", "how", "this", "that", "these",
+    "those", "with", "from", "into", "over", "after", "before", "about", "have", "does", "were",
+    "been", "being", "will", "would", "could", "should", "shall", "might", "must", "also", "more",
+    "some", "such", "than", "then", "they", "them", "their", "there", "here", "just", "only",
+    "very", "your", "using", "used", "make", "made", "like", "caused", "cause", "fail", "failed",
 ];
 
 /// Extract significant keywords from a query string.
@@ -307,7 +305,10 @@ const STOP_WORDS: &[&str] = &[
 pub fn extract_keywords(query: &str) -> Vec<String> {
     query
         .split(|c: char| !c.is_alphanumeric() && c != '-' && c != '_')
-        .map(|w| w.trim_matches(|c: char| !c.is_alphanumeric()).to_lowercase())
+        .map(|w| {
+            w.trim_matches(|c: char| !c.is_alphanumeric())
+                .to_lowercase()
+        })
         .filter(|w| w.len() > 3 && !STOP_WORDS.contains(&w.as_str()))
         .collect()
 }
@@ -332,7 +333,10 @@ pub fn find_sessions_by_keywords(
         .into_iter()
         .map(|b| {
             let content_lower = b.content.to_lowercase();
-            let hits = keywords.iter().filter(|kw| content_lower.contains(kw.as_str())).count();
+            let hits = keywords
+                .iter()
+                .filter(|kw| content_lower.contains(kw.as_str()))
+                .count();
             (b.session_id, hits)
         })
         .filter(|(_, hits)| *hits >= min_matches)
@@ -1891,7 +1895,9 @@ mod keyword_tests {
     fn test_expired_sessions_excluded() {
         let mut content = String::from("# Test\n\n");
         content.push_str("## Session: active-1 (2024-01-01T00:00:00Z)\n\ntokio async runtime\n\n");
-        content.push_str("## Session: expired-1 (2024-01-01T00:00:00Z) [ttl:1d]\n\ntokio async runtime\n\n");
+        content.push_str(
+            "## Session: expired-1 (2024-01-01T00:00:00Z) [ttl:1d]\n\ntokio async runtime\n\n",
+        );
         // expired-1 has a 1-day TTL set in the past — partition_by_expiry should drop it
         // (In practice TTL is relative to now; with 1d it may or may not have expired.
         //  Just verify active-1 is always returned.)

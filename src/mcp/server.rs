@@ -1849,8 +1849,7 @@ impl McpServer {
         use crate::llm::{
             client::LlmClient,
             prompts::{
-                ask_prompt, recursive_select_prompt, SYSTEM_QA_ASSISTANT,
-                SYSTEM_RECURSIVE_SELECTOR,
+                ask_prompt, recursive_select_prompt, SYSTEM_QA_ASSISTANT, SYSTEM_RECURSIVE_SELECTOR,
             },
         };
 
@@ -1976,8 +1975,7 @@ impl McpServer {
                 .unwrap_or_default();
 
             if !selected_ids.is_empty() {
-                rec_entries =
-                    fetch_entries_by_ids(project, &self.config.memory_dir, &selected_ids);
+                rec_entries = fetch_entries_by_ids(project, &self.config.memory_dir, &selected_ids);
             }
         }
 

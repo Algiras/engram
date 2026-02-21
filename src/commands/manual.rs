@@ -433,7 +433,17 @@ pub fn cmd_drain(project: &str, dry_run: bool, category_filter: Option<&str>) ->
                 "  {} {} → {} ({})",
                 "would promote".cyan(),
                 block.session_id,
-                if is_global { format!("_global/{}", target_file.file_name().unwrap_or_default().to_string_lossy()) } else { cat.clone() },
+                if is_global {
+                    format!(
+                        "_global/{}",
+                        target_file
+                            .file_name()
+                            .unwrap_or_default()
+                            .to_string_lossy()
+                    )
+                } else {
+                    cat.clone()
+                },
                 preview
             );
             promoted += 1;
@@ -465,12 +475,7 @@ pub fn cmd_drain(project: &str, dry_run: bool, category_filter: Option<&str>) ->
         let header = header_parts.join("") + "\n\n";
         append_session_entry(&target_file, &header, block.content.trim())?;
 
-        println!(
-            "  {} {} → {}",
-            "✓".green(),
-            block.session_id,
-            cat
-        );
+        println!("  {} {} → {}", "✓".green(), block.session_id, cat);
         promoted += 1;
         // Entry removed from inbox by not adding to remaining_blocks
     }
