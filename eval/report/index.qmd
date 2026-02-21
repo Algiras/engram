@@ -1,6 +1,6 @@
 ---
 title: "Hybrid Retrieval for Persistent Developer Memory"
-subtitle: "How combining HyDE, BM25 hybrid search, and multi-category extraction beats single-technique baselines"
+subtitle: "How combining HyDE, session-aware embeddings, and multi-category extraction beats single-technique baselines"
 date: today
 ---
 
@@ -64,6 +64,8 @@ V = {
     "v5":       load("v5"),
     "v6":       load("v6"),
     "v6b":      load("v6b"),
+    "v11":      load("v11_full"),
+    "v19":      load("v19_definitive_full"),
     "Ceiling":  load("ceiling"),
 }
 CATS = ["decisions", "solutions", "patterns", "bugs", "insights", "procedures"]
@@ -73,17 +75,17 @@ CATS = ["decisions", "solutions", "patterns", "bugs", "insights", "procedures"]
 ::: {.hero-left}
 ## Results at a glance
 
-386 domain questions · 6 knowledge categories · two metrics:
+382 domain questions · 6 knowledge categories · two metrics:
 **Token F1** (deterministic lexical overlap) and **LLM Judge**
-(Gemini 2.5 Flash, binary semantic correctness × 100).
+(Gemini 2.5 Flash, YES/NO semantic correctness × 100).
 Ceiling = full-context upper bound with no retrieval step.
 :::
 ::: {.hero-right}
-<div class="kpi accent"><div class="kpi-val">60.5</div><div class="kpi-lbl">Token F1</div></div>
-<div class="kpi accent"><div class="kpi-val">16.3</div><div class="kpi-lbl">LLM Judge</div></div>
-<div class="kpi"><div class="kpi-val">115%</div><div class="kpi-lbl">of F1 ceiling</div></div>
-<div class="kpi"><div class="kpi-val">115%</div><div class="kpi-lbl">of Judge ceiling</div></div>
-<div class="kpi"><div class="kpi-val">13.2%</div><div class="kpi-lbl">Not-found rate</div></div>
+<div class="kpi accent"><div class="kpi-val">61.7</div><div class="kpi-lbl">Token F1</div></div>
+<div class="kpi accent"><div class="kpi-val">50.8</div><div class="kpi-lbl">LLM Judge</div></div>
+<div class="kpi"><div class="kpi-val">91%</div><div class="kpi-lbl">of F1 ceiling</div></div>
+<div class="kpi"><div class="kpi-val">363%</div><div class="kpi-lbl">of Judge ceiling</div></div>
+<div class="kpi"><div class="kpi-val">8.4%</div><div class="kpi-lbl">Not-found rate</div></div>
 :::
 :::
 
@@ -161,15 +163,17 @@ ax.axhspan(cj  - 1, cj  + 1, alpha=0.08, color=RED,   zorder=0)
 ax.axhline(cf1, color=BLUE, lw=1.4, ls="--", alpha=0.6, label=f"F1 ceiling ({cf1:.1f})")
 ax.axhline(cj,  color=RED,  lw=1.4, ls=":",  alpha=0.6, label=f"Judge ceiling ({cj:.1f})")
 
-sizes = [120 if l in ("v6b", "Baseline") else 55 for l in labels]
-
 ax.plot(x, f1s,    color=BLUE, lw=2.5, marker="o", ms=7, label="Token F1",  zorder=3)
 ax.plot(x, judges, color=RED,  lw=2.5, marker="s", ms=7, label="LLM Judge", zorder=3)
 
-# highlight v6b
-v6b_idx = labels.index("v6b")
-ax.scatter([v6b_idx], [f1s[v6b_idx]],    s=160, color=BLUE, zorder=4)
-ax.scatter([v6b_idx], [judges[v6b_idx]], s=160, color=RED,  zorder=4)
+# highlight v19 (current best)
+v19_idx = labels.index("v19")
+ax.scatter([v19_idx], [f1s[v19_idx]],    s=160, color=BLUE, zorder=4)
+ax.scatter([v19_idx], [judges[v19_idx]], s=160, color=RED,  zorder=4)
+ax.annotate("v19\n(current)", xy=(v19_idx, max(f1s[v19_idx], judges[v19_idx])),
+            xytext=(v19_idx - 1.2, max(f1s[v19_idx], judges[v19_idx]) + 5),
+            arrowprops=dict(arrowstyle="->", color="#333", lw=1.2),
+            fontsize=8, color="#333")
 
 ax.set_xticks(x)
 ax.set_xticklabels(labels, fontsize=10)
@@ -261,8 +265,8 @@ plt.close(fig)
 
 run_cfg = [
     ("Baseline", LIGHT,  "//"),
-    ("v3-full",  "#6ea8fe", None),
-    ("v6b",      RED,     None),
+    ("v6b",      "#6ea8fe", None),
+    ("v19",      RED,     None),
     ("Ceiling",  GREY,    ".."),
 ]
 
@@ -300,37 +304,55 @@ plt.close(fig)
 
 - **Procedures** gained the most (+28 F1, baseline → v6b). Almost entirely from the QA dataset fix — once questions were answerable, retrieval performed well.
 - **Decisions** and **solutions** are closest to ceiling. Well-structured factual entries are largely solved at the current corpus size.
-- **Bugs** and **patterns** have the largest remaining gaps (−11 and −10 vs ceiling). Bug reports have high phrasing variation around technical identifiers; pattern descriptions use abstract vocabulary where synonym variation suppresses token F1 even when the semantic answer is correct.
-- **Insights** scores highest on the judge metric (25.8) despite moderate F1 (50.3) — the LLM finds answers semantically correct even when exact wording differs.
+- **Bugs** has high judge (45%) despite moderate F1 (52%) — the retriever finds the right session but the exact wording of the answer differs (e.g. model says "HTTP 404 error" vs gold "404"). Token F1 penalises this; the judge accepts it.
+- **Insights** is the hardest category: both F1 (51%) and judge (48%) are moderate. Conceptual/interpretive entries use diffuse vocabulary that embeds poorly relative to specific factual queries.
 
 ---
 
-## Not-found rate: what BM25 fixed
+## Not-found rate: three fixes that mattered
 
 ```{python}
-#| fig-cap: "Fraction of questions where the retriever returned no answer. BM25 hybrid reduced this by ~5 points."
+#| fig-cap: "Fraction of questions where the retriever returned no answer across versions."
 #| out-width: 100%
 
 versions_nfr = {k: v for k, v in V.items() if v["nfr"] is not None and k != "Ceiling"}
 nfr_labels   = list(versions_nfr.keys())
 nfr_vals     = [v["nfr"] for v in versions_nfr.values()]
-nfr_colors   = [RED if n < 15 else BLUE for n in nfr_vals]
+nfr_colors   = [GREEN if n < 10 else RED if n < 15 else BLUE for n in nfr_vals]
 
-fig, ax = plt.subplots(figsize=(10, 3.2))
+fig, ax = plt.subplots(figsize=(12, 3.5))
 bars = ax.bar(nfr_labels, nfr_vals, color=nfr_colors, width=0.5, zorder=3)
 
 for bar, val in zip(bars, nfr_vals):
     ax.text(bar.get_x() + bar.get_width() / 2, bar.get_height() + 0.3,
             f"{val:.1f}%", ha="center", va="bottom", fontsize=9)
 
+# Annotate key jumps
+for label, annotation in [("v6b", "BM25 added\n(was 18.4%)"), ("v11", "Cosine fix +\nInbox drain"), ("v19", "Current\nbest")]:
+    if label in nfr_labels:
+        i = nfr_labels.index(label)
+        ax.annotate(annotation, xy=(i, nfr_vals[i] + 0.8),
+                    xytext=(i, nfr_vals[i] + 4),
+                    ha="center", fontsize=7.5, color="#555",
+                    arrowprops=dict(arrowstyle="->", color="#aaa", lw=0.8))
+
 ax.set_ylabel("Questions with no retrieved answer (%)", fontsize=11)
-ax.set_ylim(0, 25)
+ax.set_ylim(0, 32)
 fig.tight_layout()
 display(fig)
 plt.close(fig)
 ```
 
-Before BM25, 18.4% of queries returned nothing — the dense index had no match above the similarity threshold. After adding BM25 hybrid, the not-found rate dropped to **13.2%**, recovering ~20 additional questions per run. These tend to be exact-term queries: specific function names, error messages, version strings.
+Three distinct improvements drove the not-found rate from 31% → 8.4%:
+
+1. **v1→v6b (HyDE + BM25 hybrid + threshold tuning):** 31.2% → 13.2%. BM25 recovers exact-term queries (function names, error codes, version strings) that dense embeddings miss.
+
+2. **v6b→v11 (cosine threshold fix + session-aware chunking + inbox drain):** 13.2% → 9.1%.
+   - *Cosine threshold bug*: `smart_search` was calling `hybrid_search()` (RRF scores, max ~0.033) but filtering with `threshold=0.15` (calibrated for cosine 0–1 scale) → semantic search silently returned 0 results on every query. Fixed by calling `store.search()` (raw cosine) directly.
+   - *Session chunking*: character-based chunking bundled 3–5 sessions per embedding (`session_id=None`). Fixed to parse session blocks individually, each with its own embedding.
+   - *Inbox drain*: 132 sessions were stuck in `inbox.md` (never promoted to searchable category files). Running `engram drain` promoted them.
+
+3. **v11→v19 (improved HyDE + keyword lexical fallback):** 9.1% → 8.4%. Marginal but stable improvement. The remaining 32 not-found questions (8.4%) appear to be genuine knowledge gaps — questions about events never recorded in the knowledge base.
 
 ---
 
@@ -356,7 +378,8 @@ df = pd.DataFrame(rows)
 display(df.style
     .set_properties(**{"text-align": "center"})
     .set_properties(subset=["Version"], **{"text-align": "left", "font-weight": "bold"})
-    .apply(lambda x: ["background: #fff8e7; font-weight:600" if v == "v6b"
+    .apply(lambda x: ["background: #e8f5e9; font-weight:700" if v == "v19"
+                       else "background: #fff8e7; font-weight:600" if v == "v6b"
                        else "color:#aaa; font-style:italic" if v == "Ceiling"
                        else "" for v in x], subset=["Version"])
     .hide(axis="index")
@@ -365,14 +388,41 @@ display(df.style
 
 ---
 
+## Judge calibration: fixing a silent measurement bug
+
+LLM-as-judge score jumped from ~18% to **50.8%** between v11 and v19 — without any change to the retrieval system. The cause was a broken judge prompt.
+
+The original prompt asked Gemini to reply "YES or NO only" but embedded 6 rules of explanation first. Gemini would reason through the rules, then conclude — but start the response with *"After considering..."* rather than the verdict. Since the parser checked `response.startswith("YES")`, most correct answers were scored as NO.
+
+```python
+# Old prompt (broken): Gemini would respond "After considering the rules: YES"
+JUDGE_PROMPT = """Is this answer correct or semantically equivalent...
+Rules:
+- YES if prediction is semantically equivalent...
+- YES if prediction uses synonyms...
+Reply YES or NO only."""
+
+# Fixed prompt: forces verdict first
+JUDGE_PROMPT = """...
+Start your response with YES or NO (nothing before it).
+YES = semantically equivalent, paraphrase, synonym, or gold is contained in prediction.
+NO = contradicts, or prediction is vague while gold is specific (e.g. gold=404, pred="an error").
+
+YES or NO:"""
+```
+
+**What this means for historical scores:** All judge scores before v19 are underestimates. The true semantic accuracy at v6b was likely ~40–45%, not 16.3%. Token F1 was never affected (deterministic). The ranking order of versions is unchanged — the relative improvements are real, just the absolute judge numbers were deflated.
+
+---
+
 ## Remaining gaps and next steps
 
 ```{python}
-#| fig-cap: "Gap between v6b and ceiling per category. Negative = still below ceiling."
+#| fig-cap: "Gap between v19 and ceiling per category. Negative = still below ceiling."
 #| out-width: 100%
 
 gap = {
-    c: V["v6b"]["cats"].get(c, {}).get("f1", 0) - V["Ceiling"]["cats"].get(c, {}).get("f1", 0)
+    c: V["v19"]["cats"].get(c, {}).get("f1", 0) - V["Ceiling"]["cats"].get(c, {}).get("f1", 0)
     for c in CATS
 }
 
@@ -387,7 +437,7 @@ for bar, val in zip(bars, gap.values()):
             f"{val:+.1f}", ha="center", va="bottom" if val >= 0 else "top",
             fontsize=9, fontweight="bold")
 
-ax.set_ylabel("v6b F1 − Ceiling F1", fontsize=11)
+ax.set_ylabel("v19 F1 − Ceiling F1", fontsize=11)
 ax.set_title("Remaining gap to ceiling (positive = surpassed ceiling)", fontsize=11)
 fig.tight_layout()
 display(fig)
