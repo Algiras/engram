@@ -1,0 +1,623 @@
+{
+  "overall_f1": 49.5591134250768,
+  "overall_judge": 17.741935483870968,
+  "not_found_rate": 19.35483870967742,
+  "not_found_count": 12,
+  "total_questions": 62,
+  "elapsed": 194.97967290878296,
+  "label": "project=Personal | t=0.15 k=12 | judge",
+  "by_category": {
+    "insights": {
+      "f1": 49.5591134250768,
+      "judge": 17.741935483870968,
+      "n": 62
+    }
+  },
+  "args": {
+    "project": "Personal",
+    "dataset": "eval/qa_dataset.json",
+    "engram": "./target/release/engram",
+    "model": "",
+    "judge_model": "gemini-2.5-flash",
+    "threshold": 0.15,
+    "top_k": 12,
+    "use_judge": true,
+    "full_context": false,
+    "recursive": false,
+    "hybrid": false,
+    "max_per_cat": null,
+    "categories": "insights",
+    "output": "eval/domain_results_insights_debug.json",
+    "prev": null,
+    "save_per_question": true
+  },
+  "per_question": [
+    {
+      "category": "insights",
+      "question": "What capability does the PostToolUse hook enable?",
+      "gold": "Zero-effort capture without LLM cooperation",
+      "prediction": "PostToolUse hook enables zero-effort capture without LLM cooperation",
+      "f1": 0.8,
+      "judge": 0.0,
+      "not_found": false
+    },
+    {
+      "category": "insights",
+      "question": "What specific condition is not required for the PostToolUse hook to enable capture?",
+      "gold": "LLM cooperation",
+      "prediction": "LLM cooperation.",
+      "f1": 1.0,
+      "judge": 0.0,
+      "not_found": false
+    },
+    {
+      "category": "insights",
+      "question": "What level of effort is required for capture when using the PostToolUse hook?",
+      "gold": "Zero-effort",
+      "prediction": "Zero-effort.",
+      "f1": 1.0,
+      "judge": 0.0,
+      "not_found": false
+    },
+    {
+      "category": "insights",
+      "question": "What is the specific purpose of the experiment branch?",
+      "gold": "Testing that checkout preserves uncommitted knowledge added on this branch.",
+      "prediction": "Testing that checkout preserves uncommitted knowledge added on this branch.",
+      "f1": 1.0,
+      "judge": 0.0,
+      "not_found": false
+    },
+    {
+      "category": "insights",
+      "question": "What uncommitted data is being tested for preservation during a checkout operation?",
+      "gold": "uncommitted knowledge",
+      "prediction": "Uncommitted knowledge added on this branch.",
+      "f1": 0.5,
+      "judge": 0.0,
+      "not_found": false
+    },
+    {
+      "category": "insights",
+      "question": "On which branch is the test for preserving uncommitted knowledge being conducted?",
+      "gold": "Experiment branch",
+      "prediction": "Testing that checkout preserves uncommitted knowledge added on this branch.",
+      "f1": 0.16666666666666669,
+      "judge": 0.0,
+      "not_found": false
+    },
+    {
+      "category": "insights",
+      "question": "What did the 'show command' immediately reveal during dogfooding?",
+      "gold": "manual session appearing in 5 categories",
+      "prediction": "Manual session appearing in 5 categories \u2014 signals need for pre-commit dedup check.",
+      "f1": 0.631578947368421,
+      "judge": 1.0,
+      "not_found": false
+    },
+    {
+      "category": "insights",
+      "question": "What two potential solutions does the insight signal a need for in the ingest process?",
+      "gold": "pre-commit dedup check or category-assignment review",
+      "prediction": "A daemon or `--background` flag for `engram ingest`.",
+      "f1": 0.13333333333333333,
+      "judge": 0.0,
+      "not_found": false
+    },
+    {
+      "category": "insights",
+      "question": "What was the specific categorization issue identified for a manual session?",
+      "gold": "Appearing in 5 categories.",
+      "prediction": "Manual session appearing in 5 categories \u2014 signals need for pre-commit dedup check.",
+      "f1": 0.47058823529411764,
+      "judge": 0.0,
+      "not_found": false
+    },
+    {
+      "category": "insights",
+      "question": "What specific configuration provides the best signal-to-noise?",
+      "gold": "Smart inject with semantic threshold 0.45",
+      "prediction": "Smart inject with semantic threshold 0.45 gives best signal-to-noise.",
+      "f1": 0.7368421052631579,
+      "judge": 0.0,
+      "not_found": false
+    },
+    {
+      "category": "insights",
+      "question": "What semantic threshold is required for smart inject to achieve the best signal-to-noise?",
+      "gold": "0.45",
+      "prediction": "Smart inject with semantic threshold 0.45 gives best signal-to-noise.",
+      "f1": 0.2857142857142857,
+      "judge": 1.0,
+      "not_found": false
+    },
+    {
+      "category": "insights",
+      "question": "What is the outcome of using smart inject with a semantic threshold of 0.45?",
+      "gold": "best signal-to-noise",
+      "prediction": "Smart inject with semantic threshold 0.45 gives best signal-to-noise.",
+      "f1": 0.5,
+      "judge": 0.0,
+      "not_found": false
+    },
+    {
+      "category": "insights",
+      "question": "What is the line truncation limit for `inject compact mode`?",
+      "gold": "60 lines",
+      "prediction": "inject compact mode truncates at 60 lines (BUDGET_PROJECT).",
+      "f1": 0.3636363636363636,
+      "judge": 0.0,
+      "not_found": false
+    },
+    {
+      "category": "insights",
+      "question": "Under what conditions do `bugs/insights/questions` appear?",
+      "gold": "if context.md is small enough OR --full is used.",
+      "prediction": "",
+      "f1": 0.0,
+      "judge": 0.0,
+      "not_found": true
+    },
+    {
+      "category": "insights",
+      "question": "What type of knowledge does compact mode prioritize as most actionable?",
+      "gold": "decisions/solutions/patterns",
+      "prediction": "Decisions/solutions/patterns are the most actionable knowledge.",
+      "f1": 0.6,
+      "judge": 0.0,
+      "not_found": false
+    },
+    {
+      "category": "insights",
+      "question": "How is knowledge decay implemented?",
+      "gold": "By reducing importance boosts.",
+      "prediction": "Reducing importance boosts, causing unused knowledge to gradually fade to neutral.",
+      "f1": 0.39999999999999997,
+      "judge": 1.0,
+      "not_found": false
+    },
+    {
+      "category": "insights",
+      "question": "What is the purpose of knowledge decay in the system?",
+      "gold": "Preventing the knowledge base from being overwhelmed by outdated or irrelevant data.",
+      "prediction": "Unused knowledge gradually fades to neutral.",
+      "f1": 0.11764705882352942,
+      "judge": 0.0,
+      "not_found": false
+    },
+    {
+      "category": "insights",
+      "question": "What happens to unused knowledge due to knowledge decay?",
+      "gold": "Unused knowledge gradually fades to neutral.",
+      "prediction": "Unused knowledge gradually fades to neutral.",
+      "f1": 1.0,
+      "judge": 0.0,
+      "not_found": false
+    },
+    {
+      "category": "insights",
+      "question": "What existing components related to contradiction detection were found in the codebase?",
+      "gold": "Existing contradiction detection prompts and potentially related code.",
+      "prediction": "Existing contradiction detection code and prompts were already present in the codebase.",
+      "f1": 0.588235294117647,
+      "judge": 0.0,
+      "not_found": false
+    },
+    {
+      "category": "insights",
+      "question": "What does the presence of existing contradiction detection components suggest about its development?",
+      "gold": "It suggests it was a planned feature, potentially saving development time.",
+      "prediction": "Contradiction detection was a planned feature, potentially saving development time.",
+      "f1": 0.7368421052631577,
+      "judge": 1.0,
+      "not_found": false
+    },
+    {
+      "category": "insights",
+      "question": "Where is global knowledge injected within `build_compact_memory`?",
+      "gold": "between shared memory and pack summary",
+      "prediction": "Global knowledge is injected between shared memory and pack summary in `build_compact_memory`.",
+      "f1": 0.5555555555555556,
+      "judge": 1.0,
+      "not_found": false
+    },
+    {
+      "category": "insights",
+      "question": "What is the core insight regarding the system's use of binaries?",
+      "gold": "The system can unintentionally use an older, outdated binary.",
+      "prediction": "Installed binary in PATH might be an older version, shadowing the newly built binary.",
+      "f1": 0.2105263157894737,
+      "judge": 0.0,
+      "not_found": false
+    },
+    {
+      "category": "insights",
+      "question": "When can replacing `current_exe()` with the binary name be problematic?",
+      "gold": "During development or if the installed binary is shadowed by an older version.",
+      "prediction": "During development or when the installed binary in PATH might be an older version.",
+      "f1": 0.6086956521739131,
+      "judge": 1.0,
+      "not_found": false
+    },
+    {
+      "category": "insights",
+      "question": "What is an example scenario where an older binary might be used instead of a newly installed one?",
+      "gold": "Older `engram` in `.local/bin` used instead of new in `~/.cargo/bin`.",
+      "prediction": "The installed binary in PATH might be an older version, shadowing the newly built binary.",
+      "f1": 0.16666666666666666,
+      "judge": 0.0,
+      "not_found": false
+    },
+    {
+      "category": "insights",
+      "question": "What existing features did the Engram system already have implemented, despite being requested as new features?",
+      "gold": "Confidence scoring and cross-session deduplication.",
+      "prediction": "Confidence scoring and cross-session deduplication were already implemented.",
+      "f1": 0.7692307692307693,
+      "judge": 0.0,
+      "not_found": false
+    },
+    {
+      "category": "insights",
+      "question": "What did features like confidence scoring and cross-session deduplication seem like before the insight was discovered?",
+      "gold": "Future work.",
+      "prediction": "Future work.",
+      "f1": 1.0,
+      "judge": 0.0,
+      "not_found": false
+    },
+    {
+      "category": "insights",
+      "question": "In what type of projects is it especially important to verify existing functionality and conduct thorough code exploration?",
+      "gold": "rapidly evolving projects",
+      "prediction": "Rapidly evolving projects.",
+      "f1": 1.0,
+      "judge": 1.0,
+      "not_found": false
+    },
+    {
+      "category": "insights",
+      "question": "How did the `engram reflect` command evolve in its scope?",
+      "gold": "From a single-project report to a cross-project summary.",
+      "prediction": "From a single-project report to a cross-project summary.",
+      "f1": 0.875,
+      "judge": 0.0,
+      "not_found": false
+    },
+    {
+      "category": "insights",
+      "question": "What are the different ways a user can specify the project scope for the `engram reflect` command?",
+      "gold": "Without specifying a project, on all projects, or a specific project.",
+      "prediction": "Without specifying a project, `--all` projects, or a specific project.",
+      "f1": 0.823529411764706,
+      "judge": 1.0,
+      "not_found": false
+    },
+    {
+      "category": "insights",
+      "question": "What significant insights are recorded in this document?",
+      "gold": "No significant insights.",
+      "prediction": "",
+      "f1": 0.0,
+      "judge": 0.0,
+      "not_found": true
+    },
+    {
+      "category": "insights",
+      "question": "What is the key insight about this record?",
+      "gold": "No significant insights.",
+      "prediction": "API usage is subject to rate limiting.",
+      "f1": 0.0,
+      "judge": 0.0,
+      "not_found": false
+    },
+    {
+      "category": "insights",
+      "question": "What was the nature of the serialization bug revealed by dogfooding engram?",
+      "gold": "A HashMap<(Enum,Enum),f32> serialization bug that produced no compiler error but crashed at runtime.",
+      "prediction": "HashMap<(Enum,Enum),f32> serialization bug that produced no compiler error but crashed at runtime.",
+      "f1": 1.0,
+      "judge": 0.0,
+      "not_found": false
+    },
+    {
+      "category": "insights",
+      "question": "When did both identified bugs appear, and why were they not caught by unit tests?",
+      "gold": "Appeared when system exercised end-to-end; not in unit tests.",
+      "prediction": "",
+      "f1": 0.0,
+      "judge": 0.0,
+      "not_found": true
+    },
+    {
+      "category": "insights",
+      "question": "What significant insights are recorded in this record?",
+      "gold": "No significant insights",
+      "prediction": "Knowledge decay is implemented by reducing importance boosts, causing unused knowledge to gradually fade to neutral.",
+      "f1": 0.0,
+      "judge": 0.0,
+      "not_found": false
+    },
+    {
+      "category": "insights",
+      "question": "What is the nature of the insights documented here?",
+      "gold": "No significant insights.",
+      "prediction": "The assistant prioritizes reading existing code structure before implementing changes.",
+      "f1": 0.0,
+      "judge": 0.0,
+      "not_found": false
+    },
+    {
+      "category": "insights",
+      "question": "Why is it important for the assistant to check for borrow-checker issues related to Option types and mutable references in Rust?",
+      "gold": "To avoid common errors related to ownership and borrowing.",
+      "prediction": "To avoid common errors related to ownership and borrowing.",
+      "f1": 0.875,
+      "judge": 1.0,
+      "not_found": false
+    },
+    {
+      "category": "insights",
+      "question": "What causes an unreachable code branch in the TUI key handling logic that the assistant identifies and corrects?",
+      "gold": "a duplicate key binding",
+      "prediction": "Duplicate key binding.",
+      "f1": 1.0,
+      "judge": 0.0,
+      "not_found": false
+    },
+    {
+      "category": "insights",
+      "question": "What is the agent's priority before implementing changes, even when given a detailed plan, and what does this preference aim to ensure?",
+      "gold": "Reading existing code and patterns to ensure compatibility and avoid introducing regressions.",
+      "prediction": "Prioritizes reading existing code structure; aims to avoid bugs or inconsistencies.",
+      "f1": 0.47619047619047616,
+      "judge": 0.0,
+      "not_found": false
+    },
+    {
+      "category": "insights",
+      "question": "Which specific tools does the agent combine to understand code, and what is the distinct purpose of each tool?",
+      "gold": "Read for full context, Grep for specific code elements.",
+      "prediction": "`Read`, `Grep`, and `Edit` tools.",
+      "f1": 0.30769230769230765,
+      "judge": 0.0,
+      "not_found": false
+    },
+    {
+      "category": "insights",
+      "question": "What types of testing and validation does the agent automatically perform after implementing a feature, and what does this practice highlight the importance of?",
+      "gold": "fmt, clippy, unit tests, smoke tests; highlights automated testing for quality and regressions.",
+      "prediction": "`cargo fmt --check && cargo clippy && cargo test`. Comprehensive testing is essential.",
+      "f1": 0.2608695652173913,
+      "judge": 0.0,
+      "not_found": false
+    },
+    {
+      "category": "insights",
+      "question": "What is the crucial action required when adding a new field to a struct used in event tracking?",
+      "gold": "Update all existing instantiations of that struct.",
+      "prediction": "Update all existing instantiations of that struct.",
+      "f1": 1.0,
+      "judge": 0.0,
+      "not_found": false
+    },
+    {
+      "category": "insights",
+      "question": "Why is it crucial to update all existing instantiations of a struct when adding a new field, even if the new field is optional?",
+      "gold": "To maintain code compatibility and avoid unexpected behavior.",
+      "prediction": "To maintain code compatibility and avoid unexpected behavior.",
+      "f1": 1.0,
+      "judge": 0.0,
+      "not_found": false
+    },
+    {
+      "category": "insights",
+      "question": "What specific field and struct were involved in the assistant's experience that led to this insight?",
+      "gold": "tokens_consumed field and UsageEvent struct.",
+      "prediction": "`tokens_consumed` field to the `UsageEvent` struct.",
+      "f1": 0.9090909090909091,
+      "judge": 0.0,
+      "not_found": false
+    },
+    {
+      "category": "insights",
+      "question": "What approach does the assistant's concurrent implementation contrast with?",
+      "gold": "a sequential approach",
+      "prediction": "Sequentially.",
+      "f1": 0.0,
+      "judge": 0.0,
+      "not_found": false
+    },
+    {
+      "category": "insights",
+      "question": "What tool does the assistant frequently use before `Edit`, and what does this emphasize?",
+      "gold": "The `Read` tool, emphasizing importance of confirming current state of the code.",
+      "prediction": "`Read`, `Grep`; emphasizes exploration, targeted search.",
+      "f1": 0.125,
+      "judge": 0.0,
+      "not_found": false
+    },
+    {
+      "category": "insights",
+      "question": "What is a cleaner alternative to using `super` paths or inlining code for modules like `tui` to access the `commands` module in a binary crate?",
+      "gold": "Adding the `commands` module to `lib.rs`.",
+      "prediction": "Adding the `commands` module to `lib.rs`.",
+      "f1": 1.0,
+      "judge": 0.0,
+      "not_found": false
+    },
+    {
+      "category": "insights",
+      "question": "What is the underlying reason `cargo install` can lead to unexpected behavior when testing changes?",
+      "gold": "`cargo install` can use a cached build.",
+      "prediction": "`cargo install` can use a cached build.",
+      "f1": 1.0,
+      "judge": 0.0,
+      "not_found": false
+    },
+    {
+      "category": "insights",
+      "question": "When is it important to remember that `cargo install` can use a cached build?",
+      "gold": "When iterating quickly on CLI applications and relying on `cargo install` for testing.",
+      "prediction": "When iterating quickly on CLI tools.",
+      "f1": 0.5555555555555556,
+      "judge": 0.0,
+      "not_found": false
+    },
+    {
+      "category": "insights",
+      "question": "What specific file is important to update when relocating functions, in addition to other call sites?",
+      "gold": "`main.rs`",
+      "prediction": "The original file.",
+      "f1": 0.0,
+      "judge": 0.0,
+      "not_found": false
+    },
+    {
+      "category": "insights",
+      "question": "What can happen if `main.rs` is not updated after relocating functions?",
+      "gold": "runtime errors and unexpected behavior",
+      "prediction": "Duplication and confusion.",
+      "f1": 0.0,
+      "judge": 0.0,
+      "not_found": false
+    },
+    {
+      "category": "insights",
+      "question": "What two actions are required to make a verbose flag effective?",
+      "gold": "Passing the flag down through function calls and adding the actual verbose output logic.",
+      "prediction": "Add `verbose: bool` parameter and pass `cli.verbose` at each dispatch point.",
+      "f1": 0.09090909090909091,
+      "judge": 0.0,
+      "not_found": false
+    },
+    {
+      "category": "insights",
+      "question": "What specific element can significantly complicate a seemingly straightforward structural refactoring like splitting a monolithic file?",
+      "gold": "shared helper functions",
+      "prediction": "Imports might still be needed in the original file due to other dependencies.",
+      "f1": 0.0,
+      "judge": 0.0,
+      "not_found": false
+    },
+    {
+      "category": "insights",
+      "question": "What is highlighted as important to identify and address early in refactoring tasks to avoid unexpected complexities?",
+      "gold": "dependencies",
+      "prediction": "Verifying existing functionality before implementing new features.",
+      "f1": 0.0,
+      "judge": 0.0,
+      "not_found": false
+    },
+    {
+      "category": "insights",
+      "question": "For what type of task can delegating work to multiple agents in parallel be more efficient than attempting to process the entire file at once?",
+      "gold": "A large, purely structural refactoring task.",
+      "prediction": "Large-scale refactoring tasks, such as splitting a monolithic file.",
+      "f1": 0.2857142857142857,
+      "judge": 1.0,
+      "not_found": false
+    },
+    {
+      "category": "insights",
+      "question": "How is global memory in `engram` injected into the system prompt?",
+      "gold": "Into the system prompt's `MEMORY.md`.",
+      "prediction": "Global memory is injected into the system prompt via `MEMORY.md`.",
+      "f1": 0.625,
+      "judge": 0.0,
+      "not_found": false
+    },
+    {
+      "category": "insights",
+      "question": "Why is it important to understand how global memory is applied in `engram`?",
+      "gold": "To understand how global preferences are applied.",
+      "prediction": "The `recall` command doesn't provide a complete view of global memory.",
+      "f1": 0.11764705882352941,
+      "judge": 0.0,
+      "not_found": false
+    },
+    {
+      "category": "insights",
+      "question": "What additional mechanism is needed to address a backlog of unprocessed sessions, beyond the `session-end-hook`?",
+      "gold": "A background processing capability.",
+      "prediction": "A background ingest process.",
+      "f1": 0.3333333333333333,
+      "judge": 1.0,
+      "not_found": false
+    },
+    {
+      "category": "insights",
+      "question": "What specific error can a stale git remote tracking ref cause during plugin refresh?",
+      "gold": "marketplace.json no longer present",
+      "prediction": "Missing `marketplace.json` file or \"marketplace.json no longer present\".",
+      "f1": 0.6666666666666666,
+      "judge": 0.0,
+      "not_found": false
+    },
+    {
+      "category": "insights",
+      "question": "What type of path must the `source` field in a marketplace's `plugin.json` be?",
+      "gold": "A relative path.",
+      "prediction": "The `source` field in a marketplace's `plugin.json` must be a relative path.",
+      "f1": 0.3076923076923077,
+      "judge": 0.0,
+      "not_found": false
+    },
+    {
+      "category": "insights",
+      "question": "What causes the `engram` install script to fail?",
+      "gold": "unauthenticated GitHub API calls hitting rate limits",
+      "prediction": "The script calls the GitHub API unauthenticated, hitting a 403 rate limit.",
+      "f1": 0.75,
+      "judge": 0.0,
+      "not_found": false
+    },
+    {
+      "category": "insights",
+      "question": "What incorrect assumption might users make when the `engram` install script fails?",
+      "gold": "Users might incorrectly assume the installation failed entirely.",
+      "prediction": "Users might incorrectly assume the installation failed entirely.",
+      "f1": 1.0,
+      "judge": 0.0,
+      "not_found": false
+    },
+    {
+      "category": "insights",
+      "question": "What potential issue can arise from relying solely on Git diff output?",
+      "gold": "Incorrect assumptions about the changes made to a file.",
+      "prediction": "Git diff outputs can be misleading in how they display context.",
+      "f1": 0.0,
+      "judge": 0.0,
+      "not_found": false
+    }
+  ],
+  "failures": [
+    {
+      "category": "insights",
+      "question": "Under what conditions do `bugs/insights/questions` appear?",
+      "gold": "if context.md is small enough OR --full is used.",
+      "prediction": "",
+      "f1": 0.0,
+      "judge": 0.0,
+      "not_found": true
+    },
+    {
+      "category": "insights",
+      "question": "What significant insights are recorded in this document?",
+      "gold": "No significant insights.",
+      "prediction": "",
+      "f1": 0.0,
+      "judge": 0.0,
+      "not_found": true
+    },
+    {
+      "category": "insights",
+      "question": "When did both identified bugs appear, and why were they not caught by unit tests?",
+      "gold": "Appeared when system exercised end-to-end; not in unit tests.",
+      "prediction": "",
+      "f1": 0.0,
+      "judge": 0.0,
+      "not_found": true
+    }
+  ]
+}
