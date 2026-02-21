@@ -514,11 +514,30 @@ pub fn trim_to_budget(content: &str, max_lines: usize) -> String {
 pub struct SmartEntry {
     pub category: String,
     pub session_id: String,
-    pub preview: String, // first 120 chars of content
+    pub preview: String,            // first 120 chars of content
     pub content: String,
-    pub score: f32,     // semantic relevance 0.0–1.0
-    pub selected: bool, // toggled in TUI preview
+    pub score: f32,                 // semantic relevance 0.0–1.0 (after recency decay)
+    pub selected: bool,             // toggled in TUI preview
+    pub timestamp: Option<String>,  // ISO-8601 from chunk metadata
 }
+
+/// Exponential recency decay: score × exp(-λ × days_since_written).
+/// λ = 0.005 → half-life ≈ 139 days (gentle; avoids penalising mature knowledge).
+/// Returns 1.0 if timestamp is absent or unparseable.
+fn decay_factor(timestamp: &str) -> f32 {
+    const LAMBDA: f64 = 0.005;
+    let Ok(dt) = chrono::DateTime::parse_from_rfc3339(timestamp) else {
+        return 1.0;
+    };
+    let days = (chrono::Utc::now() - dt.to_utc())
+        .num_days()
+        .max(0) as f64;
+    (-LAMBDA * days).exp() as f32
+}
+
+/// Penalty multiplier for global (cross-project) entries to prefer project knowledge
+/// when cosine scores are close.
+const GLOBAL_PENALTY: f32 = 0.85;
 
 impl SmartEntry {
     /// Rough token estimate (~4 chars per token).
@@ -648,8 +667,15 @@ pub async fn smart_search(
 
     // Deduplicate by session_id (keep highest scoring chunk per session)
     let mut seen: std::collections::HashMap<String, SmartEntry> = std::collections::HashMap::new();
-    for (score, chunk) in results {
+    let mut relaxed_candidates: Vec<(f32, crate::embeddings::EmbeddedChunk)> = Vec::new();
+    for (raw_score, chunk) in results {
+        let ts = chunk.metadata.timestamp.clone();
+        let score = raw_score * decay_factor(&ts);
         if score < threshold {
+            // Collect for adaptive fallback (score in [threshold×0.67, threshold))
+            if score >= threshold * 0.67 {
+                relaxed_candidates.push((score, chunk.clone()));
+            }
             continue;
         }
         let session_id = chunk
@@ -672,9 +698,11 @@ pub async fn smart_search(
             content: chunk.text.clone(),
             score,
             selected: true,
+            timestamp: Some(ts.clone()),
         });
         if score > entry.score {
             entry.score = score;
+            entry.timestamp = Some(ts);
             entry.preview = chunk
                 .text
                 .lines()
@@ -684,6 +712,36 @@ pub async fn smart_search(
                 .chars()
                 .take(120)
                 .collect();
+        }
+    }
+
+    // Adaptive threshold fallback: recovers short/conceptual entries (bugs, insights)
+    // that score just below the strict threshold. Fires before BM25 to reduce noise.
+    if seen.is_empty() {
+        for (score, chunk) in relaxed_candidates {
+            let ts = chunk.metadata.timestamp.clone();
+            let session_id = chunk
+                .metadata
+                .session_id
+                .clone()
+                .unwrap_or_else(|| chunk.id.clone());
+            seen.entry(session_id.clone()).or_insert(SmartEntry {
+                category: chunk.metadata.category.clone(),
+                session_id,
+                preview: chunk
+                    .text
+                    .lines()
+                    .find(|l| !l.trim().is_empty())
+                    .unwrap_or("")
+                    .trim()
+                    .chars()
+                    .take(120)
+                    .collect(),
+                content: chunk.text.clone(),
+                score,
+                selected: true,
+                timestamp: Some(ts),
+            });
         }
     }
 
@@ -713,6 +771,7 @@ pub async fn smart_search(
                 content: chunk.text.clone(),
                 score: threshold, // assign threshold score so entries pass downstream filters
                 selected: true,
+                timestamp: Some(chunk.metadata.timestamp.clone()),
             });
         }
     }
@@ -748,16 +807,20 @@ pub async fn smart_search(
                                 .chars()
                                 .take(120)
                                 .collect::<String>();
+                            let global_ts = chunk.metadata.timestamp.clone();
+                            let global_score = score * decay_factor(&global_ts) * GLOBAL_PENALTY;
                             let entry = seen.entry(key.clone()).or_insert(SmartEntry {
                                 category: chunk.metadata.category.clone(),
                                 session_id: key,
                                 preview: first_line.clone(),
                                 content: format!("[Global] {}", chunk.text.trim()),
-                                score,
+                                score: global_score,
                                 selected: true,
+                                timestamp: Some(global_ts.clone()),
                             });
-                            if score > entry.score {
-                                entry.score = score;
+                            if global_score > entry.score {
+                                entry.score = global_score;
+                                entry.timestamp = Some(global_ts);
                                 entry.preview = first_line;
                             }
                         }

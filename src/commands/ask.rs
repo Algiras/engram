@@ -182,6 +182,7 @@ pub fn cmd_ask(
                         content: block.content,
                         score: 0.5,
                         selected: true,
+                        timestamp: None,
                     });
                 }
             }
@@ -221,6 +222,21 @@ pub fn cmd_ask(
             entries.len().max(1),
             used_semantic
         );
+        for e in entries.iter().take(top_k) {
+            let age_str = e
+                .timestamp
+                .as_deref()
+                .and_then(|ts| chrono::DateTime::parse_from_rfc3339(ts).ok())
+                .map(|dt| {
+                    let days = (chrono::Utc::now() - dt.to_utc()).num_days();
+                    format!("{}d", days)
+                })
+                .unwrap_or_else(|| "?".to_string());
+            eprintln!(
+                "  [{:>9}:{:<36}] score={:.2}  age={}",
+                e.category, e.session_id, e.score, age_str
+            );
+        }
     }
 
     // 4. LLM synthesis
@@ -229,6 +245,7 @@ pub fn cmd_ask(
         .enable_all()
         .build()
         .map_err(|e| MemoryError::Config(format!("tokio runtime: {}", e)))?;
+
     let (system, prompt) = if concise {
         (
             crate::llm::prompts::SYSTEM_QA_CONCISE,
@@ -329,6 +346,7 @@ pub fn fetch_entries_by_ids(
                     content: block.content,
                     score: 1.0,
                     selected: true,
+                    timestamp: None,
                 });
             }
         }
@@ -542,6 +560,7 @@ pub fn cmd_ask_hybrid(
                         content: block.content,
                         score: 0.5,
                         selected: true,
+                        timestamp: None,
                     });
                 }
             }

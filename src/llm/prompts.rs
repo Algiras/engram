@@ -369,6 +369,25 @@ pub fn ask_concise_prompt(question: &str, context: &str) -> String {
     )
 }
 
+/// Concise QA prompt for procedure/workflow questions.
+/// Allows step-format answers to fix the F1=65.7 / judge=39.2 gap.
+pub const SYSTEM_QA_CONCISE_PROCEDURE: &str = "You are a precise technical Q&A assistant. \
+     Answer using ONLY information explicitly stated in the provided knowledge. \
+     Rules: \
+     (1) For step-by-step questions: list exactly the steps from the knowledge, numbered, max 4 steps of ≤12 words each. \
+     (2) For single-fact procedure questions: answer in 1-15 words, copying exact commands/flags/paths. \
+     (3) Do NOT paraphrase. Copy exact command names, flags, file paths, and tool names. \
+     (4) No explanation, no preamble. Just the steps or the answer. \
+     (5) If not in knowledge: respond exactly: Not found in knowledge base.";
+
+pub fn ask_concise_procedure_prompt(question: &str, context: &str) -> String {
+    format!(
+        "KNOWLEDGE:\n{context}\n\n\
+         QUESTION: {question}\n\n\
+         Answer (exact steps or terms from knowledge, max 4 steps or 15 words):"
+    )
+}
+
 pub fn ask_prompt(question: &str, context: &str) -> String {
     format!(
         "QUESTION: {question}\n\nKNOWLEDGE:\n{context}\n\n\
