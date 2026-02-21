@@ -91,11 +91,18 @@ def gemini_call(prompt: str, api_key: str,
         return f"[error: {e}]"
 
 
-JUDGE_PROMPT = """Is this answer correct or semantically equivalent to the gold answer?
+JUDGE_PROMPT = """Does the predicted answer convey the same meaning as the gold answer for this question?
 
 Question: {question}
 Gold: {gold}
-Answer: {prediction}
+Predicted: {prediction}
+
+Rules:
+- YES if prediction is semantically equivalent, a paraphrase, or contains the gold answer as a substring.
+- YES if prediction uses synonyms or abbreviations that mean the same thing (e.g. "sequential" ≈ "a sequential approach").
+- YES if prediction is more detailed but still correct.
+- NO if prediction contradicts the gold or gives a completely different answer.
+- NO if prediction is vague/generic while gold requires a specific value (e.g. gold="404", pred="an error code").
 
 Reply YES or NO only."""
 
@@ -378,6 +385,17 @@ def main():
     qa_pairs = dataset["qa_pairs"]
     categories = [c.strip() for c in args.categories.split(",")]
     qa_pairs = [q for q in qa_pairs if q["category"] in categories]
+
+    # Filter out unanswerable questions whose gold answer is a meta-marker like
+    # "No significant insights." — retrieval can never produce this as an answer,
+    # so they only add downward noise to recall metrics.
+    _before = len(qa_pairs)
+    qa_pairs = [
+        q for q in qa_pairs
+        if not str(q.get("answer", "")).strip().lower().startswith("no significant")
+    ]
+    if len(qa_pairs) < _before:
+        print(f"  Filtered {_before - len(qa_pairs)} unanswerable (meta) questions.")
 
     if args.max_per_cat:
         filtered = []
