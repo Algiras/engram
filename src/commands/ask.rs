@@ -588,3 +588,70 @@ pub fn cmd_ask_hybrid(
 
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // ── strip_category_prefix ───────────────────────────────────────────────
+
+    #[test]
+    fn test_strip_no_prefix() {
+        assert_eq!(strip_category_prefix("abc-123"), "abc-123");
+    }
+
+    #[test]
+    fn test_strip_single_prefix() {
+        assert_eq!(strip_category_prefix("decisions:abc-123"), "abc-123");
+        assert_eq!(strip_category_prefix("solutions:xyz-456"), "xyz-456");
+        assert_eq!(strip_category_prefix("patterns:uuid-789"), "uuid-789");
+    }
+
+    #[test]
+    fn test_strip_double_prefix() {
+        assert_eq!(
+            strip_category_prefix("decisions:decisions:abc-123"),
+            "abc-123"
+        );
+    }
+
+    #[test]
+    fn test_strip_unknown_prefix_unchanged() {
+        // Unknown prefix should be left as-is
+        assert_eq!(strip_category_prefix("unknown:abc-123"), "unknown:abc-123");
+    }
+
+    // ── parse_selected_ids ──────────────────────────────────────────────────
+
+    #[test]
+    fn test_parse_bare_ids() {
+        let ids = parse_selected_ids("abc-1, def-2, ghi-3");
+        assert_eq!(ids, vec!["abc-1", "def-2", "ghi-3"]);
+    }
+
+    #[test]
+    fn test_parse_ids_with_category_prefix() {
+        let ids = parse_selected_ids("decisions:abc-1, solutions:def-2");
+        assert_eq!(ids, vec!["abc-1", "def-2"]);
+    }
+
+    #[test]
+    fn test_parse_ids_capped_at_five() {
+        let ids =
+            parse_selected_ids("a, b, c, d, e, f, g");
+        assert_eq!(ids.len(), 5);
+        assert_eq!(ids, vec!["a", "b", "c", "d", "e"]);
+    }
+
+    #[test]
+    fn test_parse_ids_empty_string() {
+        let ids = parse_selected_ids("");
+        assert!(ids.is_empty());
+    }
+
+    #[test]
+    fn test_parse_ids_filters_empty_segments() {
+        let ids = parse_selected_ids("abc-1, , , def-2");
+        assert_eq!(ids, vec!["abc-1", "def-2"]);
+    }
+}

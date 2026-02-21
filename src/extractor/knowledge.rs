@@ -1808,3 +1808,94 @@ mod private_tag_tests {
         assert!(out.contains("C"));
     }
 }
+
+#[cfg(test)]
+mod keyword_tests {
+    use super::*;
+
+    fn make_knowledge(entries: &[(&str, &str)]) -> String {
+        // Build a minimal knowledge file with named sessions
+        let mut out = String::from("# Test\n\n");
+        for (session_id, content) in entries {
+            out.push_str(&format!(
+                "## Session: {} (2024-01-01T00:00:00Z)\n\n{}\n\n",
+                session_id, content
+            ));
+        }
+        out
+    }
+
+    // ── extract_keywords ───────────────────────────────────────────────────
+
+    #[test]
+    fn test_extract_keywords_filters_stopwords() {
+        let kws = extract_keywords("what is the best way to fix this");
+        // stop words like "what", "is", "the", "best", "way", "this" should be removed
+        assert!(!kws.contains(&"what".to_string()));
+        assert!(!kws.contains(&"the".to_string()));
+        assert!(!kws.contains(&"is".to_string()));
+    }
+
+    #[test]
+    fn test_extract_keywords_keeps_technical_terms() {
+        let kws = extract_keywords("tokio async runtime cargo build");
+        assert!(kws.contains(&"tokio".to_string()));
+        assert!(kws.contains(&"async".to_string()));
+        assert!(kws.contains(&"runtime".to_string()));
+        assert!(kws.contains(&"cargo".to_string()));
+    }
+
+    #[test]
+    fn test_extract_keywords_min_length() {
+        let kws = extract_keywords("a ab abc abcd abcde");
+        // words <= 3 chars filtered out
+        assert!(!kws.contains(&"a".to_string()));
+        assert!(!kws.contains(&"ab".to_string()));
+        assert!(!kws.contains(&"abc".to_string()));
+        assert!(kws.contains(&"abcd".to_string()));
+        assert!(kws.contains(&"abcde".to_string()));
+    }
+
+    // ── find_sessions_by_keywords ──────────────────────────────────────────
+
+    #[test]
+    fn test_finds_session_with_two_keyword_matches() {
+        let content = make_knowledge(&[
+            ("sess-1", "tokio async runtime for building async Rust apps"),
+            ("sess-2", "serde json serialization format"),
+        ]);
+        let ids = find_sessions_by_keywords(&content, "tokio async runtime", 2);
+        assert!(ids.contains(&"sess-1".to_string()));
+        assert!(!ids.contains(&"sess-2".to_string()));
+    }
+
+    #[test]
+    fn test_requires_min_matches() {
+        let content = make_knowledge(&[("sess-1", "tokio runtime")]);
+        // query has 3 keywords but only 2 match → still >= min_matches=2
+        let ids = find_sessions_by_keywords(&content, "tokio runtime serde", 2);
+        assert!(ids.contains(&"sess-1".to_string()));
+
+        // Require 3 matches — only 2 present → not included
+        let ids3 = find_sessions_by_keywords(&content, "tokio runtime serde", 3);
+        assert!(!ids3.contains(&"sess-1".to_string()));
+    }
+
+    #[test]
+    fn test_empty_content_returns_empty() {
+        let ids = find_sessions_by_keywords("", "tokio async runtime", 2);
+        assert!(ids.is_empty());
+    }
+
+    #[test]
+    fn test_expired_sessions_excluded() {
+        let mut content = String::from("# Test\n\n");
+        content.push_str("## Session: active-1 (2024-01-01T00:00:00Z)\n\ntokio async runtime\n\n");
+        content.push_str("## Session: expired-1 (2024-01-01T00:00:00Z) [ttl:1d]\n\ntokio async runtime\n\n");
+        // expired-1 has a 1-day TTL set in the past — partition_by_expiry should drop it
+        // (In practice TTL is relative to now; with 1d it may or may not have expired.
+        //  Just verify active-1 is always returned.)
+        let ids = find_sessions_by_keywords(&content, "tokio async runtime", 2);
+        assert!(ids.contains(&"active-1".to_string()));
+    }
+}

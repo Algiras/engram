@@ -152,3 +152,72 @@ fn generate_chunk_id(text: &str) -> String {
     hasher.update(text.as_bytes());
     format!("{:x}", hasher.finalize())[..16].to_string()
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::embeddings::chunk_text;
+
+    // ── chunk_text (legacy char-based) ─────────────────────────────────────
+
+    #[test]
+    fn test_chunk_text_splits_on_paragraphs() {
+        let text = "Para 1.\n\nPara 2.\n\nPara 3.";
+        let chunks = chunk_text(text, 1000);
+        // All fit in one chunk
+        assert_eq!(chunks.len(), 1);
+    }
+
+    #[test]
+    fn test_chunk_text_splits_at_max_size() {
+        let long_para = "x".repeat(800);
+        let text = format!("{}\n\n{}", long_para, long_para);
+        let chunks = chunk_text(&text, 1000);
+        // Each 800-char para is below 1000, but together they exceed it
+        assert_eq!(chunks.len(), 2);
+        assert!(chunks[0].len() <= 1000);
+    }
+
+    #[test]
+    fn test_chunk_text_empty_input() {
+        let chunks = chunk_text("", 1000);
+        assert!(chunks.is_empty());
+    }
+
+    // ── session-aware MAX_SESSION_CHUNK constant ───────────────────────────
+
+    #[test]
+    fn test_max_session_chunk_constant() {
+        // Ensure sub-chunking threshold is larger than typical session content
+        assert!(MAX_SESSION_CHUNK >= 800);
+        assert!(MAX_SESSION_CHUNK <= 2000);
+    }
+
+    // ── session block sub-chunking ─────────────────────────────────────────
+
+    #[test]
+    fn test_short_session_is_single_chunk() {
+        let text = "Short session content.".to_string();
+        assert!(text.len() <= MAX_SESSION_CHUNK);
+        // A single chunk — no sub-chunking needed
+        let chunks: Vec<_> = if text.len() <= MAX_SESSION_CHUNK {
+            vec![text.clone()]
+        } else {
+            chunk_text(&text, MAX_SESSION_CHUNK)
+        };
+        assert_eq!(chunks.len(), 1);
+        assert_eq!(chunks[0], text);
+    }
+
+    #[test]
+    fn test_long_session_is_sub_chunked() {
+        // Create a session whose content clearly exceeds MAX_SESSION_CHUNK
+        let long_text = format!("{}\n\n{}", "y".repeat(700), "z".repeat(700));
+        assert!(long_text.len() > MAX_SESSION_CHUNK);
+        let sub_chunks = chunk_text(&long_text, MAX_SESSION_CHUNK);
+        assert!(sub_chunks.len() >= 2);
+        for chunk in &sub_chunks {
+            assert!(chunk.len() <= MAX_SESSION_CHUNK);
+        }
+    }
+}
